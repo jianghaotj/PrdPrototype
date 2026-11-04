@@ -1,0 +1,375 @@
+#!/usr/bin/env node
+// 技能回归测试：构建门禁（正例 + 每类反例）、托管模式、版本迭代、浏览器端交互、安全清洗、脚手架。
+// 用法：node scripts/test-skill.mjs [--keep]   --keep 保留临时目录便于排查
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
+import { build, auditSingleFile } from './build.mjs';
+import { launch, fileUrl, sleep } from './lib/browser.mjs';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const SKILL = path.resolve(here, '..');
+const EXAMPLE = path.join(SKILL, 'examples', 'leave-approval');
+const HOSTFX = path.join(SKILL, 'tests', 'fixtures', 'host-crm');
+const KEEP = process.argv.includes('--keep');
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'prd-skill-test-'));
+let pass = 0, failN = 0;
+const fails = [];
+function ok(cond, name, extra) {
+  if (cond) { pass++; console.log('  ✓ ' + name); }
+  else { failN++; fails.push(name); console.log('  ✗ ' + name + (extra ? '\n      ' + String(extra).slice(0, 600) : '')); }
+}
+function copyDir(src, dst, filter) {
+  fs.mkdirSync(dst, { recursive: true });
+  for (const n of fs.readdirSync(src)) {
+    if (n === '.prd-build' || n === '归档') continue;
+    const s = path.join(src, n), d = path.join(dst, n);
+    if (filter && !filter(s)) continue;
+    if (fs.statSync(s).isDirectory()) copyDir(s, d, filter); else fs.copyFileSync(s, d);
+  }
+}
+let caseN = 0;
+function variant(src, edits, opt = {}) {
+  const dir = path.join(TMP, 'case-' + (++caseN));
+  copyDir(src, dir, opt.withOutput ? null : (s) => !/\.html$/.test(s) || /existing/.test(s));
+  for (const [rel, from, to] of edits) {
+    const f = path.join(dir, rel);
+    const s = fs.readFileSync(f, 'utf8');
+    if (typeof from === 'string' ? !s.includes(from) : !from.test(s)) throw new Error('测试用例的替换目标不存在：' + rel + ' :: ' + String(from).slice(0, 80));
+    fs.writeFileSync(f, s.replace(from, to));
+  }
+  return dir;
+}
+const PROD_FILE = () => 'prd/product.js';
+const M02 = 'prd/pages/M02-apply.js', P01 = 'prd/pages/P01-todo.js', P02 = 'prd/pages/P02-review.js', P03 = 'prd/pages/P03-stats.js', M03 = 'prd/pages/M03-detail.js', PROD = 'prd/product.js';
+const codes = (r) => r.report.errors.map((e) => e.code);
+const hasCode = (r, c) => codes(r).includes(c);
+function outputs(dir) { return fs.readdirSync(dir).filter((n) => /-原型需求\.html$/.test(n)); }
+
+console.log('原型需求技能回归测试\n临时目录：' + TMP + '\n');
+
+/* ---------- 1. 正例 ---------- */
+console.log('1. 样例项目构建');
+const exDir = variant(EXAMPLE, []);
+const ex = await build(exDir, { md: true });
+ok(ex.ok, '请假审批样例（手机端 + PC 端）检查通过', ex.ok ? '' : JSON.stringify(ex.report.errors.slice(0, 5)));
+ok(ex.ok && ex.report.stats.interactive > 40 && ex.report.stats.covered === ex.report.stats.interactive, '全部可交互元素都归属到功能点（' + (ex.report && ex.report.stats.covered) + '/' + (ex.report && ex.report.stats.interactive) + '）');
+ok(ex.ok && ex.report.stats.renders >= 15 * 4, '每个状态在默认数据和每个数据场景下都渲染过（' + (ex.report && ex.report.stats.renders) + ' 次）');
+const exHtml = ex.ok ? fs.readFileSync(ex.file, 'utf8') : '';
+ok(ex.ok && auditSingleFile(exHtml).length === 0 && !/<script[^>]+src=/i.test(exHtml) && !/<link[^>]+href=/i.test(exHtml), '交付文件为自包含单 HTML，无外部资源');
+ok(ex.ok && !/mermaid/i.test(exHtml.slice(0, 200000)) || exHtml.indexOf('Mermaid 11') < 0, '未使用流程图时不内嵌 Mermaid（体积 ' + Math.round((ex.size || 0) / 1024) + ' KB）');
+ok(ex.ok && /id="prd-audit"[^>]*>\{/.test(exHtml), '检查结果写入交付文件');
+{
+  const d = variant(EXAMPLE, [[P03, "desc: '选择要统计的自然月，切换后表格和合计同时刷新。',", "desc: '',"]]);
+  const bad = await build(d, {});
+  const hadFailed = !bad.ok && fs.existsSync(bad.failed);
+  fs.writeFileSync(path.join(d, 'prd/pages/P03-stats.js'), fs.readFileSync(path.join(EXAMPLE, 'prd/pages/P03-stats.js'), 'utf8'));
+  const good = await build(d, {});
+  ok(hadFailed && good.ok && !fs.existsSync(bad.failed), '修复后构建通过时清理上次的失败排查文件');
+}
+const md = ex.mdFile ? fs.readFileSync(ex.mdFile, 'utf8') : '';
+ok(['M01 请假首页', 'M02 发起请假', 'M03 请假详情', 'M04 我的', 'P01 待我审批', 'P02 审批详情', 'P03 请假统计'].every((t) => md.includes('#### ' + t)), 'Markdown 包含全部页面章节');
+ok(/\| 假期类型 `type` \| 枚举 \| 是 \|/.test(md) && md.includes('**异常与边界**') && md.includes('| 状态 | 出现条件 |'), 'Markdown 包含字段表、异常与边界、状态出现条件');
+ok(md.includes('## 9 待确认与 AI 假设') || /## \d+ 待确认与 AI 假设/.test(md), 'Markdown 包含待确认与 AI 假设章节');
+ok(!/<span class="bdg|<a id=|\]\(#\/p\//.test(md) && !/【待确认】【待确认】/.test(md), 'Markdown 不含 HTML 徽标、原型内链接和重复标记');
+
+console.log('\n2. 托管模式（已有 HTML）');
+const hostDir = variant(HOSTFX, []);
+const hr = await build(hostDir, {});
+ok(hr.ok, '为已有 crm.html 补需求后检查通过', hr.ok ? '' : JSON.stringify(hr.report.errors.slice(0, 5)));
+const hostHtml = hr.ok ? fs.readFileSync(hr.file, 'utf8') : '';
+ok(hr.ok && hostHtml.includes('prd-host-web') && hostHtml.includes('function showPage') && auditSingleFile(hostHtml).length === 0, '原型的外部 CSS/JS 已内联，交付仍为单文件');
+ok(fs.readFileSync(path.join(hostDir, 'existing', 'crm.html'), 'utf8') === fs.readFileSync(path.join(HOSTFX, 'existing', 'crm.html'), 'utf8'), '托管模式不修改用户原文件');
+
+/* ---------- 3. 反例：每一类问题都要被拦住 ---------- */
+console.log('\n3. 门禁反例（每项都应构建失败，且不生成交付文件）');
+const NEG = [
+  ['原型多出需求没有的按钮', 'UNREGISTERED', [[P03, "'<div data-fn=\"dept-table\">'", "h.btn('批量删除', { act: 'toast' }) + '<div data-fn=\"dept-table\">'"]]],
+  ['只在某个数据场景出现的未登记按钮', 'UNREGISTERED', [['prd/pages/M01-home.js', "var list = empty", "var extra = c.s.balance.annual === 0 ? h.btn('购买假期', { act: 'toast' }) : ''; var list = empty"], ['prd/pages/M01-home.js', "body: h.fn('balance'", "body: extra + h.fn('balance'"]]],
+  ['需求有、原型没有', 'FN_UNUSED', [[P03, "h.btn(h.i('download', 16) + '导出明细', { fn: 'export', act: 'toast', msg: '演示：开始导出' })", "''"]]],
+  ['data-fn 指向不存在的功能点', 'FN_UNKNOWN', [[P03, "data-fn=\"month-pick\"", "data-fn=\"month-picker\""]]],
+  ['有输入控件但没有字段定义', 'FIELD_MISSING', [[P03, /fields: \[\n        \{ key: 'month'[^\n]*\n      \],/, '']]],
+  ['控件绑定的字段未定义', 'FIELD_UNDECLARED', [[M02, "field: 'reason' }", "field: 'remark' }"]]],
+  ['列表没有空数据说明', 'LIST_EMPTY', [[P01, "      empty: '显示“没有待审批的请假”，并提供“查看已处理”链接',\n", '']]],
+  ['有提交按钮但没有异常处理', 'ERRORS', [[P02, /      errors: \['员工已撤回[^\n]*\n/, '']]],
+  ['功能点没有交互说明', 'FN_DESC', [[P03, "desc: '选择要统计的自然月，切换后表格和合计同时刷新。',", "desc: '',"]]],
+  ['功能点没有来源也没标假设', 'FN_SRC', [[P03, "      src: '需求材料 · 痛点 3'\n", '']]],
+  ['状态没有出现条件', 'STATE_WHEN', [[P03, "when: '默认显示上个自然月'", "when: ''"]]],
+  ['页面没有目标', 'PAGE', [[P03, "goal: 'HR 每月按部门查看请假天数，导出后用于考勤核算，替代手工核对。',", '']]],
+  ['跳转到不存在的页面', 'GO_TARGET', [[M03, "h.go('M01', 'list') + '>撤回</a>'", "h.go('M09', 'list') + '>撤回</a>'"]]],
+  ['跳转到不存在的状态', 'GO_TARGET', [[M03, "'<a' + h.go('M03', 'pending') + '>取消</a>", "'<a' + h.go('M03', 'waiting') + '>取消</a>"]]],
+  ['缺少本期不做', 'PRODUCT', [[PROD, /  scope: \{\n    out: \[[\s\S]*?\n    \]\n  \},\n/, '']]],
+  ['已移除的功能点仍在原型中', 'FN_REMOVED', [[P03, "status: 'assumed', statusNote: '导出格式和大数据量处理方式是 AI 补充的'", "status: 'assumed', statusNote: 'x', changes: [{ ver: 'V1.0', type: 'removed', note: '不做了' }]"]]],
+  ['版本变化引用未登记版本', 'RELEASE', [[P03, "      src: '需求材料 · 痛点 3'\n", "      src: '需求材料 · 痛点 3', changes: [{ ver: 'V9.9', type: 'added' }]\n"]]],
+  ['流程步骤引用不存在的状态', 'FLOW', [[PROD, "{ p: 'M03', st: 'withdraw'", "{ p: 'M03', st: 'cancel'"]]],
+  ['页面渲染抛异常', 'RENDER', [[P03, "var rows = [['教育产品部'", "var rows = c.s.notExist.x || [['教育产品部'"]]],
+  ['页面 ID 重复', 'BOOT', [[P03, "id: 'P03', end: 'pc'", "id: 'P01', end: 'pc'"]]]
+];
+for (const [name, code, edits] of NEG) {
+  const dir = variant(EXAMPLE, edits);
+  let r;
+  try { r = await build(dir, {}); } catch (e) { ok(false, name + ' → ' + code, e.message); continue; }
+  ok(!r.ok && hasCode(r, code) && outputs(dir).length === 0 && fs.existsSync(r.failed) && (code !== 'UNREGISTERED' || r.report.errors.filter((e) => e.code === code).length === 1), name + ' → ' + code, r.ok ? '构建竟然通过了' : '实际：' + Array.from(new Set(codes(r))).join(',') + ' ' + JSON.stringify(r.report.errors.filter((e) => e.code === code || true).slice(0, 2)));
+}
+{
+  const dir = variant(EXAMPLE, [[P03, "desc: '选择要统计的自然月，切换后表格和合计同时刷新。',", "desc: '',"]], { withOutput: true });
+  fs.writeFileSync(path.join(dir, '请假审批-原型需求.html'), 'OLD');
+  const r = await build(dir, {});
+  ok(!r.ok && fs.readFileSync(path.join(dir, '请假审批-原型需求.html'), 'utf8') === 'OLD', '检查失败时不覆盖已有交付文件');
+}
+{
+  const dir = variant(EXAMPLE, [[M02, "'<div class=\"mt16\">' + h.demo(", "'<div class=\"mt16\">' + ("]]);
+  const r = await build(dir, {});
+  ok(!r.ok && hasCode(r, 'UNREGISTERED'), '演示切换不包在 h.demo() 里会被当作未登记功能');
+}
+
+{
+  const dir = variant(EXAMPLE, [[P03, "h.btn(h.i('download', 16) + '导出明细', { fn: 'export', act: 'toast', msg: '演示：开始导出' })", "h.btn(h.i('download', 16) + '导出明细', { fn: 'export', act: 'toast', msg: '演示：开始导出' }) + '<a class=\"lnk\" data-fn=\"dept-table\" data-act=\"toast\">删除</a>'"]]);
+  const r = await build(dir, {});
+  ok(!r.ok && r.report.errors.some((e) => e.code === 'ERRORS' && /部门请假汇总/.test(e.msg)), '“删除”链接（不只是按钮）也要求写异常处理 → ERRORS');
+  const dir2 = variant(EXAMPLE, [[P01, "h.btn('审批', { sz: 'sm', k: 'pri', go: 'P02', st: 'detail' })],\n      ['张一鸣", "h.btn('进入审批', { sz: 'sm', k: 'pri', go: 'P02', st: 'detail' }) + h.btn('查看提交记录', { sz: 'sm', go: 'P02', st: 'detail' })],\n      ['张一鸣"]]);
+  const r2 = await build(dir2, {});
+  ok(r2.ok, '“进入审批”“查看提交记录”这类导航按钮不会被误判为提交操作', r2.ok ? '' : JSON.stringify(r2.report.errors.slice(0, 2)));
+  const dir3 = variant(EXAMPLE, [[P03, "{ id: 'month', label: '按月查看', when: '默认显示上个自然月' }", "{ id: 'month', label: '按月查看', when: '默认显示上个自然月 [待确认]' }"], [P03, "empty: '当月没有已通过的请假时显示“本月没有请假记录”'", "empty: '显示“本月没有请假记录” [AI 假设]'"]]);
+  const r3 = await build(dir3, { md: true });
+  const md3 = r3.mdFile ? fs.readFileSync(r3.mdFile, 'utf8') : '';
+  ok(r3.ok && r3.report.stats.pending === ex.report.stats.pending + 1 && r3.report.stats.assumed === ex.report.stats.assumed + 1 && /状态「按月查看」：默认显示上个自然月 \|/.test(md3), '状态出现条件、空数据说明里的标记也计入待确认 / AI 假设清单', JSON.stringify(r3.report && r3.report.stats));
+  const dir4 = variant(EXAMPLE, [[P03, "      src: '需求材料 · 痛点 3'\n", "      src: '需求材料 · 痛点 3', gap: '原型未画出年份切换，以需求为准'\n"]]);
+  const r4 = await build(dir4, {});
+  ok(r4.ok && r4.report.warns.some((w) => w.code === 'GAP_NATIVE'), '原生原型里写 gap 只给提醒（应该直接画出来）');
+}
+
+{
+  const dir = variant(EXAMPLE, [[P03, "{ key: 'month', name: '月份', type: '年月', required: true,", "{ key: 'month', name: '月份', type: '年月', requried: true, required: true, src: 'x',"]]);
+  const r = await build(dir, {});
+  ok(r.ok && r.report.warns.filter((w) => w.code === 'UNKNOWN_KEY').length === 2, '拼错或放错位置的字段名给出 UNKNOWN_KEY 提醒');
+  const dir2 = variant(EXAMPLE, [[PROD, "'加班、调休、出差申请（二期）',", "{ text: '加班、调休、出差申请（二期）', changes: [{ ver: 'V9', type: 'modified' }] },"]]);
+  const r2 = await build(dir2, {});
+  ok(!r2.ok && r2.report.errors.filter((e) => e.code === 'RELEASE').length >= 2, '“本期不做”等产品级条目上的 changes 也校验版本和 note → RELEASE');
+}
+
+console.log('\n4. 托管模式反例');
+const HNEG = [
+  ['原型多出的按钮没有登记也没写进 ignore', 'UNREGISTERED', [['prd/product.js', "        { sel: '#btn-export', why: '原型多出的“导出 Excel”，本期不做' },\n", '']]],
+  ['ignore 没写原因', 'HOST', [['prd/product.js', "{ sel: '.ai-fab', why: '原型多出的 AI 助手入口，本期不做' }", "'.ai-fab'"]]],
+  ['进入步骤找不到元素', 'HOST_ENTER', [['prd/pages/C01-customers.js', "enter: [{ click: '#btn-new' }]", "enter: [{ click: '#btn-create' }]"]]],
+  ['进入后 match 不成立', 'HOST_ENTER', [['prd/pages/C01-customers.js', "match: '#modal-new' }", "match: '#modal-edit' }"]]],
+  ['功能点选择器在原型里找不到', 'FN_UNUSED', [['prd/pages/C01-customers.js', "sel: '#btn-new',", "sel: '#btn-add', text: '新建',"]]],
+  ['托管页面功能点缺少 sel', 'HOST_SEL', [['prd/pages/D01-dashboard.js', "id: 'kpis', name: '本月指标', sel: '.kpis',", "id: 'kpis', name: '本月指标',"]]]
+];
+{
+  const dir = variant(HOSTFX, [['prd/product.js', "      ignore: [", "      boot: [{ js: \"confirm('确定要继续吗？'); alert('欢迎')\" }],\n      ignore: ["]]);
+  const t0 = Date.now();
+  const r = await build(dir, {});
+  ok(r.ok && Date.now() - t0 < 60000 && r.report.warns.some((w) => w.code === 'HOST_DIALOG'), '原型弹出原生 confirm / alert 时检查不会卡住，并给出提醒（' + Math.round((Date.now() - t0) / 1000) + ' 秒）', r.ok ? '' : JSON.stringify(r.report.errors.slice(0, 2)));
+  const dir2 = variant(HOSTFX, [['prd/product.js', "{ sel: '.ai-fab', why: '原型多出的 AI 助手入口，本期不做' }", "{ sel: '.ai-fab', name: 'AI 助手入口', why: '另行评审', label: '评审范围外' }"]]);
+  const r2 = await build(dir2, { md: true });
+  const md2 = r2.mdFile ? fs.readFileSync(r2.mdFile, 'utf8') : '';
+  ok(r2.ok && /### 原型中有、评审范围外/.test(md2) && /AI 助手入口 `\.ai-fab`/.test(md2) && /### 原型中有、本期不做/.test(md2), 'ignore 支持自定义标签（如“评审范围外”）和可读名称，需求文档分组列出');
+  const dir3 = variant(HOSTFX, [['prd/pages/C01-customers.js', "      src: '需求材料'\n    },\n    {\n      id: 'table'", "      src: '需求材料'\n    },\n    { id: 'import', name: '批量导入', desc: '上传 Excel 批量导入客户，重复手机号跳过。', gap: '原型未画出导入入口，以需求为准', src: '需求材料' },\n    {\n      id: 'table'"]]);
+  const r3 = await build(dir3, { md: true });
+  const md3 = r3.mdFile ? fs.readFileSync(r3.mdFile, 'utf8') : '';
+  ok(r3.ok && /### 需求中有、原型未体现[\s\S]*批量导入/.test(md3) && r3.report.stats.gaps === 1, '托管：需求有、原型缺的功能点用 gap 记录，单列“需求中有、原型未体现”');
+}
+for (const [name, code, edits] of HNEG) {
+  const dir = variant(HOSTFX, edits);
+  let r;
+  try { r = await build(dir, {}); } catch (e) { ok(false, name + ' → ' + code, e.message); continue; }
+  ok(!r.ok && hasCode(r, code), name + ' → ' + code, r.ok ? '构建竟然通过了' : '实际：' + Array.from(new Set(codes(r))).join(','));
+}
+
+/* ---------- 5. 版本迭代 ---------- */
+console.log('\n5. 版本迭代');
+const relDir = variant(EXAMPLE, [], { withOutput: true });
+fs.copyFileSync(ex.file, path.join(relDir, '请假审批-原型需求.html'));
+const relEdits = [
+  [PROD, "    { id: 'V1.0', date: '2026-11-03', summary: '首版：员工手机端发起与查看请假，主管 PC 端审批，HR 查看月度统计' }", "    { id: 'V1.0', date: '2026-11-03', summary: '首版' },\n    { id: 'V1.1', date: '2026-12-01', summary: '统计支持导出；去掉申请人历史' }"],
+  [P02, "status: 'assumed', statusNote: '需求材料没有提到主管需要看历史记录，这是 AI 为“辅助判断”补充的，评审确认是否保留'", "status: 'assumed', statusNote: 'x', changes: [{ ver: 'V1.1', type: 'removed', note: '评审决定去掉，避免主管看到病假详情' }]"],
+  [P02, "'<div class=\"box fill mt16\" data-fn=\"history\"><div class=\"b md\">本年度已请</div><div class=\"row g24 mt8 md\"><span>年假 3 天</span><span>病假 1 天</span><span>事假 0.5 天</span></div><div class=\"sm mut2 mt8\">年假剩余 3.5 天（已扣除本单）</div></div>'", "''"],
+  [P03, "      src: '需求材料 · 痛点 3'\n    },\n    {\n      id: 'dept-table'", "      src: '需求材料 · 痛点 3',\n      changes: [{ ver: 'V1.1', type: 'modified', note: '可选范围扩大到近 24 个月' }]\n    },\n    {\n      id: 'dept-table'"]
+];
+for (const [rel, from, to] of relEdits) { const f = path.join(relDir, rel); const s = fs.readFileSync(f, 'utf8'); if (!s.includes(from)) throw new Error('迭代用例替换目标不存在'); fs.writeFileSync(f, s.replace(from, to)); }
+const rr = await build(relDir, { md: true });
+ok(rr.ok, 'V1.1 构建通过', rr.ok ? '' : JSON.stringify(rr.report.errors.slice(0, 3)));
+ok(rr.ok && rr.archived && fs.existsSync(rr.archived) && /V1\.0\.html$/.test(rr.archived), '上一版交付文件自动归档到 归档/');
+const rmd = rr.mdFile ? fs.readFileSync(rr.mdFile, 'utf8') : '';
+ok(/### V1\.1 变化明细[\s\S]*移除[\s\S]*申请人本年度请假[\s\S]*评审决定去掉/.test(rmd) && /修改[\s\S]*统计月份/.test(rmd), '变更记录列出本版新增/修改/移除及原因');
+ok(rr.ok && rr.report.stats.changes === 2, '本版变化计数正确（' + (rr.report && rr.report.stats.changes) + '）');
+{
+  const d = variant(relDir, [[P03, "id: 'P03', end: 'pc', group: '统计', title: '请假统计',", "id: 'P03', end: 'pc', group: '统计', title: '请假统计', changes: [{ ver: 'V1.1', type: 'added' }],"], [PROD, "  goals: [\n    '员工在手机上", "  goals: [\n    { text: 'HR 可导出明细用于核算', changes: [{ ver: 'V1.1', type: 'added' }] },\n    '员工在手机上"]]);
+  const r = await build(d, { md: true });
+  const m = r.mdFile ? fs.readFileSync(r.mdFile, 'utf8') : '';
+  ok(r.ok && r.report.stats.changes === 4 && /新增 \| 建设目标 \| HR 可导出明细用于核算/.test(m), '新增页面的功能点自动算作本版新增（不重复计入明细）；建设目标的变化进入变更记录', JSON.stringify(r.report && r.report.stats));
+}
+
+/* ---------- 6. 浏览器端 ---------- */
+console.log('\n6. 浏览器端交互');
+const b = await launch();
+try {
+  const page = await b.newPage({ width: 1600, height: 1000 });
+  const go = async (file, hash) => { await page.goto('about:blank'); await page.goto(fileUrl(file) + (hash || '')); await page.waitFor('window.__PRD_READY === true'); await sleep(400); };
+  await go(ex.file, '#/doc');
+  const d0 = await page.evaluate('({ toc: document.querySelectorAll("#left .nv-i").length, pages: document.querySelectorAll("#docbody a[id^=d-pg-]").length, badge: (document.querySelector(".audit-badge")||{}).textContent || "", sum: document.querySelectorAll("#right .issue").length })');
+  ok(d0.pages === 7 && d0.toc >= 10 && /检查通过/.test(d0.badge), '需求文档：目录、7 个页面章节、检查通过徽标', JSON.stringify(d0));
+  await page.evaluate('location.hash = "#/doc/d-pg-P02"; 1');
+  await sleep(400);
+  const anchorTop = await page.evaluate('Math.round(document.getElementById("d-pg-P02").getBoundingClientRect().top)');
+  ok(anchorTop > 40 && anchorTop < 300, '文档目录跳转到对应章节（top=' + anchorTop + '）');
+  const mdLen = await page.evaluate('W.doc.markdown({ html: false }).length');
+  ok(mdLen > 8000 && Math.abs(mdLen - md.length) < 400, '页面内导出的 Markdown 与构建导出一致（' + mdLen + ' / ' + md.length + '）');
+
+  await go(ex.file, '#/p/M01/list');
+  let dg = await page.evaluate('W.viewerDiag()');
+  ok(dg.page === 'M01' && dg.dots.length === 3 && dg.cards >= 3, '页面视图：圆点与本页功能点对应（' + dg.dots.join(',') + '）', JSON.stringify(dg));
+  await page.evaluate('document.querySelector(".fdot[data-fdot=records]").click(); 1');
+  await sleep(200);
+  const selOk = await page.evaluate('document.querySelector(".fc[data-fid=records]").classList.contains("on") && !document.querySelector(".fc[data-fid=records]").classList.contains("fold") && document.querySelectorAll("#dots .fbox").length > 0');
+  ok(selOk, '点击圆点：选中并展开对应卡片，画板高亮目标区域');
+  await page.evaluate('document.querySelector("#right .chip[data-nav=\'M01|empty\']").click(); 1');
+  await sleep(400);
+  dg = await page.evaluate('W.viewerDiag()');
+  const emptyText = await page.evaluate('document.querySelector("#ab").textContent.indexOf("还没有请假记录") >= 0');
+  ok(dg.state === 'empty' && emptyText, '状态切换：右侧状态标签切到“无请假记录”并应用数据场景');
+  await page.evaluate('document.querySelector("[data-tool=reset]").click(); 1');
+  await sleep(300);
+  await go(ex.file, '#/p/M01/empty');
+  ok(await page.evaluate('W.store.hasRecords === false && document.querySelector("#ab").textContent.indexOf("还没有请假记录") >= 0'), '直接打开状态链接（刷新、分享链接、截图）时也应用该状态的演示数据');
+  await page.evaluate('location.hash = "#/p/M01/list"; 1');
+  await sleep(300);
+  ok(await page.evaluate('W.store.hasRecords === true'), '从目录或地址切换状态时应用目标状态的演示数据');
+  await page.evaluate('W.nav("M01", "empty", "hasRecords=true"); 1');
+  await sleep(300);
+  ok(await page.evaluate('W.store.hasRecords === true && W.store.balance.annual === 5'), '跳转时按钮上的 data-set 晚于目标状态的 set 生效');
+  await page.evaluate('document.querySelector("[data-tool=reset]").click(); 1');
+  await sleep(200);
+
+  await go(ex.file, '#/p/P02/reject');
+  dg = await page.evaluate('W.viewerDiag()');
+  ok(dg.dots.length === 1 && dg.dots[0] === 'reject-form', '弹层状态只显示最高层的功能点圆点', JSON.stringify(dg.dots));
+
+  await go(ex.file, '#/p/P01/list?f=f2&i=0');
+  await page.evaluate('document.querySelector("#ab button[data-go=P02]").click(); 1');
+  await sleep(400);
+  const fb = await page.evaluate('({ hash: location.hash, i: document.querySelector("#flowbar").dataset.i })');
+  ok(/#\/p\/P02\/detail\?f=f2&i=1/.test(fb.hash) && fb.i === '1', '流程演示：点击画板按钮自动前进到下一步', JSON.stringify(fb));
+  await page.evaluate('document.querySelector("#flowbar [data-fb=next]").click(); 1');
+  await sleep(300);
+  ok(await page.evaluate('/P02\\/reject/.test(location.hash)'), '流程条“下一步”可用');
+
+  await page.evaluate('document.dispatchEvent(new KeyboardEvent("keydown", { key: "n" })); 1');
+  ok(await page.evaluate('document.body.classList.contains("no-dots")'), '快捷键 N 切换圆点显示');
+  await page.evaluate('document.dispatchEvent(new KeyboardEvent("keydown", { key: "n" })); 1');
+  await page.evaluate('document.dispatchEvent(new KeyboardEvent("keydown", { key: "h" })); 1');
+  ok(await page.evaluate('document.body.classList.contains("hot")'), '快捷键 H 显示热区');
+  await page.evaluate('document.dispatchEvent(new KeyboardEvent("keydown", { key: "h" })); 1');
+
+  await page.setViewport(900, 900);
+  await go(ex.file, '#/p/P01/list');
+  const narrow = await page.evaluate('({ right: getComputedStyle(document.querySelector("#right")).display, scale: W.viewerDiag().scale })');
+  await page.evaluate('document.querySelector("[data-tool=right]").click(); 1');
+  await sleep(250);
+  const opened = await page.evaluate('getComputedStyle(document.querySelector("#right")).display');
+  ok(narrow.right === 'none' && opened === 'block' && narrow.scale < 1, '窄屏：侧栏收起为抽屉，画板等比缩小');
+  await page.setViewport(1600, 1000);
+
+  /* 托管 */
+  if (hr.ok) {
+    await go(hr.file, '#/p/D01');
+    await page.waitFor('document.querySelectorAll("#dots .fdot").length > 0', 8000).catch(() => {});
+    dg = await page.evaluate('W.viewerDiag()');
+    const xd = await page.evaluate('document.querySelectorAll("#dots .xbox").length');
+    ok(dg.page === 'D01' && dg.dots.includes('kpis') && xd >= 1, '托管：圆点定位到原型元素，“本期不做”元素被标出', JSON.stringify(dg) + ' xdot=' + xd);
+    await page.evaluate('document.querySelector("#hostf").contentDocument.getElementById("kpi-follow").click(); 1');
+    await sleep(700);
+    dg = await page.evaluate('W.viewerDiag()');
+    ok(dg.page === 'C01' && dg.state === 'list', '托管：在原型里点击跳转后，右侧需求自动切换到对应页面', JSON.stringify(dg));
+    await page.evaluate('document.querySelector("#hostf").contentDocument.getElementById("btn-new").click(); 1');
+    await sleep(700);
+    dg = await page.evaluate('W.viewerDiag()');
+    ok(dg.state === 'new' && dg.dots.length === 1 && dg.dots[0] === 'form', '托管：打开弹窗后识别为弹层状态，只标弹层内功能点', JSON.stringify(dg));
+    await page.evaluate('location.hash = "#/p/D01"; 1');
+    await sleep(1200);
+    ok((await page.evaluate('W.viewerDiag()')).page === 'D01', '托管：从目录切换页面会重新进入原型对应画面');
+    const before = await page.evaluate('location.href');
+    await page.evaluate('(function(){ var d = document.querySelector("#hostf").contentDocument; var sc = d.createElement("script"); sc.textContent = "try { top.location.href = \\"about:blank#hijack\\"; } catch (e) {}"; d.body.appendChild(sc); return 1; })()');
+    await sleep(500);
+    ok((await page.evaluate('location.href')) === before && (await page.evaluate('!!window.__PRD_READY')), '托管：sandbox 阻止原型跳走整个评审页');
+    page.errors.length = 0;
+  }
+
+  /* 版本视图 */
+  if (rr.ok) {
+    await go(rr.file, '#/p/P02/detail');
+    const before = await page.evaluate('W.viewerDiag().dots.length');
+    const hasRemoved = await page.evaluate('!!document.querySelector(".fc[data-fid=history]")');
+    await page.evaluate('document.querySelector("[data-tool=chg]").click(); 1');
+    await sleep(400);
+    const after = await page.evaluate('({ dots: W.viewerDiag().dots.length, removed: !!document.querySelector(".fc.removed[data-fid=history]") })');
+    ok(!hasRemoved && after.removed && after.dots < before, '本版变化：显示已移除项（删除线）、只标变化的圆点', JSON.stringify({ before, hasRemoved, after }));
+    await page.evaluate('location.hash = "#/doc"; 1');
+    await sleep(400);
+    const docOnly = await page.evaluate('({ h: document.querySelector("#docbody").textContent.indexOf("V1.1 本版变化") >= 0, pages: document.querySelectorAll("#docbody a[id^=d-pg-]").length })');
+    ok(docOnly.h && docOnly.pages === 2, '本版变化：需求文档只列有变化的页面', JSON.stringify(docOnly));
+    await page.evaluate('document.querySelector("[data-tool=chg]").click(); 1');
+  }
+  ok(page.errors.length === 0, '浏览过程中没有控制台错误', page.errors.join('\n'));
+  await page.close();
+} finally {
+  await b.close();
+}
+
+/* ---------- 7. 安全 ---------- */
+console.log('\n7. 内容安全');
+{
+  const dir = variant(EXAMPLE, [[P03, "desc: '选择要统计的自然月，切换后表格和合计同时刷新。',", "desc: '选择月份 <img src=\"data:image/gif;base64,R0lGODlhAQABAAAAACw=\" onerror=\"window.__xss=1\"> <a href=\"javascript:window.__xss=2\">链接</a> <script>window.__xss=3<\\/script> <iframe src=\"about:blank\"></iframe>',"]]);
+  const r = await build(dir, {});
+  ok(r.ok, '含恶意 HTML 的需求文字仍可构建', r.ok ? '' : JSON.stringify(r.report.errors.slice(0, 3)));
+  if (r.ok) {
+    const b2 = await launch();
+    try {
+      const pg = await b2.newPage();
+      await pg.goto(fileUrl(r.file) + '#/p/P03/month');
+      await pg.waitFor('window.__PRD_READY === true');
+      await sleep(400);
+      await pg.evaluate('document.querySelectorAll("#right a[href^=javascript]").forEach(function(a){a.click()}); location.hash="#/doc"; 1');
+      await sleep(500);
+      const x = await pg.evaluate('({ xss: window.__xss || 0, js: document.querySelectorAll("a[href^=javascript]").length, onerr: document.querySelectorAll("[onerror]").length, ifr: document.querySelectorAll("#docbody iframe, #right iframe").length })');
+      ok(x.xss === 0 && x.js === 0 && x.onerr === 0 && x.ifr === 0, '需求文字经过 DOMPurify 清洗：脚本、事件属性、javascript: 链接均被移除', JSON.stringify(x));
+      await pg.close();
+    } finally { await b2.close(); }
+  }
+}
+
+/* ---------- 8. 脚手架 ---------- */
+{
+  const dir = variant(EXAMPLE, [[P03, "desc: '选择要统计的自然月，切换后表格和合计同时刷新。',", "desc: '选择要统计的自然月，切换后刷新。示意图：![](./shot.png)',"]]);
+  const r = await build(dir, {});
+  ok(!r.ok && hasCode(r, 'IMG_SRC'), '需求文字引用本地图片 → IMG_SRC');
+  const dir2 = variant(EXAMPLE, [[P03, "desc: '选择要统计的自然月，切换后表格和合计同时刷新。',", "desc: '选择月份，TODO 补充口径',"]]);
+  const r2 = await build(dir2, {});
+  ok(!r2.ok && hasCode(r2, 'TEXT'), '需求文字留有占位（TODO）→ TEXT');
+}
+
+console.log('\n8. 脚手架');
+{
+  const dir = path.join(TMP, 'scaffold');
+  execFileSync(process.execPath, [path.join(here, 'new.mjs'), dir, '--name', '测试产品', '--end', 'pc:管理后台', '--end', 'mobile:学员端'], { stdio: 'pipe' });
+  ok(fs.existsSync(path.join(dir, 'prd', 'product.js')) && fs.existsSync(path.join(dir, 'prd', 'kit.js')) && fs.readdirSync(path.join(dir, 'prd', 'pages')).length === 2, '新建项目生成 product.js、kit.js 和每端首页模板');
+  const r = await build(dir, {});
+  ok(!r.ok && hasCode(r, 'PRODUCT') && hasCode(r, 'PAGE') && hasCode(r, 'STATE_WHEN') && hasCode(r, 'FN_DESC'), '空模板构建会逐项提示需要补的需求内容，而不是崩溃');
+  let refused = false;
+  try { execFileSync(process.execPath, [path.join(here, 'new.mjs'), dir, '--name', 'x'], { stdio: 'pipe' }); } catch (e) { refused = true; }
+  ok(refused, '已有项目时拒绝覆盖');
+  const hdir = path.join(TMP, 'scaffold-host');
+  execFileSync(process.execPath, [path.join(here, 'new.mjs'), hdir, '--name', '托管', '--host', path.join(HOSTFX, 'existing', 'crm.html')], { stdio: 'pipe' });
+  const hrr = await build(hdir, {});
+  ok(!hrr.ok && hasCode(hrr, 'UNREGISTERED') && !hasCode(hrr, 'JS'), '托管模板构建能加载原型并列出未登记元素');
+}
+
+console.log('\n结果：' + pass + ' 通过，' + failN + ' 失败');
+if (failN) console.log('失败项：\n  - ' + fails.join('\n  - '));
+if (!KEEP && !failN) fs.rmSync(TMP, { recursive: true, force: true });
+else console.log('临时目录保留：' + TMP);
+process.exit(failN ? 1 : 0);

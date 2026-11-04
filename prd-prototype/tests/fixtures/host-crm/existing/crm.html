@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>客户管理系统原型</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { margin: 0; font-family: -apple-system, "PingFang SC", sans-serif; background: #f5f6f8; color: #1d2129; }
+  .layout { display: flex; height: 100vh; }
+  .sidebar { width: 200px; background: #1f2a44; color: #fff; padding: 16px 0; }
+  .sidebar .logo { padding: 0 20px 20px; font-weight: 700; font-size: 18px; }
+  .menu-item { padding: 12px 20px; cursor: pointer; color: #c9d1e3; }
+  .menu-item.active { background: #2f5bea; color: #fff; }
+  .main { flex: 1; padding: 24px 32px; overflow: auto; }
+  .page { display: none; }
+  .page.active { display: block; }
+  .toolbar { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
+  .btn { height: 34px; padding: 0 14px; border-radius: 6px; border: 1px solid #d0d4da; background: #fff; cursor: pointer; }
+  .btn-primary { background: #2f5bea; color: #fff; border-color: #2f5bea; }
+  table { width: 100%; border-collapse: collapse; background: #fff; }
+  th, td { padding: 10px 12px; border-bottom: 1px solid #eceef1; text-align: left; font-size: 14px; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+  .kpi { background: #fff; border-radius: 8px; padding: 16px; cursor: pointer; }
+  .kpi b { font-size: 26px; display: block; }
+  .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; align-items: center; justify-content: center; }
+  .modal-mask.show { display: flex; }
+  .modal { background: #fff; width: 440px; border-radius: 10px; padding: 24px; }
+  .modal label { display: block; margin: 12px 0 6px; font-size: 13px; color: #4e5969; }
+  .modal input, .modal select { width: 100%; height: 36px; box-sizing: border-box; border: 1px solid #d0d4da; border-radius: 6px; padding: 0 10px; }
+  .ai-fab { position: fixed; right: 24px; bottom: 24px; width: 52px; height: 52px; border-radius: 50%; background: #7a3cff; color: #fff; border: 0; font-size: 18px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo">CRM 原型</div>
+    <div class="menu-item active" id="nav-dashboard" onclick="showPage('dashboard')">工作台</div>
+    <div class="menu-item" id="nav-customers" onclick="showPage('customers')">客户列表</div>
+  </aside>
+  <main class="main">
+    <section class="page active" id="page-dashboard">
+      <h2>工作台</h2>
+      <div class="kpis">
+        <div class="kpi" id="kpi-new"><span>本月新增客户</span><b>128</b></div>
+        <div class="kpi" id="kpi-follow"><span>待跟进</span><b>36</b></div>
+        <div class="kpi" id="kpi-deal"><span>本月成交</span><b>12</b></div>
+      </div>
+    </section>
+    <section class="page" id="page-customers">
+      <h2>客户列表</h2>
+      <div class="toolbar">
+        <input id="kw" placeholder="搜索客户名称或手机号" style="height:34px;width:240px;border:1px solid #d0d4da;border-radius:6px;padding:0 10px">
+        <select id="level"><option>全部等级</option><option>A 类</option><option>B 类</option><option>C 类</option></select>
+        <span style="flex:1"></span>
+        <button class="btn" id="btn-export">导出 Excel</button>
+        <button class="btn btn-primary" id="btn-new" onclick="openModal()">新建客户</button>
+      </div>
+      <table id="customer-table">
+        <thead><tr><th>客户名称</th><th>手机号</th><th>等级</th><th>负责人</th><th>操作</th></tr></thead>
+        <tbody>
+          <tr><td>北京晨光科技</td><td>138****1234</td><td>A 类</td><td>李雷</td><td><a href="#" class="op-edit">编辑</a></td></tr>
+          <tr><td>上海远望贸易</td><td>139****5678</td><td>B 类</td><td>韩梅梅</td><td><a href="#" class="op-edit">编辑</a></td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</div>
+<div class="modal-mask" id="modal-new">
+  <div class="modal">
+    <h3>新建客户</h3>
+    <label>客户名称 *</label><input id="f-name" placeholder="请输入客户名称">
+    <label>手机号 *</label><input id="f-phone" placeholder="11 位手机号">
+    <label>客户等级</label><select id="f-level"><option>A 类</option><option>B 类</option><option>C 类</option></select>
+    <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:20px">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="closeModal()">保存</button>
+    </div>
+  </div>
+</div>
+<button class="ai-fab" title="AI 助手">AI</button>
+<script src="app.js"></script>
+</body>
+</html>
