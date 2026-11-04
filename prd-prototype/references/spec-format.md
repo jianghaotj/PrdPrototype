@@ -54,7 +54,7 @@
 | `home` | 该端首页的页面 ID |
 | `url` | PC 地址栏里的演示地址 |
 | `desc` | 端的说明，进入“信息架构” |
-| `width`、`height` | 画板尺寸，默认 PC 1280 宽、手机 375×812 |
+| `width`、`height` | 画板尺寸，默认 PC 1280 宽、手机 375×812；选用规范包（`--theme`）时 PC 为 1440×900 |
 | `host`、`ignore`、`boot`、`settle`、`resetKeys` | 托管模式专用，见 `host-mode.md` |
 
 ## W.page({...})

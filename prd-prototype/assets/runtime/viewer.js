@@ -215,12 +215,15 @@
     var e = W.end(p.end);
     var ctx = { st: st, s: W.store, p: p, q: q || {}, end: e };
     var html;
+    /* 组件扩展（如规范包 theme-kit.js）按这个值判断当前端，手机端走原有实现 */
+    W.device = e.device === 'mobile' ? 'mobile' : 'pc';
     try { html = p.render(ctx); } catch (err) {
       console.error(err);
       html = '<div style="padding:40px;color:#c4322a">渲染出错：' + h.esc(err.message) + '</div>';
     }
     ui.hostEnd = null;
-    $('#stage-in').innerHTML = '<div id="devwrap">' + devHTML(e, '<div class="ab" id="ab">' + html + '</div>') + '</div><div class="cap">' + capHTML(p, st) + '</div>';
+    var device = e.device === 'mobile' ? 'mobile' : 'pc';
+    $('#stage-in').innerHTML = '<div id="devwrap">' + devHTML(e, '<div class="ab" id="ab" data-device="' + device + '">' + html + '</div>') + '</div><div class="cap">' + capHTML(p, st) + '</div>';
     fit();
     var ab = $('#ab');
     $$('.body,.pane,.m-body,.drw-b', ab).forEach(function (el) { el.scrollTop = 0; });

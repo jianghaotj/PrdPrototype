@@ -259,6 +259,8 @@
       if (W.host.isHosted(p)) continue;
       var e = W.end(p.end) || {};
       box.style.width = (e.width || (e.device === 'mobile' ? 375 : 1280)) + 'px';
+      ab.setAttribute('data-device', e.device === 'mobile' ? 'mobile' : 'pc');
+      W.device = e.device === 'mobile' ? 'mobile' : 'pc';
       var sets = [null].concat(presetIds);
       for (var si = 0; si < p.states.length; si++) {
         var s = p.states[si];

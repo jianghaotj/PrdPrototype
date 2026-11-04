@@ -74,6 +74,7 @@
     var out = {};
     var saved = JSON.stringify(W.store);
     var sets = [null].concat(W.presets().map(function (x) { return x.id; }));
+    W.device = ((W.end(p.end) || {}).device === 'mobile') ? 'mobile' : 'pc';
     (p.states.length ? p.states : [{ id: '' }]).forEach(function (s) {
       sets.forEach(function (ps) {
         try {

@@ -6,8 +6,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
+import vm from 'node:vm';
 import { build, auditSingleFile } from './build.mjs';
 import { launch, fileUrl, sleep } from './lib/browser.mjs';
+import { installTheme } from './lib/theme.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SKILL = path.resolve(here, '..');
@@ -366,6 +369,240 @@ console.log('\n8. 脚手架');
   execFileSync(process.execPath, [path.join(here, 'new.mjs'), hdir, '--name', '托管', '--host', path.join(HOSTFX, 'existing', 'crm.html')], { stdio: 'pipe' });
   const hrr = await build(hdir, {});
   ok(!hrr.ok && hasCode(hrr, 'UNREGISTERED') && !hasCode(hrr, 'JS'), '托管模板构建能加载原型并列出未登记元素');
+}
+
+/* ---------- 9. 规范包（主题） ---------- */
+console.log('\n9. 规范包（主题）');
+const read = (f) => fs.readFileSync(f, 'utf8');
+/* allowed: 选择器必须以 allowedPrefix 开头。wire.css 限定到 .ab；规范包只给 PC 画板，限定到 .ab[data-device="pc"] */
+function unscopedSelectors(css, allowed = /^(\.ab\b|:where\(\.ab\)|\.hot \.ab\b)/) {
+  const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const bad = [];
+  const re = /([^{}]+)\{/g;
+  let m;
+  while ((m = re.exec(clean))) {
+    const head = m[1].trim();
+    if (head.startsWith('@')) continue;
+    head.split(',').map((s) => s.trim()).filter(Boolean).forEach((s) => {
+      if (/^(to|from|\d+(\.\d+)?%)$/.test(s)) return;
+      if (!allowed.test(s)) bad.push(s);
+    });
+  }
+  return bad;
+}
+const PC_SCOPE = /^\.ab\[data-device="pc"\]/;
+/* 每个状态的计算样式指纹：画板内所有元素的标签、class、关键计算样式。 */
+const FP_JS = `(function(){
+  var root = document.getElementById('ab');
+  if (!root) return 'NO_AB';
+  var props = ['color','background-color','font-size','font-weight','font-family','line-height','display','border-top-width','border-top-color','border-radius','padding-top','padding-left','margin-top','margin-left','text-align','opacity','position'];
+  var all = [root].concat(Array.prototype.slice.call(root.querySelectorAll('*')));
+  return all.map(function(el){
+    var cs = getComputedStyle(el);
+    return el.tagName + '.' + (el.getAttribute('class') || '') + ':' + props.map(function(p){ return cs.getPropertyValue(p); }).join('|');
+  }).join('\\n');
+})()`;
+/* 逐个页面状态打开交付文件，返回 { 'P01/list': 指纹, ... }，以及每个页面的端类型 */
+async function fingerprintAll(bt, file) {
+  const pg = await bt.newPage({ width: 1600, height: 1000 });
+  const out = {}, devices = {};
+  try {
+    await pg.goto(fileUrl(file));
+    await pg.waitFor('window.__PRD_READY === true');
+    const list = JSON.parse(await pg.evaluate('JSON.stringify(Object.keys(W.pages).map(function(id){ var p = W.pages[id]; return [id, (W.end(p.end) || {}).device || "pc", p.states.map(function(s){ return s.id; })]; }))'));
+    for (const [pid, dev, states] of list) {
+      devices[pid] = dev;
+      for (const st of states) {
+        await pg.evaluate('localStorage.clear(); 1');
+        await pg.goto('about:blank');
+        await pg.goto(fileUrl(file) + '#/p/' + pid + '/' + st);
+        await pg.waitFor('window.__PRD_READY === true');
+        await sleep(300);
+        out[pid + '/' + st] = await pg.evaluate(FP_JS);
+      }
+    }
+  } finally { await pg.close(); }
+  return { fp: out, devices };
+}
+function digestOf(fp) {
+  const h = crypto.createHash('sha256');
+  Object.keys(fp).sort().forEach((k) => h.update(k + '\n' + fp[k] + '\n'));
+  return h.digest('hex');
+}
+{
+  const dir = path.join(TMP, 'theme-scaffold');
+  execFileSync(process.execPath, [path.join(here, 'new.mjs'), dir, '--name', '主题测试', '--theme', 'gaodeng-pc', '--end', 'pc:管理后台'], { stdio: 'pipe' });
+  ok(fs.existsSync(path.join(dir, 'prd', 'theme.css')) && fs.existsSync(path.join(dir, 'prd', 'theme-kit.js')), '选用规范包时 prd/ 下生成 theme.css 和 theme-kit.js');
+  ok(/width: 1440, height: 900/.test(fs.readFileSync(path.join(dir, 'prd', 'product.js'), 'utf8')), '选用规范包时 PC 端默认 1440×900');
+  let badTheme = false;
+  try { execFileSync(process.execPath, [path.join(here, 'new.mjs'), path.join(TMP, 'theme-bad'), '--name', 'x', '--theme', 'no-such'], { stdio: 'pipe' }); } catch (e) { badTheme = true; }
+  ok(badTheme, '规范包名称不存在时拒绝生成');
+  let badHost = false;
+  try { execFileSync(process.execPath, [path.join(here, 'new.mjs'), path.join(TMP, 'theme-host'), '--name', 'x', '--theme', 'gaodeng-pc', '--host', path.join(HOSTFX, 'existing', 'crm.html')], { stdio: 'pipe' }); } catch (e) { badHost = true; }
+  ok(badHost, '托管模式不能与 --theme 同用');
+  let badNoValue = false;
+  try { execFileSync(process.execPath, [path.join(here, 'new.mjs'), path.join(TMP, 'theme-novalue'), '--name', 'x', '--theme'], { stdio: 'pipe' }); } catch (e) { badNoValue = true; }
+  ok(badNoValue && !fs.existsSync(path.join(TMP, 'theme-novalue', 'prd', 'product.js')), '--theme 不带规范包名时报错，不生成线框项目');
+}
+const themed = variant(EXAMPLE, []);
+installTheme(path.join(themed, 'prd'), 'gaodeng-pc');
+const tr = await build(themed, {});
+ok(tr.ok && fs.readFileSync(tr.file, 'utf8').includes('.ab[data-device="pc"] .btn.pri'), '带规范包的样例构建通过，主题样式内联进交付文件', tr.ok ? '' : JSON.stringify(tr.report.errors.slice(0, 3)));
+if (tr.ok) {
+  const bt = await launch();
+  try {
+    const pg = await bt.newPage({ width: 1600, height: 1000 });
+    const open = async (file, hash) => { await pg.goto('about:blank'); await pg.goto(fileUrl(file) + hash); await pg.waitFor('window.__PRD_READY === true'); await sleep(400); };
+    await open(tr.file, '#/p/P01/list');
+    const sz = JSON.parse(await pg.evaluate(`JSON.stringify({
+      pri: getComputedStyle(document.querySelector('#ab .btn.pri')).backgroundColor,
+      priText: getComputedStyle(document.querySelector('#ab .btn.pri')).color,
+      sm: getComputedStyle(document.querySelector('#ab .btn.sm')).height,
+      td: getComputedStyle(document.querySelector('#ab .tbl td')).height,
+      th: getComputedStyle(document.querySelector('#ab .tbl th')).height,
+      tag: getComputedStyle(document.querySelector('#ab .tag')).borderRadius
+    })`));
+    ok(sz.pri === 'rgb(50, 100, 250)' && sz.priText === 'rgb(255, 255, 255)', '主按钮使用规范品牌色 #3264FA，文字白色（' + sz.pri + '）', JSON.stringify(sz));
+    ok(sz.sm === '32px' && sz.td === '54px' && sz.th === '54px' && sz.tag === '2px', '按钮 32 高、表格单元格和表头 54 高、标签圆角 2px', JSON.stringify(sz));
+    await open(tr.file, '#/p/P02/reject');
+    const dlg = JSON.parse(await pg.evaluate(`JSON.stringify({
+      w: getComputedStyle(document.querySelector('#ab .dlg')).width,
+      head: getComputedStyle(document.querySelector('#ab .dlg h3')).height
+    })`));
+    ok(dlg.w === '480px' && dlg.head === '56px', '弹窗默认宽 480、头部 56（' + JSON.stringify(dlg) + '）');
+    const kit = JSON.parse(await pg.evaluate(`(function () {
+      var root = document.getElementById('ab');
+      root.insertAdjacentHTML('beforeend', W.h.btn('测试', { sz: 'xs', cls: 'probe' }));
+      var xs = getComputedStyle(document.querySelector('#ab .btn.probe')).height;
+      document.querySelector('#ab .btn.probe').remove();
+      var big = W.h.modal('t', 'b', '', { size: 'xl' });
+      return JSON.stringify({
+        xs: xs,
+        pager3: W.h.pager(3),
+        pager23: W.h.pager(23),
+        pager23p2: W.h.pager(23, { page: 2 }),
+        modalXl: big.indexOf('width:960px') >= 0,
+        empty: W.h.empty('暂无数据', '', '', { kind: 'system' }),
+        emptyTable: W.h.table(['a'], [], { empty: '暂无数据' })
+      });
+    })()`));
+    ok(kit.xs === '24px', '辅助按钮 sz:xs 为 24 高', kit.xs);
+    ok(kit.pager3.indexOf('共 3 条') >= 0 && kit.pager3.indexOf('pg-n') < 0, '分页：不足 10 行隐藏页码，保留“共 N 条”（按规范原文）', kit.pager3);
+    ok(kit.pager23.indexOf('第 1~10 条 / 共 23 条') >= 0 && kit.pager23p2.indexOf('第 11~20 条 / 共 23 条') >= 0, '分页：超过 10 行显示页码和“第 X~Y 条 / 共 N 条”');
+    ok(kit.modalXl && kit.empty.indexOf('data-empty="system"') >= 0 && kit.emptyTable.indexOf('class="emp"') >= 0 && kit.emptyTable.indexOf('<table') < 0, '弹窗四档宽度可选；整表无数据用缺省页替代表格');
+  } finally { await bt.close(); }
+
+  /* 外壳不受主题影响：同一路由下，有主题与无主题的外壳计算样式一致 */
+  const shellProbe = `(function () {
+    var sels = ['#top', '#top .brand', '#top .vbtn', '#left .nv-i', '#right .np h2', '#right .chip', '#right .np-sec h3', '.audit-badge'];
+    var props = ['color', 'background-color', 'font-size', 'font-weight', 'font-family', 'line-height', 'border-radius', 'height', 'padding-left'];
+    return sels.map(function (s) {
+      var el = document.querySelector(s);
+      if (!el) return s + ':none';
+      var cs = getComputedStyle(el);
+      return s + ':' + props.map(function (p) { return cs.getPropertyValue(p); }).join('|');
+    }).join('\\n');
+  })()`;
+  const sb = await launch();
+  try {
+    const pg = await sb.newPage({ width: 1600, height: 1000 });
+    const probe = async (file) => { await pg.goto('about:blank'); await pg.goto(fileUrl(file) + '#/p/P01/list'); await pg.waitFor('window.__PRD_READY === true'); await sleep(400); return pg.evaluate(shellProbe); };
+    const plain = await probe(ex.file);
+    const withTheme = await probe(tr.file);
+    ok(plain === withTheme && plain.indexOf('none') < 0, '外壳关键元素的计算样式不受规范包影响', plain === withTheme ? '' : 'plain:\n' + plain + '\ntheme:\n' + withTheme);
+  } finally { await sb.close(); }
+}
+/* 组件扩展守卫（不依赖样例页面）：theme-kit.js 覆盖的 h.empty、h.table、h.modal 在手机端必须与不带规范包时输出完全一致；
+   PC 端确实走规范版（否则覆盖没生效）。样例的手机页没有调用这三个组件，所以单靠指纹测试覆盖不到。 */
+{
+  const RUNTIME_CORE = path.join(SKILL, 'assets', 'runtime', 'core.js');
+  const KIT = path.join(SKILL, 'themes', 'gaodeng-pc', 'theme-kit.js');
+  const mkH = (withKit, device) => {
+    const win = { console, document: {}, addEventListener() {}, location: { href: 'about:blank' } };
+    win.window = win;
+    const ctx = vm.createContext(win);
+    vm.runInContext(read(RUNTIME_CORE), ctx);
+    if (withKit) vm.runInContext(read(KIT), ctx);
+    ctx.W.device = device;
+    return ctx.W.h;
+  };
+  const kitCases = {
+    empty: (h) => h.empty('暂无数据', '请稍后再试', '<button>刷新</button>'),
+    emptyNoDesc: (h) => h.empty('暂无数据', '', ''),
+    emptySystem: (h) => h.empty('加载失败', '网络异常', '', { kind: 'system' }),
+    tableEmpty: (h) => h.table(['a', 'b'], [], { empty: '暂无数据', emptyDesc: 'd' }),
+    tableRows: (h) => h.table(['a'], [['x']], {}),
+    modal: (h) => h.modal('标题', '正文', '<button>确定</button>'),
+    modalSizeM: (h) => h.modal('标题', '正文', '', { size: 'm' }),
+  };
+  const run = (h, fn) => { try { return fn(h); } catch (e) { return 'THROW ' + e.message; } };
+  const mobileDiff = Object.keys(kitCases).filter((k) => run(mkH(false, 'mobile'), kitCases[k]) !== run(mkH(true, 'mobile'), kitCases[k]));
+  ok(mobileDiff.length === 0, '手机端调用 h.empty、h.table、h.modal，输出与不带规范包时完全一致（' + Object.keys(kitCases).length + ' 种调用）', mobileDiff.join(', '));
+  const pcSame = Object.keys(kitCases).filter((k) => run(mkH(false, 'pc'), kitCases[k]) === run(mkH(true, 'pc'), kitCases[k]));
+  ok(pcSame.length < Object.keys(kitCases).length, 'PC 端 h.empty、h.table、h.modal 使用规范版（覆盖已生效）');
+  ok(run(mkH(true, 'mobile'), (h) => h.pager(23)) === '', '手机端 h.pager 返回空串（手机端没有分页组件）');
+}
+/* 选择器作用域守卫：wire.css 限定在 .ab 内；规范包只给 PC 画板，限定在 .ab[data-device="pc"] 内 */
+{
+  const wire = read(path.join(SKILL, 'assets', 'runtime', 'wire.css'));
+  const packTheme = read(path.join(SKILL, 'themes', 'gaodeng-pc', 'theme.css'));
+  const packTokens = read(path.join(SKILL, 'themes', 'gaodeng-pc', 'tokens.css'));
+  const bad = [...unscopedSelectors(wire), ...unscopedSelectors(packTheme, PC_SCOPE), ...unscopedSelectors(packTokens, PC_SCOPE)];
+  ok(bad.length === 0, 'wire.css 限定在 .ab 内，规范包限定在 .ab[data-device="pc"] 内', bad.slice(0, 10).join(' | '));
+}
+/* 规范包预览页：自己的 .ab 作用域里能取到变量（改动前的基准：正文色、字号、品牌按钮、色块） */
+{
+  const bp = await launch();
+  try {
+    const pg = await bp.newPage({ width: 1440, height: 900 });
+    const pv = (f) => path.join(SKILL, 'themes', 'gaodeng-pc', 'preview', f);
+    for (const f of ['colors.html', 'type.html', 'components.html']) {
+      await pg.goto('about:blank');
+      await pg.goto(fileUrl(pv(f)));
+      await sleep(300);
+      const r = JSON.parse(await pg.evaluate(`JSON.stringify({
+        body: getComputedStyle(document.body).color,
+        font: getComputedStyle(document.body).fontFamily,
+        h1: getComputedStyle(document.querySelector('h1')).fontSize,
+        transparentChips: [].slice.call(document.querySelectorAll('.chip')).filter(function (c) { return getComputedStyle(c).backgroundColor === 'rgba(0, 0, 0, 0)'; }).length,
+        chips: document.querySelectorAll('.chip').length
+      })`));
+      ok(r.body === 'rgb(26, 34, 51)' && /PingFang/.test(r.font) && r.h1 === '28px', f + '：正文色、苹方字体、标题 28px 取到规范值（' + JSON.stringify(r) + '）');
+      ok(r.chips === 0 || r.transparentChips === 0, f + '：色块都有颜色（' + r.chips + ' 个）');
+    }
+    await pg.goto('about:blank');
+    await pg.goto(fileUrl(pv('components.html')));
+    await sleep(300);
+    const b = JSON.parse(await pg.evaluate(`JSON.stringify((function () {
+      var el = document.querySelector('.btn-primary.btn-lg:not([disabled])');
+      var cs = getComputedStyle(el);
+      return { bg: cs.backgroundColor, h: cs.height };
+    })())`));
+    ok(b.bg === 'rgb(50, 100, 250)' && b.h === '40px', '预览页主按钮为品牌色 #3264FA、40 高（' + JSON.stringify(b) + '）');
+  } finally { await bp.close(); }
+}
+
+/* 请假审批：交付文件的指纹与仓库已提交的产物一致（改动前后渲染不变）。
+   手机画板不套规范包：带规范包的构建，手机页的指纹与不带规范包的一致；PC 页则有变化。 */
+{
+  const COMMITTED = path.join(EXAMPLE, '请假审批-原型需求.html');
+  const fb = await launch();
+  try {
+    const cur = await fingerprintAll(fb, ex.file);
+    const committed = await fingerprintAll(fb, COMMITTED);
+    const n = Object.keys(cur.fp).length;
+    ok(n === 15, '请假审批样例共 15 个页面状态（' + n + '）', n);
+    const d1 = digestOf(cur.fp), d2 = digestOf(committed.fp);
+    ok(d1 === d2 && n === Object.keys(committed.fp).length, '请假审批样例渲染与仓库已提交的产物一致（' + n + ' 个页面状态的计算样式指纹）', d1 + ' / ' + d2);
+
+    const themedFp = await fingerprintAll(fb, tr.file);
+    const mobileKeys = Object.keys(cur.fp).filter((k) => cur.devices[k.split('/')[0]] === 'mobile');
+    const pcKeys = Object.keys(cur.fp).filter((k) => cur.devices[k.split('/')[0]] !== 'mobile');
+    const mobileDiff = mobileKeys.filter((k) => themedFp.fp[k] !== cur.fp[k]);
+    ok(mobileKeys.length > 0 && mobileDiff.length === 0, '带规范包时，手机页的渲染与不带规范包时一致（' + mobileKeys.length + ' 个状态）', mobileDiff.slice(0, 5).join(', '));
+    const pcDiff = pcKeys.filter((k) => themedFp.fp[k] !== cur.fp[k]);
+    ok(pcKeys.length > 0 && pcDiff.length === pcKeys.length, '带规范包时，PC 页全部按规范包输出（' + pcDiff.length + '/' + pcKeys.length + ' 个状态有变化）');
+  } finally { await fb.close(); }
 }
 
 console.log('\n结果：' + pass + ' 通过，' + failN + ' 失败');

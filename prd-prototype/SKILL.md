@@ -40,8 +40,8 @@ description: "一站式产出“交互原型 + 需求文档”的单 HTML：从�
 
 1. **读材料，整理已知事实。** 能从文件、截图、已有原型里查到的事实自己查，不问用户。
 2. **轻量澄清。** 读 `references/clarify.md`。最多 2 轮、每轮不超过 6 题，每题带推荐答案，用户回“是”即采纳。材料已经足够时跳过提问。
-3. **出范围清单，等用户确认。** 列出端、页面、每页的状态和功能点、本期不做、AI 假设、待确认。**用户确认前不写任何页面代码。** 用户改了清单，只就改动部分再确认一次。
-4. **建项目。** `node scripts/new.mjs <项目目录> --name "产品名" --id 英文短名 --end pc:端名称 [--end mobile:端名称]`。项目目录默认放在需求材料旁边。`--id` 用于浏览器保存演示数据，建议给一个稳定的英文名。生成的端 ID：第一个 PC 端为 `pc`、第一个手机端为 `m`（同类再加为 `pc2`、`m2`），页面的 `end` 引用它。
+3. **出范围清单，等用户确认。** 列出端、页面、每页的状态和功能点、是否选用规范包（`--theme`，决定出线框还是高保真）、本期不做、AI 假设、待确认。**用户确认前不写任何页面代码。** 用户改了清单，只就改动部分再确认一次。
+4. **建项目。** `node scripts/new.mjs <项目目录> --name "产品名" --id 英文短名 --end pc:端名称 [--end mobile:端名称] [--theme gaodeng-pc]`。`--theme` 是可选的设计规范包：不选是线框；选用时 PC 端默认 1440×900，组件按规范输出。规范包不适用于托管模式。项目目录默认放在需求材料旁边。`--id` 用于浏览器保存演示数据，建议给一个稳定的英文名。生成的端 ID：第一个 PC 端为 `pc`、第一个手机端为 `m`（同类再加为 `pc2`、`m2`），页面的 `end` 引用它。
 5. **写需求数据。** 读 `references/spec-format.md`，先写 `prd/product.js`（背景、范围、角色、端、全局规则、数据字典、流程、澄清记录）。
 6. **逐页写页面。** 读 `references/components.md`。每个页面一个文件 `prd/pages/<编号>-<名称>.js`；脚手架生成的 `*-page.js` 是模板，改名后填写，页面 ID 不能重复。**先写 states 和 fns，再按 fns 写 render**。render 只画 fns 里登记的东西，用 `data-fn` 把元素挂到功能点上。参考 `examples/leave-approval/prd/` 的写法。写作中新补的规则级假设直接标 `[AI 假设]`，不必停下来再问，汇报时列出。
 7. **构建并修到通过。** `node scripts/build.mjs <项目目录>`。未通过时按输出修改，代码含义见 `references/audit-codes.md`。不要为了通过检查而删掉真实需求，也不要把真实功能塞进 `h.demo()`。
@@ -79,7 +79,7 @@ description: "一站式产出“交互原型 + 需求文档”的单 HTML：从�
 - 没有依据的规则、口径、字段校验，写成“… [AI 假设]”或标 `status: "assumed"`；需要业务方拍板的写“… [待确认]”或 `status: "pending"`。不得把推测写成已确认。
 - 每个功能点要么有 `src`（依据），要么是 `assumed` / `pending`。
 - 检查未通过不交付。`--draft` 只用于排查画面，产物不可交给用户。
-- 线框阶段不追求视觉：优先用 `h.*` 组件和 `wire.css` 的工具类，不写颜色；内联样式只用于尺寸、字号和字距。
+- 视觉分两种：未选用规范包时保持线框，优先用 `h.*` 组件和 `wire.css` 的工具类，不写颜色；选用规范包（`--theme`）时，颜色、字号、间距、圆角按规范包的变量（`prd/theme.css` 里的 `--fg`、`--accent` 等）和组件输出，页面代码仍不写色值。内联样式只用于尺寸、字号和字距。
 - 托管模式下不修改用户的原 HTML 文件。
 
 ## 交付汇报
@@ -97,6 +97,7 @@ description: "一站式产出“交互原型 + 需求文档”的单 HTML：从�
 
 ```bash
 node scripts/new.mjs <项目目录> --name "产品名" --end pc:管理后台 --end mobile:员工手机端
+node scripts/new.mjs <项目目录> --name "产品名" --end pc:管理后台 --theme gaodeng-pc   # 选用高教 PC 规范包
 node scripts/new.mjs <项目目录> --name "产品名" --host <已有原型.html>        # 托管模式
 node scripts/probe-host.mjs <已有原型.html> [--steps '[{"js":"showPage(\"x\")"}]'] [--boot '[...]'] [--shot a.png]
 node scripts/build.mjs <项目目录> [--md] [--out 文件名.html]                  # --md 同时导出需求文档 Markdown
