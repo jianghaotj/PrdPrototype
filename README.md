@@ -19,6 +19,11 @@
 - **各端页面**：PC 浏览器框或手机框画板；编号圆点与右侧功能点卡片一一对应，点击互相定位并高亮目标区域；弹层状态只显示最高层的功能点。
 - **核心流程**：逐步演示，直接点画板里的按钮也会前进。
 - **工具**：热区 `H`、标注圆点 `N`、缩放、目录/需求面板开关、数据场景切换、重置演示数据、本版变化。
+- **声明式交互**：表单必填和长度校验、提交（防重复点击、失败可重试、成功后更新列表）、搜索筛选，由组件实现，规则自动写进需求文档。
+- **范围基线**（可选）：确认范围后写入 `prd/scope.json`。之后新增或移除的页面、状态、功能点只给提醒，并在需求文档单列“范围确认后新增”。
+- **验收条件**（可选）：功能点写 `ac`（前置条件、用户操作、预期结果），集中列在需求文档“验收条件”一章。
+- **断网门槛**：构建时断网运行检查。托管原型引用的网络脚本和样式会阻止交付；确需联网的端写 `online: true`，交付物标“需联网”。
+- **设计规范包**（可选）：`--theme gaodeng-pc` 按高教 PC 设计规范出高保真 PC 画面，手机端仍为线框。
 
 保留了 i 雅思线框原型的浏览结构（页面目录、热区、页面状态、核心流程、缩放、重置数据），把“页面说明”升级成可评审的需求，把“总览”升级成全文需求文档。
 
@@ -62,20 +67,24 @@
 
 ```bash
 node prd-prototype/scripts/new.mjs <项目目录> --name "产品名" --id short-name --end pc:管理后台 --end mobile:员工手机端
+node prd-prototype/scripts/new.mjs <项目目录> --name "产品名" --id short-name --end pc:管理后台 --theme gaodeng-pc
 node prd-prototype/scripts/new.mjs <项目目录> --name "产品名" --host 已有原型.html
 node prd-prototype/scripts/probe-host.mjs 已有原型.html [--steps '[...]'] [--shot a.png]
 node prd-prototype/scripts/build.mjs <项目目录> [--md]
+node prd-prototype/scripts/build.mjs <项目目录> --scope-baseline --confirmed-at 2026-11-04
 node prd-prototype/scripts/snap.mjs <产物.html> [--view "#/p/P01/list"]
 node prd-prototype/scripts/test-skill.mjs
 ```
 
 ## 样例
 
-`prd-prototype/examples/leave-approval/` 是完整样例：员工手机端发起请假、主管 PC 端审批、HR 查看统计。包括表单、校验失败状态、确认底部弹层、列表、抽屉叠弹窗、数据场景切换、两条核心流程、待确认和 AI 假设标记。直接打开 `请假审批-原型需求.html` 即可。
+`prd-prototype/examples/leave-approval/` 是线框基线样例：员工手机端发起请假、主管 PC 端审批、HR 查看统计。包括表单、校验失败状态、确认底部弹层、列表、抽屉叠弹窗、数据场景切换、两条核心流程、待确认和 AI 假设标记。直接打开 `请假审批-原型需求.html` 即可。
+
+`prd-prototype/examples/course-mgmt/` 是高教 PC 高保真样例（gaodeng-pc 规范包）：课程管理后台，包含列表搜索与分页、新建课程弹窗（校验、提交失败后重试、列表更新）和课程详情抽屉。业务内容都是 AI 假设，并在文档中标出。直接打开 `课程管理-原型需求.html` 即可。
 
 ## 质量
 
-`node prd-prototype/scripts/test-skill.mjs` 覆盖：样例构建、托管构建、20 余类门禁反例（每类都必须拦住且不覆盖已有交付文件）、托管反例、版本迭代与归档、浏览器端交互（圆点定位、状态切换、弹层层级、流程演示、快捷键、窄屏、托管状态识别、sandbox）、内容安全（DOMPurify 清洗）、脚手架。
+`node prd-prototype/scripts/test-skill.mjs` 应全部通过。覆盖：两个样例构建、托管构建、20 余类门禁反例（每类都必须拦住且不覆盖已有交付文件）、托管反例、断网门槛（`HOST_NET`、`online: true` 放行）、范围基线（`SCOPE_ADDED`、`SCOPE_REMOVED`、`--scope-baseline`）、声明式交互（校验、提交、搜索筛选、`FIELD_REQ`）、规范包（`--theme`、PC 作用域、对话框、分页、缺省页）、版本迭代与归档、浏览器端交互（圆点定位、状态切换、弹层层级、流程演示、快捷键、窄屏、托管状态识别、sandbox）、内容安全（DOMPurify 清洗）、脚手架。
 
 ## 目录
 
@@ -88,6 +97,7 @@ prd-prototype/
 ├─ assets/vendor/      Marked、DOMPurify、Mermaid 及许可
 ├─ scripts/            新建、构建、探测、截图、回归测试
 ├─ examples/           完整样例
+├─ themes/             设计规范包（gaodeng-pc：tokens、主题、组件扩展、冲突清单）
 └─ tests/fixtures/     托管模式夹具
 ```
 
@@ -96,4 +106,5 @@ prd-prototype/
 - 浏览结构来自 i 雅思一期交互线框原型。
 - 版本迭代、内容安全、单文件审计等思路来自「原型标注」技能（基于 [lin96008-maxlin/prototype-annotation](https://github.com/lin96008-maxlin/prototype-annotation) 二次开发，MIT）。
 - 轻量澄清借鉴了 [mattpocock/skills](https://github.com/mattpocock/skills) 中 grilling 的做法：每题给推荐答案、回“是”即采纳、事实自己查；去掉了“问到所有分支走完为止”。
+- 设计规范包 gaodeng-pc 的内容来自高等教育事业部设计组《设计规范》Web 2.0.1，由 PDF 转写为文本。`tokens.css` 与 `DESIGN.md` 可进公开仓库，PDF 原文不入库。与原文冲突的处理见 `themes/gaodeng-pc/CONFLICTS.md`。
 - 第三方组件见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。本项目代码按 [MIT License](LICENSE) 发布。
