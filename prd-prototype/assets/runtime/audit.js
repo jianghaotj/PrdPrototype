@@ -362,13 +362,20 @@
     /* 托管页面：逐状态加载原有 HTML */
     var hostedPages = pageList.filter(function (p) { return W.host.isHosted(p); });
     if (hostedPages.length) {
-      var frame = document.createElement('iframe');
-      frame.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(frame);
+      /* 每个托管端一个隐藏 iframe，name 为 prd-host-audit-<端 id>，构建脚本据此把网络请求归到对应端 */
+      var hostFrames = {};
       for (var hi = 0; hi < hostedPages.length; hi++) {
         var hp = hostedPages[hi];
         var he = W.end(hp.end);
         if (!he || W.host.html(he.id) == null) continue;
+        var frame = hostFrames[he.id];
+        if (!frame) {
+          frame = document.createElement('iframe');
+          frame.name = 'prd-host-audit-' + he.id;
+          frame.setAttribute('aria-hidden', 'true');
+          document.body.appendChild(frame);
+          hostFrames[he.id] = frame;
+        }
         var sz = W.host.size(he);
         frame.style.cssText = 'position:fixed;left:-40000px;top:0;border:0;width:' + sz.w + 'px;height:' + sz.h + 'px';
         for (var hs = 0; hs < hp.states.length; hs++) {
@@ -386,7 +393,7 @@
           scanHosted(hp, st, he, win, hw);
         }
       }
-      frame.remove();
+      Object.keys(hostFrames).forEach(function (k) { hostFrames[k].remove(); });
     }
     function scanHosted(p, s, e, win, where) {
       var doc = win.document;

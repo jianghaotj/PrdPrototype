@@ -139,6 +139,7 @@
       var parts = [];
       if (st0.pending) parts.push('待确认 ' + st0.pending);
       if (st0.assumed) parts.push('AI 假设 ' + st0.assumed);
+      if (a.needOnline) parts.unshift('需联网');
       badge = '<a class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" href="#/doc" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '检查通过' : '检查未通过') + (parts.length ? ' · ' + parts.join(' · ') : '') + '</a>';
     }
     $('#top').innerHTML = '<a class="brand" data-tab="doc"><span class="brand-m">' + h.esc((P.name || '原')[0]) + '</span><span class="t">' + h.esc(P.name || '') + '</span><small>' + h.esc([D.cur(), P.date, P.fidelity || '低保真'].filter(Boolean).join(' · ')) + '</small></a>' +
@@ -613,6 +614,7 @@
     var cells = [['页面', st.pages], ['页面状态', st.states], ['功能点', st.fns], ['字段', st.fields], ['待确认', st.pending], ['AI 假设', st.assumed]];
     if (D.multiRelease()) cells.push([st.release + ' 变化', st.changes]);
     if (a) cells.push(['交互元素覆盖', a.stats.interactive ? Math.round(a.stats.covered / a.stats.interactive * 100) + '%' : '—']);
+    if (a && a.needOnline) cells.push(['交付条件', '需联网']);
     return '<div class="stats">' + cells.map(function (c) { return '<div><b>' + c[1] + '</b><span>' + c[0] + '</span></div>'; }).join('') + '</div>';
   }
   function renderDoc(r) {
@@ -651,9 +653,11 @@
       '<div class="np-sec"><div class="sum-k"><div><b>' + st.pages + '</b><span>页面</span></div><div><b>' + st.fns + '</b><span>功能点</span></div><div><b>' + st.pending + '</b><span>待确认</span></div><div><b>' + st.assumed + '</b><span>AI 假设</span></div></div></div>';
     if (a) {
       s += '<div class="np-sec"><h3>构建检查<span>' + h.esc(D.localTime(a.at)) + '</span></h3>' +
-        '<div class="issue ' + (a.ok ? '' : 'e') + '">' + (a.ok ? '通过：原型中 ' + a.stats.interactive + ' 个可交互元素全部对应到需求功能点' + (a.stats.ignored ? '（另有 ' + a.stats.ignored + ' 个标为不纳入本次需求）' : '') + '，需求中的功能点全部在原型中出现' + (st.gaps ? '或已标注“原型未体现”' : '') + '。' : '未通过：' + a.errors.length + ' 个问题') + '</div>' +
+        '<div class="issue ' + (a.ok ? '' : 'e') + '">' + (a.ok ? '通过：原型中 ' + a.stats.interactive + ' 个可交互元素全部对应到需求功能点' + (a.stats.ignored ? '（另有 ' + a.stats.ignored + ' 个标为不纳入本次需求）' : '') + '，需求中的功能点全部在原型中出现' + (st.gaps ? '或已标注“原型未体现”' : '') + '。' : '未通过：' + a.errors.length + ' 个问题') + (a.needOnline ? '本原型标为“需联网”，交付后需联网才能完整使用。' : '') + '</div>' +
         (a.errors || []).slice(0, 10).map(function (x) { return '<div class="issue e">' + h.esc(x.msg) + '</div>'; }).join('') +
-        (a.warns || []).slice(0, 12).map(function (x) { return '<div class="issue w">' + h.esc(x.msg) + '</div>'; }).join('') + '</div>';
+        /* “需联网”提醒不参与截断，保证交付方一定能看到 */
+        (a.warns || []).filter(function (x) { return x.code === 'ONLINE'; }).map(function (x) { return '<div class="issue w">' + h.esc(x.msg) + '</div>'; }).join('') +
+        (a.warns || []).filter(function (x) { return x.code !== 'ONLINE'; }).slice(0, 12).map(function (x) { return '<div class="issue w">' + h.esc(x.msg) + '</div>'; }).join('') + '</div>';
     } else s += '<div class="np-sec"><h3>构建检查</h3><div class="issue w">此文件未经过构建检查。</div></div>';
     if (W.errors.length) s += '<div class="np-sec"><h3>运行错误</h3>' + W.errors.slice(0, 20).map(function (m) { return '<div class="issue e">' + h.esc(m) + '</div>'; }).join('') + '</div>';
     s += '<div class="np-sec"><h3>浏览方式</h3><ul>' +

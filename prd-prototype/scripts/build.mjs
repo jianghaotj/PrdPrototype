@@ -3,6 +3,7 @@
 // 用法：node scripts/build.mjs <项目目录> [--out 文件名.html] [--md] [--draft] [--json]
 //   检查未通过时不写交付文件，只在 <项目>/.prd-build/ 留下 failed 版本供排查。
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
@@ -69,21 +70,47 @@ function mime(f) {
 function dataUri(f) { return 'data:' + mime(f) + ';base64,' + fs.readFileSync(f).toString('base64'); }
 function attr(tag, name) { const m = new RegExp('\\b' + name + '\\s*=\\s*(["\'])(.*?)\\1', 'i').exec(tag) || new RegExp('\\b' + name + '\\s*=\\s*([^\\s>]+)', 'i').exec(tag); return m ? (m[2] !== undefined ? m[2] : m[1]) : null; }
 function localPath(base, u) { try { return path.resolve(base, decodeURI(u.split(/[?#]/)[0])); } catch (e) { return path.resolve(base, u.split(/[?#]/)[0]); } }
-function inlineCssUrls(css, base, warns, src) {
-  return css.replace(/url\(\s*(["']?)([^"')]+)\1\s*\)/gi, (m, q, u) => {
+/* 处理 CSS 中的 @import 和 url()。
+ * @import 远程样式交给 onStyle（按样式阻止或放行）；@import 本地文件则内联进来，保证交付仍是单文件。
+ * url() 里的远程地址只作为图片、字体提醒，不在这里阻止。 */
+function inlineCssUrls(css, base, warns, src, remote, onStyle, depth = 0) {
+  const re = /@import\s+(?:url\(\s*(["']?)([^"')]+)\1\s*\)|(["'])([^"']+)\3)[^;]*;|url\(\s*(["']?)([^"')]+)\5\s*\)/gi;
+  return css.replace(re, (m, q1, u1, q3, u3, q5, u5) => {
+    if (/^@import/i.test(m)) {
+      const u = u1 || u3;
+      if (isInline(u)) return m;
+      if (isRemote(u)) { onStyle(u); return m; }
+      const f = localPath(base, u);
+      if (!fs.existsSync(f) || depth > 5) { warns.push('托管原型引用的样式文件不存在：' + u + '（' + src + '）'); return ''; }
+      return inlineCssUrls(read(f), path.dirname(f), warns, src, remote, onStyle, depth + 1);
+    }
+    const u = u5;
     if (isInline(u)) return m;
-    if (isRemote(u)) { warns.push('托管原型引用了网络资源 ' + u + '（' + src + '），断网时可能显示异常'); return m; }
+    if (isRemote(u)) { remote.push(u); warns.push('托管原型引用了网络资源 ' + u + '（' + src + '），断网时可能显示异常'); return m; }
     const f = localPath(base, u);
     if (fs.existsSync(f)) return 'url("' + dataUri(f) + '")';
     warns.push('托管原型引用的文件不存在：' + u + '（' + src + '）');
     return m;
   });
 }
-/* 把托管原型的本地 CSS / JS / 图片内联，保证最终仍是单文件 */
-export function inlineHost(file) {
+/* 把托管原型的本地 CSS / JS / 图片内联，保证最终仍是单文件。
+ * 远程脚本和样式：默认作为阻止交付的 blocks；端上写 online: true 时改为 online 提醒（需联网）。
+ * 远程图片和字体：只作为 warns 提醒。remote 列出所有远程地址，供断网检查时去重。 */
+export function inlineHost(file, opts = {}) {
   if (!fs.existsSync(file)) die('托管原型文件不存在：' + file);
   const base = path.dirname(file);
-  const warns = [];
+  const warns = [], blocks = [], online = [], remote = [], netCodes = [];
+  const remoteCode = (what, u) => {
+    remote.push(u);
+    if (opts.online) {
+      online.push('托管原型引用了网络' + what + ' ' + u + '，该端已写 online: true 显式放行，交付后需联网才能正常显示或运行');
+      netCodes.push({ code: 'ONLINE', url: u });
+    } else {
+      blocks.push('托管原型引用了网络' + what + ' ' + u + '，断网时原型会失去样式或无法运行。确需联网请在该端写 online: true');
+      netCodes.push({ code: 'HOST_NET', url: u });
+    }
+  };
+  const onStyle = (u) => remoteCode('样式', u);
   let html = read(file);
   if (!/<html|<body|<div|<main/i.test(html)) die('托管原型不像 HTML 文件：' + file);
   html = html.replace(/<link\b[^>]*>/gi, (tag) => {
@@ -91,16 +118,20 @@ export function inlineHost(file) {
     const href = attr(tag, 'href');
     if (!href || isInline(href)) return tag;
     if (!/stylesheet|icon/i.test(rel)) return tag;
-    if (isRemote(href)) { warns.push('托管原型引用了网络资源 ' + href + '，断网时可能显示异常'); return tag; }
+    if (isRemote(href)) {
+      if (/stylesheet/i.test(rel)) remoteCode('样式', href);
+      else { remote.push(href); warns.push('托管原型引用了网络资源 ' + href + '，断网时可能显示异常'); }
+      return tag;
+    }
     const f = localPath(base, href);
     if (!fs.existsSync(f)) { warns.push('托管原型引用的文件不存在：' + href); return ''; }
     if (/icon/i.test(rel)) return tag.replace(href, dataUri(f));
-    return '<style>\n' + inlineCssUrls(read(f), path.dirname(f), warns, href) + '\n</style>';
+    return '<style>\n' + inlineCssUrls(read(f), path.dirname(f), warns, href, remote, onStyle) + '\n</style>';
   });
   html = html.replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi, (m, attrs, body) => {
     const src = attr('<x ' + attrs + '>', 'src');
     if (!src) return m;
-    if (isRemote(src)) { warns.push('托管原型引用了网络脚本 ' + src + '，断网时原型可能无法运行'); return m; }
+    if (isRemote(src)) { remoteCode('脚本', src); return m; }
     const f = localPath(base, src);
     if (!fs.existsSync(f)) { warns.push('托管原型引用的脚本不存在：' + src); return m; }
     const js = read(f).replace(/<\/script/gi, '<\\/script');
@@ -108,13 +139,14 @@ export function inlineHost(file) {
   });
   html = html.replace(/(<(?:img|source|video|audio)\b[^>]*?\b(?:src|poster)\s*=\s*)(["'])([^"']+)\2/gi, (m, pre, q, u) => {
     if (isInline(u)) return m;
-    if (isRemote(u)) { warns.push('托管原型引用了网络图片 ' + u + '，断网时不显示'); return m; }
+    if (isRemote(u)) { remote.push(u); warns.push('托管原型引用了网络图片 ' + u + '，断网时不显示'); return m; }
     const f = localPath(base, u);
     if (!fs.existsSync(f)) { warns.push('托管原型引用的图片不存在：' + u); return m; }
     return pre + q + dataUri(f) + q;
   });
-  html = html.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (m, a, css) => '<style' + a + '>' + inlineCssUrls(css, base, warns, '内联样式') + '</style>');
-  return { html, warns: Array.from(new Set(warns)) };
+  html = html.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (m, a, css) => '<style' + a + '>' + inlineCssUrls(css, base, warns, '内联样式', remote, onStyle) + '</style>');
+  const uniq = (a) => Array.from(new Set(a));
+  return { html, warns: uniq(warns), blocks: uniq(blocks), online: uniq(online), remote: uniq(remote), netCodes };
 }
 /* 交付文件不允许引用外部或相对资源（托管原型的 JSON 字符串除外，已单独检查） */
 export function auditSingleFile(html) {
@@ -166,12 +198,22 @@ export async function build(input, opts = {}) {
 
   /* 托管原型 */
   const buildWarns = [];
+  const buildErrs = [];
   const hostBlocks = [];
+  const hostRemote = new Set();
+  const netSeen = new Set();   /* 已报告过的网络脚本/样式，格式 “代码|地址”，运行时检查据此去重 */
+  const endOnline = {};        /* 端 id → 是否写了 online: true；只对托管端生效 */
   (cfg.ends || []).forEach((e) => {
     if (!e.host) return;
+    endOnline[e.id] = e.online === true;
     const f = path.resolve(prd, e.host);
-    const r = inlineHost(f);
-    r.warns.forEach((w) => buildWarns.push({ code: 'HOST_RES', msg: '端「' + e.name + '」：' + w }));
+    const r = inlineHost(f, { online: e.online === true });
+    const who = '端「' + e.name + '」：';
+    r.warns.forEach((w) => buildWarns.push({ code: 'HOST_RES', msg: who + w }));
+    r.blocks.forEach((m) => buildErrs.push({ code: 'HOST_NET', msg: who + m }));
+    r.online.forEach((m) => buildWarns.push({ code: 'ONLINE', msg: who + m }));
+    r.remote.forEach((u) => hostRemote.add(u));
+    r.netCodes.forEach((x) => netSeen.add(x.code + '|' + x.url));
     hostBlocks.push('<script type="application/json" id="prd-host-' + e.id + '">' + escJson(r.html) + '</script>');
   });
 
@@ -222,12 +264,14 @@ export async function build(input, opts = {}) {
     return { ok: true, draft: true, file: draft, release, name: cfg.name };
   }
 
-  const tmp = path.join(tmpDir, base + '.check.html');
+  /* 断网检查：复制到系统临时目录，禁止所有网络请求地址后逐状态运行检查，并记录页面发出的网络请求 */
+  const offlineDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prd-offline-'));
+  const tmp = path.join(offlineDir, base + '.check.html');
   fs.writeFileSync(tmp, assemble(null));
   const browser = await launch();
-  let report, markdown = null, jsErrors = [];
+  let report, markdown = null, jsErrors = [], netReqs = [];
   try {
-    const page = await browser.newPage({ width: 1600, height: 1000 });
+    const page = await browser.newPage({ width: 1600, height: 1000, offline: true });
     await page.goto(fileUrl(tmp));
     try { await page.waitFor('window.__PRD_READY === true', 20000); } catch (e) { /* 启动失败也继续拿检查结果 */ }
     const hasAudit = await page.evaluate('!!(window.W && W.runAudit)');
@@ -235,24 +279,52 @@ export async function build(input, opts = {}) {
     report = await page.evaluate('W.runAudit().then(function (r) { W.audit = r; return r; })');
     if (opts.md) markdown = await page.evaluate('W.doc.markdown({ html: false })');
     jsErrors = page.errors.slice();
+    netReqs = page.requests.slice();
     await page.close();
   } finally {
     await browser.close();
+    try { fs.rmSync(offlineDir, { recursive: true, force: true }); } catch (e) {}
   }
   jsErrors.forEach((m) => {
     /* 资源加载失败（原型引用的图片、字体不存在）不阻止交付，作为提醒；脚本错误仍阻止 */
-    if (/Failed to load resource|ERR_FILE_NOT_FOUND|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|net::ERR_/.test(m)) report.warns.push({ code: 'RES', msg: '有资源加载失败：' + m.replace(/^浏览器错误：/, '').replace(/file:\/\/[^）]*\.prd-build\//, '') + '。托管原型请检查原文件引用的图片/字体是否存在' });
+    if (/Failed to load resource|ERR_FILE_NOT_FOUND|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|net::ERR_/.test(m)) report.warns.push({ code: 'RES', msg: '有资源加载失败：' + m.replace(/^浏览器错误：/, '').replace(/（?file:\/\/\S*）?/g, '').trim() + '。托管原型请检查原文件引用的图片/字体是否存在' });
     else report.errors.push({ code: 'JS', msg: m });
   });
   buildWarns.forEach((w) => report.warns.push(w));
+  buildErrs.forEach((w) => report.errors.push(w));
+  /* 断网运行时记录到的网络请求。
+   * 脚本和样式按请求类型判定：来自托管端 iframe 且该端写了 online: true 的记为 ONLINE，其余记为 HOST_NET。
+   * 同一地址同一代码只报告一次；静态检查已报告过的不再重复。图片、字体等只作为 RES 提醒。 */
+  const isNet = (q) => /^(?:https?|wss?):\/\//i.test(q.url);
+  const seenRes = new Set(hostRemote);
+  netReqs.forEach((q) => {
+    if (!isNet(q)) return;
+    if (q.type === 'Script' || q.type === 'Stylesheet') {
+      const what = q.type === 'Script' ? '脚本 ' : '样式 ';
+      const hosted = /^prd-host-audit-(.+)$/.exec(q.frameName || '');
+      const allowed = !!hosted && endOnline[hosted[1]] === true;
+      const code = allowed ? 'ONLINE' : 'HOST_NET';
+      if (netSeen.has(code + '|' + q.url)) return;
+      netSeen.add(code + '|' + q.url);
+      if (allowed) report.warns.push({ code, msg: '需联网：托管原型运行时加载了网络' + what + q.url + '（该端已写 online: true 显式放行，交付后需联网）' });
+      else if (hosted) report.errors.push({ code, msg: '托管原型运行时加载了网络' + what + q.url + '（断网检查时发出）。改为本地文件，或在该端写 online: true 显式放行' });
+      else report.errors.push({ code, msg: '原型运行时加载了网络' + what + q.url + '（断网检查时发出）。改为本地文件' });
+    } else {
+      if (seenRes.has(q.url)) return;
+      seenRes.add(q.url);
+      report.warns.push({ code: 'RES', msg: '断网检查时原型请求了网络资源（' + (q.type || '未知类型') + '）' + q.url + '，断网时可能显示异常' });
+    }
+  });
+  report.needOnline = report.warns.some((w) => w.code === 'ONLINE');
   report.ok = report.errors.length === 0;
   report.stats.errors = report.errors.length;
   report.stats.warns = report.warns.length;
+  report.stats.netRequests = netReqs.filter(isNet).length;
+  report.stats.netBlocked = netReqs.filter((q) => isNet(q) && q.failed).length;
   const html = assemble(report);
   const single = auditSingleFile(html);
   single.forEach((m) => report.errors.push({ code: 'SINGLE_FILE', msg: '交付文件引用了外部或相对资源：' + m }));
   report.ok = report.errors.length === 0;
-  try { fs.unlinkSync(tmp); } catch (e) {}
 
   if (!report.ok) {
     const failed = path.join(tmpDir, base + '.failed.html');

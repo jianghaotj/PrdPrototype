@@ -86,6 +86,57 @@ const hostHtml = hr.ok ? fs.readFileSync(hr.file, 'utf8') : '';
 ok(hr.ok && hostHtml.includes('prd-host-web') && hostHtml.includes('function showPage') && auditSingleFile(hostHtml).length === 0, '原型的外部 CSS/JS 已内联，交付仍为单文件');
 ok(fs.readFileSync(path.join(hostDir, 'existing', 'crm.html'), 'utf8') === fs.readFileSync(path.join(HOSTFX, 'existing', 'crm.html'), 'utf8'), '托管模式不修改用户原文件');
 
+let onFile = null;   /* 端写了 online: true 的交付文件，供浏览器端检查“需联网”标记 */
+console.log('\n2b. 离线门禁（断网检查：托管外链脚本/样式阻止交付，图片字体只提醒，显式放行需联网）');
+{
+  const CDN_JS = '<script src="https://cdn.example.com/lib.js"></script>\n</head>';
+  const CDN_CSS = '<link rel="stylesheet" href="https://cdn.example.com/x.css">\n</head>';
+  const CDN_IMG = '<img src="https://cdn.example.com/a.png">\n</head>';
+  const dirJs = variant(HOSTFX, [['existing/crm.html', '</head>', CDN_JS]]);
+  const rJs = await build(dirJs, {});
+  ok(!rJs.ok && rJs.report.errors.some((e) => e.code === 'HOST_NET' && /lib\.js/.test(e.msg)) && outputs(dirJs).length === 0, '托管原型引用 CDN 脚本：构建被拦住（HOST_NET），不生成交付文件', rJs.ok ? '构建竟然通过了' : JSON.stringify(rJs.report.errors.slice(0, 2)));
+  const dirCss = variant(HOSTFX, [['existing/crm.html', '</head>', CDN_CSS]]);
+  const rCss = await build(dirCss, {});
+  ok(!rCss.ok && rCss.report.errors.some((e) => e.code === 'HOST_NET' && /x\.css/.test(e.msg)), '托管原型引用 CDN 样式表：构建被拦住（HOST_NET）', rCss.ok ? '构建竟然通过了' : JSON.stringify(rCss.report.errors.slice(0, 2)));
+  const dirImg = variant(HOSTFX, [['existing/crm.html', '</head>', CDN_IMG]]);
+  const rImg = await build(dirImg, {});
+  ok(rImg.ok && rImg.report.warns.some((w) => w.code === 'HOST_RES' && /a\.png/.test(w.msg)) && !rImg.report.errors.some((e) => e.code === 'HOST_NET'), '托管原型引用网络图片：只提醒（HOST_RES），构建通过', rImg.ok ? '' : JSON.stringify(rImg.report.errors.slice(0, 2)));
+  const dirOn = variant(HOSTFX, [['existing/crm.html', '</head>', CDN_JS.replace('</head>', CDN_CSS)], ['prd/product.js', "host: '../existing/crm.html', width", "host: '../existing/crm.html', online: true, width"]]);
+  const rOn = await build(dirOn, {});
+  onFile = rOn.ok ? rOn.file : null;
+  ok(rOn.ok && rOn.report.needOnline === true && rOn.report.warns.some((w) => w.code === 'ONLINE' && /lib\.js/.test(w.msg)) && rOn.report.warns.some((w) => w.code === 'ONLINE' && /x\.css/.test(w.msg)), '端写 online: true 显式放行：构建通过，并给出“需联网”提醒（ONLINE）且标记 needOnline', rOn.ok ? '' : JSON.stringify(rOn.report.errors.slice(0, 2)));
+  const dirImp = variant(HOSTFX, [['existing/crm.html', '</head>', "<style>@import url('https://cdn.example.com/boot.css');</style>\n</head>"]]);
+  const rImp = await build(dirImp, {});
+  ok(!rImp.ok && rImp.report.errors.some((e) => e.code === 'HOST_NET' && /boot\.css/.test(e.msg)), '托管原型 CSS 的 @import url(https://…) 外链样式：构建被拦住（HOST_NET）', rImp.ok ? '构建竟然通过了' : JSON.stringify(rImp.report.errors.slice(0, 2)));
+  const dirFont = variant(HOSTFX, [['existing/crm.html', '</head>', "<style>@font-face{font-family:F;src:url(https://cdn.example.com/f.woff2)}</style>\n</head>"]]);
+  const rFont = await build(dirFont, {});
+  ok(rFont.ok && rFont.report.warns.some((w) => w.code === 'HOST_RES' && /f\.woff2/.test(w.msg)) && !rFont.report.errors.some((e) => e.code === 'HOST_NET') && !rFont.report.needOnline, '@font-face 引用网络字体：只提醒（HOST_RES），构建通过', rFont.ok ? '' : JSON.stringify(rFont.report.errors.slice(0, 2)));
+  const dirRtCss = variant(HOSTFX, [['existing/crm.html', '</head>', "<style>.kpi{background:url(https://cdn.example.com/rt3.css)}</style>\n</head>"], ['prd/product.js', "host: '../existing/crm.html', width", "host: '../existing/crm.html', boot: [{ js: \"var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'https://cdn.example.com/rt3.css'; document.head.appendChild(l)\" }], width"]]);
+  const rRtCss = await build(dirRtCss, {});
+  ok(!rRtCss.ok && rRtCss.report.errors.some((e) => e.code === 'HOST_NET' && /rt3\.css/.test(e.msg)), '同一地址先作为 url() 图片提醒、运行时又作为样式表加载：仍按样式阻止（HOST_NET）', rRtCss.ok ? '构建竟然通过了' : JSON.stringify(rRtCss.report.errors.slice(0, 2)));
+  const dirBoot = (online) => variant(HOSTFX, [['prd/product.js', "host: '../existing/crm.html', width", "host: '../existing/crm.html', " + (online ? 'online: true, ' : '') + "boot: [{ js: \"var s = document.createElement('script'); s.src = 'https://cdn.example.com/rt2.js'; document.head.appendChild(s)\" }], width"]]);
+  const rBoot = await build(dirBoot(false), {});
+  ok(!rBoot.ok && rBoot.report.errors.some((e) => e.code === 'HOST_NET' && /rt2\.js/.test(e.msg) && /托管原型运行时/.test(e.msg)), '托管原型运行时加载网络脚本（该端未放行）：构建被拦住（HOST_NET），提示指向 online: true', rBoot.ok ? '构建竟然通过了' : JSON.stringify(rBoot.report.errors.slice(0, 2)));
+  const rBootOn = await build(dirBoot(true), {});
+  ok(rBootOn.ok && rBootOn.report.needOnline === true && rBootOn.report.warns.some((w) => w.code === 'ONLINE' && /rt2\.js/.test(w.msg)) && !rBootOn.report.errors.some((e) => e.code === 'HOST_NET'), '同一脚本在该端写 online: true：构建通过，给出 ONLINE 提醒并标记需联网', rBootOn.ok ? '' : JSON.stringify(rBootOn.report.errors.slice(0, 2)));
+  const dirRt = variant(EXAMPLE, [['prd/pages/M01-home.js', 'render: function (c) {', "render: function (c) {\n    (function(){ var s = document.createElement('script'); s.src = 'https://cdn.example.com/rt.js'; document.head.appendChild(s); var i = new Image(); i.src = 'https://cdn.example.com/rt.png'; })();"]]);
+  const rRt = await build(dirRt, {});
+  ok(!rRt.ok && rRt.report.errors.some((e) => e.code === 'HOST_NET' && /rt\.js/.test(e.msg)) && rRt.report.warns.some((w) => w.code === 'RES' && /rt\.png/.test(w.msg)), '断网运行时：页面动态加载的脚本被拦住（HOST_NET），动态加载的图片只提醒（RES）', rRt.ok ? '构建竟然通过了' : JSON.stringify(rRt.report.errors.slice(0, 2)));
+  ok(rRt.report.stats.netRequests >= 2 && rRt.report.stats.netBlocked === rRt.report.stats.netRequests, '断网检查确实拦下了页面发出的网络请求（loadingFailed：' + (rRt.report && rRt.report.stats.netBlocked) + '/' + (rRt.report && rRt.report.stats.netRequests) + '）');
+  const dirNat = variant(EXAMPLE, [[PROD, "id: 'pc', name: '审批台（PC）', device: 'pc', home: 'P01',", "id: 'pc', name: '审批台（PC）', device: 'pc', home: 'P01', online: true,"], ['prd/pages/M01-home.js', 'render: function (c) {', "render: function (c) {\n    (function(){ var s = document.createElement('script'); s.src = 'https://cdn.example.com/nat.js'; document.head.appendChild(s); })();"]]);
+  const rNat = await build(dirNat, {});
+  ok(!rNat.ok && rNat.report.errors.some((e) => e.code === 'HOST_NET' && /nat\.js/.test(e.msg)) && !rNat.report.warns.some((w) => w.code === 'ONLINE') && !rNat.report.needOnline, '原生端写 online: true 不放行另一端（手机端）运行时加载的脚本，也不标需联网');
+  const dirMiss = variant(EXAMPLE, [['prd/pages/M01-home.js', 'render: function (c) {', "render: function (c) {\n    (function(){ var i = new Image(); i.src = 'nope-missing.png'; })();"]]);
+  const rMiss = await build(dirMiss, {});
+  const resMsgs = rMiss.report.warns.filter((w) => w.code === 'RES').map((w) => w.msg);
+  ok(rMiss.ok && resMsgs.length > 0 && !resMsgs.some((m) => /file:|prd-offline|\/tmp|\.check\.html/.test(m)), '资源加载失败的提醒不暴露临时目录路径', resMsgs.join(' | '));
+  ok(ex.ok && ex.report.stats.netRequests === 0 && !ex.report.errors.some((e) => e.code === 'HOST_NET'), '原生样例断网检查通过，断网运行时没有发出任何网络请求（' + (ex.report && ex.report.stats.netRequests) + ' 次）');
+  const offlineDirs = () => fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('prd-offline-')).length;
+  const offBefore = offlineDirs();
+  await build(variant(EXAMPLE, []), {});
+  ok(offlineDirs() === offBefore, '断网检查用的临时目录构建后已清理');
+}
+
 /* ---------- 3. 反例：每一类问题都要被拦住 ---------- */
 console.log('\n3. 门禁反例（每项都应构建失败，且不生成交付文件）');
 const NEG = [
@@ -216,6 +267,15 @@ try {
   await go(ex.file, '#/doc');
   const d0 = await page.evaluate('({ toc: document.querySelectorAll("#left .nv-i").length, pages: document.querySelectorAll("#docbody a[id^=d-pg-]").length, badge: (document.querySelector(".audit-badge")||{}).textContent || "", sum: document.querySelectorAll("#right .issue").length })');
   ok(d0.pages === 7 && d0.toc >= 10 && /检查通过/.test(d0.badge), '需求文档：目录、7 个页面章节、检查通过徽标', JSON.stringify(d0));
+  ok(!/需联网/.test(d0.badge), '未放行网络资源的原型：顶部徽标不显示“需联网”');
+  if (onFile) {
+    await go(onFile, '#/doc');
+    const on = await page.evaluate('({ badge: (document.querySelector(".audit-badge")||{}).textContent || "", issues: Array.from(document.querySelectorAll("#right .issue.w")).map(function (x) { return x.textContent; }), md: W.doc.markdown({ html: false }).slice(0, 800) })');
+    ok(/需联网/.test(on.badge), '需联网的交付物：顶部徽标显示“需联网”（' + on.badge + '）');
+    ok(on.issues.some((t) => /lib\.js/.test(t)) && on.issues.some((t) => /x\.css/.test(t)), '需联网的交付物：检查面板列出网络脚本和样式地址，不被截断');
+    ok(/需联网/.test(on.md), '需联网的交付物：需求文档摘要行和 Markdown 标注“需联网”');
+    await go(ex.file, '#/doc');
+  }
   await page.evaluate('location.hash = "#/doc/d-pg-P02"; 1');
   await sleep(400);
   const anchorTop = await page.evaluate('Math.round(document.getElementById("d-pg-P02").getBoundingClientRect().top)');
