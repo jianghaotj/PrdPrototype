@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>gaodeng-pc · 组件</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--fg);font-family:var(--font-family);padding:40px 32px 64px}
+  main{max-width:1040px;margin:0 auto}
+  h1{font-size:var(--text-2xl);font-weight:var(--fw-medium);line-height:var(--lh-2xl);margin-bottom:6px}
+  .sub{font-size:var(--text-xs);color:var(--fg-3-ink);letter-spacing:.08em;text-transform:uppercase}
+  h2{font-size:var(--text-sm);font-weight:var(--fw-medium);color:var(--fg-2);margin:32px 0 12px}
+  p{font-size:var(--text-sm);line-height:var(--lh-sm);color:var(--fg-2);max-width:70ch}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    font-family:var(--font-family);font-weight:var(--fw-medium);
+    border-radius:var(--radius-sm);border:1px solid transparent;cursor:pointer;
+    transition:background 150ms ease-out,color 150ms ease-out;padding:0 16px}
+  .btn-lg{height:var(--h-lg);font-size:var(--text-base);min-width:var(--btn-min-w)}
+  .btn-md{height:var(--h-md);font-size:var(--text-sm);min-width:var(--btn-min-w-md)}
+  .btn-sm{height:var(--h-sm);font-size:var(--text-sm);padding:0 12px;min-width:var(--btn-min-w-sm)}
+  .btn-primary{background:var(--accent);color:var(--accent-on)}
+  /* 悬停底 #5C8AFF 压白字只有 3.21:1，原文 1.1 也把它写作主按钮底色，待确认（CONFLICTS C12） */
+  .btn-primary:hover{background:var(--accent-hover)}
+  .btn-primary:disabled{background:var(--accent-disabled);cursor:not-allowed}
+  .btn-ghost{background:var(--bg);color:var(--accent);border-color:var(--accent)}
+  .btn-ghost:hover{background:var(--accent-weak)}
+  .btn-default{background:var(--bg);color:var(--fg);border-color:var(--border)}
+  .btn-default:hover{border-color:var(--accent-hover);color:var(--accent)}
+  /* 危险实心按钮底用加深值：#FF6859 压白字只有 2.85:1 */
+  .btn-danger{background:var(--danger-fill);color:var(--accent-on)}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}
+
+  .field{display:flex;align-items:center;border:1px solid var(--border);border-radius:var(--radius-sm);
+    padding:0 12px;background:var(--bg);color:var(--fg-disabled);font-size:var(--text-base)}
+  .field.md{height:var(--h-md);font-size:var(--text-sm);padding:0 12px}
+  .field.sm{height:var(--h-sm);font-size:var(--text-sm);padding:0 8px}
+  .field.lg{height:var(--h-lg)}
+
+  table{width:100%;border-collapse:collapse;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+  th{background:var(--surface);font-size:var(--text-sm);font-weight:var(--fw-medium);color:var(--fg);
+    text-align:left;padding:0 16px;height:var(--row-h);border-bottom:1px solid var(--border)}
+  td{font-size:var(--text-sm);color:var(--fg-2);padding:0 16px;height:var(--row-h);border-bottom:1px solid var(--surface)}
+  tr:last-child td{border-bottom:0}
+  tr.sel td{background:var(--accent-weak)}
+  table.compact th,table.compact td{height:var(--row-h-compact)}
+
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:12px}
+  .card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);
+    padding:16px;box-shadow:var(--shadow-md)}
+  .card b{font-size:var(--text-base);font-weight:var(--fw-medium);display:block;margin-bottom:6px}
+  .card span{font-size:var(--text-sm);color:var(--fg-2);line-height:var(--lh-sm)}
+  .icons{display:flex;gap:20px;align-items:flex-end;margin-top:12px}
+  .icons figure{text-align:center}
+  .icons .sq{background:var(--accent-weak);border:1px solid var(--accent-disabled);border-radius:var(--radius-sm);margin:0 auto 6px}
+  .icons figcaption{font-size:11px;color:var(--fg-3-ink);font-family:var(--font-mono)}
+  .radius{display:flex;gap:16px;margin-top:12px}
+  .radius div{width:96px;height:64px;background:var(--accent-weak);border:1px solid var(--accent-disabled);
+    display:grid;place-items:center;font-size:11px;color:var(--fg-2)}
+  .tags{display:flex;gap:12px;align-items:center;margin-top:12px}
+  .tag{font-size:var(--tag-font);line-height:var(--tag-h-md);padding:0 6px;border-radius:var(--radius-tag);
+    background:var(--accent-weak);color:var(--accent);height:var(--tag-h-md);display:inline-flex;align-items:center}
+</style>
+</head>
+<body>
+<main>
+  <span class="sub">gaodeng-pc / Components [2.2、5.6、6.4、6.5、6.8]</span>
+  <h1>控件三档高度、表格两档行高、圆角按用途分开</h1>
+  <p>页面中用 40px，弹窗与表格内用 32px，小范围辅助操作用 24px。圆角：控件 4px，弹窗与提醒 8px，标签 2px [6.4]。卡片圆角 8px 待确认（CONFLICTS C5）。</p>
+
+  <h2>按钮三档（最小宽 86 / 72 / 54）</h2>
+  <div class="row">
+    <button class="btn btn-primary btn-lg">主要操作</button>
+    <button class="btn btn-ghost btn-lg">次要操作</button>
+    <button class="btn btn-default btn-lg">默认</button>
+    <button class="btn btn-danger btn-lg">删除</button>
+    <button class="btn btn-primary btn-lg" disabled>不可点</button>
+  </div>
+  <div class="row">
+    <button class="btn btn-primary btn-md">弹窗内 32</button>
+    <button class="btn btn-ghost btn-md">次要 72</button>
+    <button class="btn btn-primary btn-sm">小操作 24</button>
+    <button class="btn btn-default btn-sm">复制 54</button>
+  </div>
+
+  <h2>图标三档（随按钮高度）[2.2]</h2>
+  <div class="icons">
+    <figure><div class="sq" style="width:var(--icon-size);height:var(--icon-size)"></div><figcaption>18 · 40px 按钮</figcaption></figure>
+    <figure><div class="sq" style="width:var(--icon-size-md);height:var(--icon-size-md)"></div><figcaption>16 · 32px 按钮</figcaption></figure>
+    <figure><div class="sq" style="width:var(--icon-size-sm);height:var(--icon-size-sm)"></div><figcaption>14 · 24px 按钮</figcaption></figure>
+  </div>
+
+  <h2>输入框（内边距 12 / 8px，字号 16 / 14）[5.6]</h2>
+  <div class="row">
+    <div class="field lg" style="width:220px">请输入课程名称</div>
+    <div class="field md" style="width:200px">弹窗内输入</div>
+    <div class="field sm" style="width:160px">小尺寸</div>
+  </div>
+
+  <h2>标签 [6.4]：字号 10，圆角 2，高 16</h2>
+  <div class="tags">
+    <span class="tag" style="background:var(--success-ink);color:var(--accent-on)">进行中</span>
+    <span class="tag" style="background:var(--danger-ink);color:var(--accent-on)">未通过</span>
+    <span class="tag" style="background:var(--accent-quiz);color:var(--fg)">题库</span>
+    <span class="tag" style="background:var(--surface);color:var(--fg-2)">未开始</span>
+  </div>
+
+  <h2>表格（行高 54；对话框内 40；表头 LV6 + 14 Medium）[6.5]</h2>
+  <table>
+    <thead><tr><th style="width:120px">课程编号</th><th>课程名称</th><th style="width:100px">状态</th><th style="width:80px">操作</th></tr></thead>
+    <tbody>
+      <tr class="sel"><td>EDU-0012</td><td>大学英语（三）</td><td>进行中</td><td>编辑</td></tr>
+      <tr><td>EDU-0034</td><td>高等数学 A</td><td>已结课</td><td>编辑</td></tr>
+      <tr><td>EDU-0091</td><td>-</td><td>待排课</td><td>编辑</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top:8px">单元格为空显示 <code>-</code>。整张表没有数据时改用缺省页。选中行底为 #F0F6FF。</p>
+  <div style="margin-top:16px">
+    <table class="compact">
+      <thead><tr><th style="width:120px">编号</th><th>弹窗内紧凑表格（40px）</th><th style="width:90px">操作</th></tr></thead>
+      <tbody>
+        <tr><td>EDU-0012</td><td>选择要关联的课程</td><td>选择</td></tr>
+        <tr><td>EDU-0034</td><td>选择要关联的课程</td><td>选择</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>卡片（中阴影；圆角 8px 待确认）[1.3、6.8]</h2>
+  <div class="cards">
+    <div class="card"><b>中阴影</b><span>#1A1F33 / 10% / Y4 / 模糊 12 / 扩展 -2。6.8 另有一组阴影，待确认（C4）。</span></div>
+    <div class="card"><b>描边 1px</b><span>线色用 LV5 #E1E6F0。</span></div>
+    <div class="card"><b>悬停</b><span>[AI 假设] 鼠标经过用 #F0F6FF 底，不加深边框。</span></div>
+  </div>
+
+  <h2>圆角对比</h2>
+  <div class="radius">
+    <div style="border-radius:var(--radius-sm)">4px 控件</div>
+    <div style="border-radius:var(--radius-lg)">8px 弹窗/卡片</div>
+  </div>
+</main>
+</body>
+</html>
