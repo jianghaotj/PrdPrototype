@@ -55,7 +55,7 @@
 
   W.runAudit = async function (opts) {
     opts = opts || {};
-    var R = { errors: [], warns: [], fnStates: {}, links: {}, interactive: 0, covered: 0, renders: 0, ignored: 0, dialogs: [] };
+    var R = { errors: [], warns: [], fnStates: {}, links: {}, behave: {}, interactive: 0, covered: 0, renders: 0, ignored: 0, dialogs: [] };
     var uniq = {}, unreg = {}, unregOrder = [];
     /* 交互元素按“页面 + 元素文字 + 归属”去重计数，避免同一按钮在多个状态、多个数据场景下重复计 */
     function countEl(p, el, fnId) {
@@ -352,7 +352,21 @@
         var key = el.getAttribute('data-field');
         if (!ref) return;
         if (fieldKeys(ref.fn).indexOf(key) < 0) E('FIELD_UNDECLARED', where + '：元素 data-field="' + key + '" 没有在功能点「' + ref.fn.name + '」的 fields 中定义');
+        var dec = (ref.fn.fields || []).find(function (x) { return x.key === key; });
+        /* 必填一致性以 h.fld 为准（只有它带组件级校验）。data-field 可以写在 h.fld 上，也可以只写在控件上。
+           写在 h.fld 上时由这里检查；只写在控件上时由所在的 h.fld 检查，避免同一个字段报两次。 */
+        var fld = el.classList.contains('fld') ? el : (el.matches(CONTROL) && !el.closest('.fld[data-field]') ? el.closest('.fld') : null);
+        if (dec && typeof dec.required === 'boolean' && fld) {
+          var has = fld.hasAttribute('data-req');
+          if (has !== dec.required) E('FIELD_REQ', where + '：字段「' + (dec.name || key) + '」在 fields 中是 required: ' + dec.required + '，界面上的 h.fld 却是' + (has ? '必填' : '非必填') + '。两边要一致：h.fld 写 req: 1，或把 fields 改成对应的值');
+        }
         if (el.matches(CONTROL) || el.querySelector(CONTROL)) need(p, ref, 'field', key, where);
+      });
+      /* 组件行为（必填、长度、提交、筛选）转成规则，写进需求文档 */
+      W.behaveCollect(scope).forEach(function (x) {
+        var m = R.behave[p.id] = R.behave[p.id] || {};
+        var l = m[x.fn] = m[x.fn] || [];
+        if (l.indexOf(x.text) < 0) l.push(x.text);
       });
       /* 跳转目标 */
       scope.querySelectorAll('[data-go]').forEach(function (el) {
@@ -561,7 +575,9 @@
 
   function finish(R) {
     var st = D.stats();
+    W.behaveApply({ behave: R.behave });
     return {
+      behave: R.behave,
       ok: R.errors.length === 0,
       at: new Date().toISOString(),
       release: st.release,

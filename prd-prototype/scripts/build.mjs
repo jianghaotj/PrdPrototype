@@ -266,7 +266,7 @@ export async function build(input, opts = {}) {
   const rt = (n) => read(path.join(RT, n));
   const scripts = [
     ...vendor,
-    rt('core.js'), rt('md.js'), rt('doc.js'), rt('host.js'), rt('audit.js'),
+    rt('core.js'), rt('behave.js'), rt('md.js'), rt('doc.js'), rt('host.js'), rt('audit.js'),
     ...userJs.map((x) => '/* ' + path.relative(prd, x.f).split(path.sep).join('/') + ' */\n' + x.src),
     rt('viewer.js')
   ];

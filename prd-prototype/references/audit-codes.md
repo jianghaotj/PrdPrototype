@@ -19,6 +19,7 @@
 | `FIELD_MISSING` | 功能点里有输入控件，但没有字段定义，或字段都没写必填 | 补 `fields`，输入字段写 `required: true / false` |
 | `FIELD_UNDECLARED` | `data-field="key"` 在所属功能点的 `fields` 中找不到 | 在 `fields` 补上该 key，或改正 `data-field` |
 | `FIELD` | 字段缺 `name` / `type`，或 `rule` 和 `options` 都没写，或绑定了控件却没写 `required` | 按提示补全 |
+| `FIELD_REQ` | 字段在 `fields` 中的 `required` 与界面上 `h.fld` 的 `req` 不一致 | 两边改成一致：界面写 `req: 1`，或把 `fields` 的 `required` 改成对应值 |
 | `LIST_FIELDS` | 列表/表格没有字段定义 | 用 `fields` 写清每列或每项的含义、格式、来源 |
 | `LIST_EMPTY` | 列表/表格没写空数据表现 | 写 `empty` |
 | `ERRORS` | 有改变数据的操作（按钮或链接，见下方词表），但没写异常处理 | 写 `errors`：校验失败、重复提交、并发冲突、权限不足、网络失败。误判时给元素加 `{ submit: false }`（`data-op="nav"`） |

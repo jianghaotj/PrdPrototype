@@ -147,7 +147,7 @@
       if (!it.length) return '';
       return '<div class="k">' + title + '</div><ul>' + it.map(function (x) { return '<li>' + md.inline(x.text) + badgeHTML(x, o.ver) + '</li>'; }).join('') + '</ul>';
     }
-    s += list('规则', f.rules);
+    s += list('规则', D.items(f.rules).concat(D.items(f.auto)));
     s += list('异常与边界', f.errors);
     if (f.empty) s += '<div class="k">空数据</div><div>' + md.inline(f.empty) + '</div>';
     if (f.perm) s += '<div class="k">权限</div><div>' + md.inline(f.perm) + '</div>';
@@ -312,7 +312,7 @@
               })));
             }
             var sub = [];
-            var rl = D.items(f.rules).filter(function (x) { return !D.removed(x); });
+            var rl = D.items(f.rules).concat(D.items(f.auto)).filter(function (x) { return !D.removed(x); });
             if (rl.length) sub.push('**规则**\n\n' + rl.map(function (x) { return '- ' + T(x.text) + B(x, ver); }).join('\n'));
             var er = D.items(f.errors).filter(function (x) { return !D.removed(x); });
             if (er.length) sub.push('**异常与边界**\n\n' + er.map(function (x) { return '- ' + T(x.text) + B(x, ver); }).join('\n'));
@@ -343,7 +343,7 @@
           out.push('##### ' + D.letter(i) + ' ' + f.name + ' ' + (HTML ? '<span class="fid">' + f.id + '</span>' : '`' + f.id + '`') + B(f, ver) + '\n\n');
           if (f.desc) out.push(T(f.desc) + '\n\n');
           if (f.fields && f.fields.length) out.push(table(['字段', '类型', '必填', '规则与口径'], f.fields.map(function (x) { return [T(x.name || x.key), x.type || '', x.required ? '是' : '否', T(x.rule || '')]; })));
-          var rl = D.items(f.rules);
+          var rl = D.items(f.rules).concat(D.items(f.auto));
           if (rl.length) out.push(rl.map(function (x) { return '- ' + T(x.text) + B(x, ver); }).join('\n') + '\n\n');
           var er = D.items(f.errors);
           if (er.length) out.push('**异常与边界**\n\n' + er.map(function (x) { return '- ' + T(x.text); }).join('\n') + '\n\n');

@@ -77,6 +77,7 @@ ok(['M01 请假首页', 'M02 发起请假', 'M03 请假详情', 'M04 我的', 'P
 ok(/\| 假期类型 `type` \| 枚举 \| 是 \|/.test(md) && md.includes('**异常与边界**') && md.includes('| 状态 | 出现条件 |'), 'Markdown 包含字段表、异常与边界、状态出现条件');
 ok(md.includes('## 9 待确认与 AI 假设') || /## \d+ 待确认与 AI 假设/.test(md), 'Markdown 包含待确认与 AI 假设章节');
 ok(!/<span class="bdg|<a id=|\]\(#\/p\//.test(md) && !/【待确认】【待确认】/.test(md), 'Markdown 不含 HTML 徽标、原型内链接和重复标记');
+ok(ex.ok && !/为必填项，为空时不能提交|提交前先校验必填项|提交中按钮禁用/.test(md), '请假审批没有 h.form / h.submit，不生成表单行为规则（不写“X为必填项”等）');
 
 console.log('\n2. 托管模式（已有 HTML）');
 const hostDir = variant(HOSTFX, []);
@@ -795,6 +796,87 @@ console.log('\n范围基线与验收条件');
   ok(badDate && dateNoBase, '--confirmed-at 格式不对，或没有和 --scope-baseline 一起用时拒绝执行');
   const cliNoVal = (() => { try { execFileSync(process.execPath, [path.join(SKILL, 'scripts', 'build.mjs'), scopeDir, '--scope-baseline', '--confirmed-at'], { stdio: 'pipe' }); return null; } catch (e) { return e; } })();
   ok(cliNoVal && cliNoVal.status === 2 && /缺少日期值/.test(String(cliNoVal.stderr)), '--confirmed-at 缺少日期值时命令行报错退出，不会静默忽略');
+}
+
+/* ---------- 10. 组件内置行为：必填与长度、提交、筛选 ---------- */
+console.log('\n10. 组件内置行为（必填与长度、提交、搜索筛选）');
+const BEH = path.join(SKILL, 'tests', 'fixtures', 'behave');
+{
+  const fx = await build(variant(BEH, []), { md: true });
+  ok(fx.ok, '组件行为夹具构建通过', fx.ok ? '' : JSON.stringify(fx.report.errors.slice(0, 5)));
+  if (fx.ok) {
+    const fxMd = fs.readFileSync(fx.mdFile, 'utf8');
+    ok(['请假事由为必填项，为空时不能提交', '请假事由长度为 5–200 个字', '提交前先校验必填项和长度', '提交中按钮禁用，重复点击只提交一次', '没有匹配的结果'].every((t) => fxMd.includes(t)), '组件行为自动写入需求文档（必填、长度、提交、筛选）');
+  }
+  const rq1 = await build(variant(BEH, [['prd/pages/M02-apply.js', 'required: true, rule', 'required: false, rule']]), {});
+  ok(!rq1.ok && codes(rq1).includes('FIELD_REQ'), 'fields 写 required: false 而界面是必填时构建报错（FIELD_REQ）', JSON.stringify(codes(rq1)));
+  const rq2 = await build(variant(BEH, [['prd/pages/M02-apply.js', '{ req: 1, min: 5', '{ min: 5']]), {});
+  ok(!rq2.ok && codes(rq2).includes('FIELD_REQ'), 'fields 写 required: true 而界面没有 req 时构建报错（FIELD_REQ）', JSON.stringify(codes(rq2)));
+  const rq3 = await build(variant(BEH, [['prd/pages/M02-apply.js', "{ req: 1, min: 5, max: 200, fn: 'form', field: 'reason' }", "{ min: 5, max: 200, fn: 'form', field: 'reason' }"], ['prd/pages/M02-apply.js', "rows: 3, field: 'reason', fn: 'form' })", "rows: 3, fn: 'form' })"]]), {});
+  ok(!rq3.ok && codes(rq3).includes('FIELD_REQ'), 'data-field 只写在 h.fld 上（控件没有）时也检查必填一致性（FIELD_REQ）', JSON.stringify(codes(rq3)));
+  const noFail = await build(variant(BEH, [['prd/product.js', "{ id: 'submit-fail', label: '提交失败', set: 'submitFail=true' },", '']]), { md: true });
+  const noFailMd = noFail.mdFile ? fs.readFileSync(noFail.mdFile, 'utf8') : '';
+  ok(noFail.ok && noFailMd.includes('提交失败时保留已填内容并提示，可直接重试') && !noFailMd.includes('演示首次提交失败'), '没有提交失败的数据场景时，规则不提“可在数据场景中切换”', noFail.ok ? '' : JSON.stringify(noFail.report.errors.slice(0, 2)));
+
+  const bb = await launch();
+  try {
+    const pg = await bb.newPage({ width: 1200, height: 900 });
+    const open = async (hash) => { await pg.goto('about:blank'); await pg.goto(fileUrl(fx.file) + hash); await pg.waitFor('window.__PRD_READY === true'); await sleep(300); };
+    const ev = (s) => pg.evaluate(s);
+    const count = () => ev('W.get("list.items").length');
+    const setReason = (v) => ev('(function(){var t=document.querySelector("#ab textarea");t.value=' + JSON.stringify(v) + ';t.dispatchEvent(new Event("input",{bubbles:true}));return 1})()');
+    const clicks = (n) => ev('(function(){var b=document.querySelector("#ab button[data-form]");for(var i=0;i<' + n + ';i++)b.click();return 1})()');
+    const errText = () => ev('(function(){var e=document.querySelector("#ab .ferr[data-auto]");return e?e.textContent:""})()');
+    const formErr = () => ev('!!document.querySelector("#ab .wb-form-err")');
+
+    /* 清空必填提交被拦 */
+    await open('#/p/M02/form');
+    const base0 = await count();
+    await setReason('');
+    await clicks(1);
+    await sleep(900);
+    ok((await errText()).indexOf('请填写请假事由') >= 0 && (await count()) === base0 && (await ev('location.hash')).indexOf('M02') >= 0, '清空必填后提交被拦：字段下方提示，不写入数据，仍停留在表单');
+    /* 长度不足同样被拦 */
+    await setReason('好');
+    await clicks(1);
+    await sleep(900);
+    ok((await errText()).indexOf('至少 5 个字') >= 0 && (await count()) === base0, '事由不足 5 个字时提交被拦并提示长度');
+
+    /* 连续点提交只算一次 */
+    await setReason('家中有事需回老家处理');
+    await clicks(3);
+    await sleep(1100);
+    ok((await count()) === base0 + 1 && (await ev('location.hash')).indexOf('M01') >= 0, '连续点击三次提交，只新增一条，并回到列表（' + (await count()) + ' 条）');
+    ok((await ev('document.querySelector("#ab").textContent')).indexOf('家中有事需回老家处理') >= 0, '提交成功后列表中的演示数据已更新');
+
+    /* 失败后重试成功：通过界面上的数据场景按钮打开“提交失败”，不直接改数据 */
+    await open('#/p/M02/form');
+    const base1 = await count();
+    await ev('document.querySelector("#right [data-preset=submit-fail]").click(); 1');
+    await sleep(400);
+    ok(await ev('W.get("submitFail") === true && !!document.querySelector("#right .chip.on[data-preset=submit-fail]") && location.hash.indexOf("M02") >= 0'), '点数据场景“提交失败”：场景按钮选中，表单仍在 M02');
+    await setReason('发烧三天，需要去医院复诊');
+    await clicks(1);
+    await sleep(1100);
+    ok((await formErr()) && (await count()) === base1 && (await ev('document.querySelector("#ab textarea").value')).indexOf('发烧三天') >= 0, '提交失败：提示错误，保留已填内容，不写入数据');
+    ok((await ev('document.querySelector("#ab button[data-form]").disabled')) === false, '失败后提交按钮恢复可点，可以重试');
+    await clicks(1);
+    await sleep(1100);
+    ok((await count()) === base1 + 1 && (await ev('location.hash')).indexOf('M01') >= 0, '重试成功：列表新增一条并回到列表');
+    ok((await ev('(function(){var r=W.get("list.items")[0];return r.no==="新申请"&&r.type==="事假"&&r.reason.indexOf("发烧三天")===0})()')) === true, '新增的请假单带有表单外字段的默认值（编号、类型），表单值为事由');
+
+    /* 搜索筛选出无结果 */
+    await open('#/p/M01/list');
+    const visibleRows = () => ev('Array.prototype.filter.call(document.querySelectorAll("#ab [data-frow]"), function(r){return r.style.display!=="none"}).length');
+    const noMatchShown = () => ev('(function(){var n=document.querySelector("#ab [data-fnomatch]");return !!n && n.style.display!=="none"})()');
+    const typeKw = (v) => ev('(function(){var i=document.querySelector("#ab input[data-filter]");i.value=' + JSON.stringify(v) + ';i.dispatchEvent(new Event("input",{bubbles:true}));return 1})()');
+    await typeKw('zzz不存在');
+    ok((await visibleRows()) === 0 && (await noMatchShown()), '搜索无匹配时隐藏全部请假单，并显示“没有匹配的结果”');
+    await typeKw('QJ001');
+    ok((await visibleRows()) === 1 && !(await noMatchShown()), '按单号搜索只留下匹配的一条，无结果提示隐藏');
+    await typeKw('');
+    ok((await visibleRows()) === (await count()) && !(await noMatchShown()), '清空搜索后恢复全部请假单');
+  } finally { await bb.close(); }
 }
 
 console.log('\n结果：' + pass + ' 通过，' + failN + ' 失败');

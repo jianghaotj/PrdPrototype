@@ -45,6 +45,7 @@
     if (!P.releases || !P.releases.length) P.releases = [{ id: P.version || 'V1.0', date: P.date || '' }];
     D.inheritChanges();
     try { var a = document.getElementById('prd-audit'); W.audit = a && a.textContent.trim() ? JSON.parse(a.textContent) : null; } catch (e) { W.audit = null; }
+    W.behaveApply(W.audit);
     PREF = 'prd-viewer:' + (P.id || P.name);
   }
 
