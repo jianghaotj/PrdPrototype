@@ -665,6 +665,138 @@ if (tr.ok) {
   } finally { await fb.close(); }
 }
 
+/* ---------- 范围基线与验收条件 ---------- */
+console.log('\n范围基线与验收条件');
+{
+  const SUBMIT_LINE = "id: 'submit', name: '提交申请',";
+  const acVariant = (acText) => variant(EXAMPLE, [[M02, SUBMIT_LINE, SUBMIT_LINE + '\n      ' + acText + ',']]);
+  const scopeWarns = (r) => r.report.warns.filter((w) => w.code.startsWith('SCOPE_'));
+
+  /* 验收条件（ac） */
+  const acWarns = ex.report.warns.filter((w) => w.code === 'AC_MISSING');
+  ok(ex.ok && acWarns.some((w) => w.msg.includes('「提交申请」')) && acWarns.length === 5, '核心流程里没写 ac 的功能点按页面合并为 AC_MISSING 提醒（样例 ' + acWarns.length + ' 条，每页一条）', acWarns.map((w) => w.msg).join('\n'));
+  ok(ex.ok && !/验收条件/.test(md), '没有写 ac 时，需求文档不出现“验收条件”一章');
+  ok(exHtml.includes('id="prd-scope"'), '交付文件含范围基线占位（无基线时为空）');
+
+  const acGood = variant(EXAMPLE, [[P03, "desc: '选择要统计的自然月，切换后表格和合计同时刷新。',", "desc: '选择要统计的自然月，切换后表格和合计同时刷新。',\n      ac: { pre: '已有请假单据', act: '选择上个月后查看统计', expect: '表格和合计同时刷新为上个月数据' },"]]);
+  const rGood = await build(acGood, { md: true });
+  const acMd = rGood.mdFile ? fs.readFileSync(rGood.mdFile, 'utf8') : '';
+  ok(rGood.ok && /## \d+ 验收条件/.test(acMd) && acMd.includes('| P03 请假统计 | 统计月份 | 已有请假单据 | 选择上个月后查看统计 | 表格和合计同时刷新为上个月数据 |'), 'ac 写对时构建通过，需求文档单列“验收条件”一章', rGood.ok ? '' : JSON.stringify(rGood.report.errors));
+
+  const rSubmit = await build(acVariant("ac: { act: '点击“提交申请”，时长超过可用余额', expect: '不提交，时长一行下方提示余额不足' }"), {});
+  ok(rSubmit.ok && !rSubmit.report.warns.some((w) => w.code === 'AC_MISSING' && w.msg.includes('「提交申请」')), '核心流程功能点写了 ac 后不再出现在 AC_MISSING 中');
+
+  const acBad = [
+    ["ac: '写成了一句文字'", 'ac 写成文字而不是对象'],
+    ["ac: { act: '点击“提交申请”', expect: '' }", 'expect 为空'],
+    ["ac: { act: '点击', expect: '提示余额不足' }", 'act 太短'],
+  ];
+  for (const [acText, label] of acBad) {
+    const r = await build(acVariant(acText), {});
+    ok(!r.ok && codes(r).includes('AC'), '验收条件不合格（' + label + '）时阻止交付', r.ok ? 'ok' : JSON.stringify(r.report.errors.slice(0, 3)));
+  }
+  const rUnknown = await build(acVariant("ac: { act: '点击“提交申请”', expect: '提示余额不足', note: '多余字段' }"), {});
+  ok(rUnknown.ok && rUnknown.report.warns.some((w) => w.code === 'UNKNOWN_KEY' && w.msg.includes('ac')), 'ac 里有未识别的字段时给提醒，不阻止交付');
+
+  /* 范围基线：没有基线 */
+  const scopeDir = variant(EXAMPLE, []);
+  const sNone = await build(scopeDir, { md: true });
+  ok(sNone.ok && scopeWarns(sNone).length === 0 && !/范围确认后新增/.test(fs.readFileSync(sNone.mdFile, 'utf8')), '没有范围基线时不做增删对比，需求文档不出现“范围确认后新增”');
+
+  /* 流程 A：用户确认清单后按清单手写 scope.json（写页面之前），第一次构建就要能发现清单外的新增 */
+  const LIST_BASE = {
+    release: 'V1.0', confirmedAt: '2026-11-04',
+    pages: ['M01', 'M02', 'M03', 'M04', 'P01', 'P02', 'P03'],
+    states: ['M01/list', 'M01/empty', 'M02/form', 'M02/err', 'M02/confirm', 'M03/pending', 'M03/approved', 'M03/rejected', 'M03/withdraw', 'M04/me', 'P01/list', 'P01/empty', 'P02/detail', 'P02/reject', 'P03/month'],
+    fns: ['M01/balance', 'M01/create', 'M01/records', 'M02/form', 'M02/submit', 'M02/confirm', 'M03/info', 'M03/progress', 'M03/withdraw', 'M03/again', 'M04/profile', 'P01/filter', 'P01/table', 'P02/summary', 'P02/history', 'P02/decide', 'P02/reject-form', 'P03/month-pick', 'P03/dept-table', 'P03/export', '公共/pc-shell/pc-nav', '公共/m-shell/m-tab']
+  };
+  const withList = (dir) => { fs.writeFileSync(path.join(dir, 'prd', 'scope.json'), JSON.stringify(LIST_BASE, null, 2)); return dir; };
+  const M04 = 'prd/pages/M04-me.js';
+  const sA0 = await build(withList(variant(EXAMPLE, [])), {});
+  ok(sA0.ok && scopeWarns(sA0).length === 0, '按确认清单手写的基线与样例一致时，第一次构建没有增删提醒', JSON.stringify(scopeWarns(sA0)));
+  const sA1 = await build(withList(variant(EXAMPLE, [[M04, "{ id: 'me', label: '默认', when: '任何员工进入' }", "{ id: 'me', label: '默认', when: '任何员工进入' },\n    { id: 'guest', label: '访客', when: '测试用的新增状态' }"]])), {});
+  ok(sA1.ok && scopeWarns(sA1).some((w) => w.code === 'SCOPE_ADDED' && w.msg.includes('状态「访客」')), '清单之外新增的状态，第一次构建就报 SCOPE_ADDED', sA1.ok ? JSON.stringify(scopeWarns(sA1)) : JSON.stringify(sA1.report.errors.slice(0, 3)));
+  const flowPage = variant(EXAMPLE, []);
+  withList(flowPage);
+  fs.writeFileSync(path.join(flowPage, 'prd', 'pages', 'M05-extra.js'), fs.readFileSync(path.join(flowPage, M04), 'utf8').replace("id: 'M04'", "id: 'M05'"));
+  const sA2 = await build(flowPage, { md: true });
+  const pageAdds = scopeWarns(sA2).filter((w) => w.code === 'SCOPE_ADDED');
+  ok(sA2.ok && pageAdds.length === 3 && pageAdds.some((w) => w.msg.includes('页面 · M05')) && pageAdds.some((w) => w.msg.includes('状态「默认」')) && pageAdds.some((w) => w.msg.includes('功能点「个人信息」')), '清单之外新增的整页（M05）第一次构建就报 SCOPE_ADDED，页面、状态、功能点各一条', JSON.stringify(pageAdds.map((w) => w.msg)));
+  ok(/## \d+ 范围确认后新增/.test(fs.readFileSync(sA2.mdFile, 'utf8')), '清单之外新增的页面列入需求文档“范围确认后新增”一章');
+
+  /* 文档流程：基线在 new.mjs 之后写，且含脚手架生成的公共导航。两件事都要成立：
+     1) 脚手架生成的公共功能点 ID 与 LIST_BASE 一致；2) 漏写公共导航时，第一次构建确实会误报两条 SCOPE_ADDED */
+  const scaffold = path.join(TMP, 'scaffold-nav');
+  execFileSync(process.execPath, [path.join(SKILL, 'scripts', 'new.mjs'), scaffold, '--name', '测试产品', '--end', 'pc:管理后台', '--end', 'mobile:员工手机端'], { stdio: 'pipe' });
+  const kit = fs.readFileSync(path.join(scaffold, 'prd', 'kit.js'), 'utf8');
+  ok(kit.includes("id: 'pc-shell'") && kit.includes("id: 'pc-nav'") && kit.includes("id: 'm-shell'") && kit.includes("id: 'm-tab'"), 'new.mjs 生成的 kit.js 公共导航 ID 为 pc-shell/pc-nav、m-shell/m-tab，与文档示例一致', kit.slice(0, 300));
+  const noPublic = { ...LIST_BASE, fns: LIST_BASE.fns.filter((k) => !k.startsWith('公共/')) };
+  const nd = variant(EXAMPLE, []);
+  fs.writeFileSync(path.join(nd, 'prd', 'scope.json'), JSON.stringify(noPublic, null, 2));
+  const sNP = await build(nd, {});
+  const npAdds = scopeWarns(sNP).filter((w) => w.code === 'SCOPE_ADDED');
+  ok(sNP.ok && npAdds.length === 2 && npAdds.some((w) => w.msg.includes('顶部导航与账号菜单')) && npAdds.some((w) => w.msg.includes('功能点「底部导航」')), '基线漏写公共导航时，第一次构建报两条 SCOPE_ADDED（PC 顶部导航、手机底部导航）', JSON.stringify(npAdds.map((w) => w.msg)));
+  const specDoc = fs.readFileSync(path.join(SKILL, 'references', 'spec-format.md'), 'utf8');
+  ok(specDoc.includes('公共/pc-shell/pc-nav') && !/pc-shell\/nav\b/.test(specDoc), '范围基线文档的公共功能点示例与脚手架生成的 ID 一致（pc-nav）');
+  const noStates = variant(EXAMPLE, []);
+  fs.writeFileSync(path.join(noStates, 'prd', 'scope.json'), JSON.stringify({ release: 'V1.0', confirmedAt: '2026-11-04', pages: ['M01'], fns: [] }));
+  const sNoStates = await build(noStates, {});
+  ok(!sNoStates.ok && codes(sNoStates).includes('SCOPE_FILE'), '范围基线缺少 states 时阻止交付（三项都要写）');
+
+  /* 写入基线 */
+  const sBase = await build(scopeDir, { scopeBaseline: true, md: true });
+  const baseFile = path.join(scopeDir, 'prd', 'scope.json');
+  const base = fs.existsSync(baseFile) ? JSON.parse(fs.readFileSync(baseFile, 'utf8')) : null;
+  ok(sBase.ok && base && base.pages.length === 7 && base.states.includes('M02/form') && base.fns.includes('M02/submit') && base.release === sBase.release && /^\d{4}-\d{2}-\d{2}$/.test(base.confirmedAt || ''), '--scope-baseline 检查通过后写入 prd/scope.json（页面 7，含状态和功能点，记录版本与日期）', sBase.ok ? '' : JSON.stringify(sBase.report.errors.slice(0, 3)));
+  const sSame = await build(scopeDir, {});
+  ok(sSame.ok && scopeWarns(sSame).length === 0, '基线与当前清单一致时没有增删提醒');
+
+  /* 基线之后新增功能点 */
+  const addDir = variant(scopeDir, [['prd/pages/M04-me.js', '  fns: [\n', "  fns: [\n    { id: 'extra', name: '新增测试功能', desc: '确认范围后加入的功能点。', ui: false, src: '测试' },\n"]]);
+  const sAdd = await build(addDir, { md: true });
+  const addWarns = scopeWarns(sAdd);
+  ok(sAdd.ok && addWarns.length === 1 && addWarns[0].code === 'SCOPE_ADDED' && addWarns[0].msg.includes('新增测试功能'), '基线之后新增的功能点给出 SCOPE_ADDED 提醒，且不阻止交付', JSON.stringify(addWarns));
+  const addMd = sAdd.mdFile ? fs.readFileSync(sAdd.mdFile, 'utf8') : '';
+  ok(/## \d+ 范围确认后新增/.test(addMd) && addMd.includes('| 功能点 | M04 我的 · 功能点「新增测试功能」 |'), '需求文档单列“范围确认后新增”，列出新增的功能点');
+
+  /* 基线里有、原型里已没有 */
+  const rmDir = variant(scopeDir, []);
+  const rmFile = path.join(rmDir, 'prd', 'scope.json');
+  const rmData = JSON.parse(fs.readFileSync(rmFile, 'utf8'));
+  rmData.fns.push('M04/ghost');
+  fs.writeFileSync(rmFile, JSON.stringify(rmData, null, 2));
+  const sRm = await build(rmDir, { md: true });
+  ok(sRm.ok && scopeWarns(sRm).some((w) => w.code === 'SCOPE_REMOVED' && w.msg.includes('M04/ghost')) && /确认之后已从原型中移除/.test(fs.readFileSync(sRm.mdFile, 'utf8')), '基线中有、原型中已删除的功能点给出 SCOPE_REMOVED 提醒，并列入文档');
+
+  /* 刷新基线：新增内容纳入基线后不再提醒 */
+  const sRefresh = await build(addDir, { scopeBaseline: true, md: true });
+  const refreshedData = JSON.parse(fs.readFileSync(path.join(addDir, 'prd', 'scope.json'), 'utf8'));
+  ok(sRefresh.ok && sRefresh.baseline && refreshedData.fns.includes('M04/extra') && scopeWarns(sRefresh).length === 0 && /确认之后没有新增的页面、状态或功能点/.test(fs.readFileSync(sRefresh.mdFile, 'utf8')), '--scope-baseline 刷新后，新增内容纳入基线，不再提醒，文档也不再列出');
+
+  /* 检查未通过时不刷新基线 */
+  const failDir = variant(scopeDir, [[P03, "desc: '选择要统计的自然月，切换后表格和合计同时刷新。',", "desc: '',"]]);
+  const failFile = path.join(failDir, 'prd', 'scope.json');
+  const before = fs.readFileSync(failFile, 'utf8');
+  const sFail = await build(failDir, { scopeBaseline: true });
+  ok(!sFail.ok && fs.readFileSync(failFile, 'utf8') === before, '检查未通过时不刷新基线，原来的 scope.json 保持不变');
+
+  /* 基线文件格式错误 */
+  const badDir = variant(EXAMPLE, []);
+  fs.writeFileSync(path.join(badDir, 'prd', 'scope.json'), '{"pages": "M01"}');
+  const sBad = await build(badDir, {});
+  ok(!sBad.ok && codes(sBad).includes('SCOPE_FILE'), '范围基线格式不对（pages 不是数组）时阻止交付，并给出 SCOPE_FILE');
+
+  /* 刷新时记录用户确认日期 */
+  const sDate = await build(scopeDir, { scopeBaseline: true, confirmedAt: '2026-11-03' });
+  const dateBase = JSON.parse(fs.readFileSync(path.join(scopeDir, 'prd', 'scope.json'), 'utf8'));
+  ok(sDate.ok && dateBase.confirmedAt === '2026-11-03', '--confirmed-at 指定后，基线记录用户确认范围的日期');
+  const badDate = await build(scopeDir, { scopeBaseline: true, confirmedAt: '11/03' }).then(() => false, () => true);
+  const dateNoBase = await build(scopeDir, { confirmedAt: '2026-11-03' }).then(() => false, () => true);
+  ok(badDate && dateNoBase, '--confirmed-at 格式不对，或没有和 --scope-baseline 一起用时拒绝执行');
+  const cliNoVal = (() => { try { execFileSync(process.execPath, [path.join(SKILL, 'scripts', 'build.mjs'), scopeDir, '--scope-baseline', '--confirmed-at'], { stdio: 'pipe' }); return null; } catch (e) { return e; } })();
+  ok(cliNoVal && cliNoVal.status === 2 && /缺少日期值/.test(String(cliNoVal.stderr)), '--confirmed-at 缺少日期值时命令行报错退出，不会静默忽略');
+}
+
 console.log('\n结果：' + pass + ' 通过，' + failN + ' 失败');
 if (failN) console.log('失败项：\n  - ' + fails.join('\n  - '));
 if (!KEEP && !failN) fs.rmSync(TMP, { recursive: true, force: true });

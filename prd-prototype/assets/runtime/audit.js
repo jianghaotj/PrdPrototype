@@ -106,7 +106,7 @@
     var KNOWN = {
       page: 'id end group title goal entry perm scenarios states fns rules todo render after acts changes match enter host',
       state: 'id label when layer set enter match changes',
-      fn: 'id name desc fields rules errors empty perm src status statusNote ui gap dot sel text changes',
+      fn: 'id name desc fields rules errors empty perm src status statusNote ui gap dot sel text changes ac',
       field: 'key name type required def options rule status statusNote changes',
       product: 'id name date fidelity version current releases background goals scope roles ends groups rules nfr dict flows sections todo demo scenarios clarify out demoNote outOfScope'
     };
@@ -143,6 +143,16 @@
       var st = f.status;
       if (st && ['pending', 'assumed', 'confirmed'].indexOf(st) < 0) E('FN_SRC', w + ' 的 status 只能是 confirmed / pending / assumed');
       if (!f.src && st !== 'pending' && st !== 'assumed') E('FN_SRC', w + ' 没有来源 src；有依据就写来源（如“需求材料 §2”“澄清 Q3”），没有依据就标 status: "assumed"（AI 假设）或 "pending"（待确认）');
+      /* 验收条件 ac（可选）：写了就必须有用户操作和预期结果 */
+      if (f.ac != null) {
+        if (typeof f.ac !== 'object' || Array.isArray(f.ac)) E('AC', w + ' 的 ac 要写成对象 { pre, act, expect }（前置条件、用户操作、预期结果）');
+        else {
+          if (f.ac.pre != null && typeof f.ac.pre !== 'string') E('AC', w + ' 的 ac.pre（前置条件）要写成文字');
+          if (!f.ac.act || typeof f.ac.act !== 'string' || f.ac.act.replace(/\s/g, '').length < 4) E('AC', w + ' 的 ac 缺少 act（用户操作），要写成一句完整的话');
+          if (!f.ac.expect || typeof f.ac.expect !== 'string' || f.ac.expect.replace(/\s/g, '').length < 4) E('AC', w + ' 的 ac 缺少 expect（预期结果），要写成一句完整的话');
+          Object.keys(f.ac).forEach(function (k) { if (['pre', 'act', 'expect'].indexOf(k) < 0) Wn('UNKNOWN_KEY', w + ' 的 ac 有未识别的字段「' + k + '」（可用：pre、act、expect）'); });
+        }
+      }
       (f.fields || []).forEach(function (x) {
         var fw = w + ' 的字段「' + (x.name || x.key || '?') + '」';
         if (!x.name) E('FIELD', fw + ' 缺少 name');
@@ -459,6 +469,30 @@
         if (!ends.some(function (en) { return seenShared[en + ':' + f.id]; })) E('FN_UNUSED', '公共组件「' + g.title + '」· 功能点「' + f.name + '」没有在任何页面出现');
       });
     });
+    /* 核心流程里出现的功能点建议写 ac，测试可直接据此写用例；只提醒，不阻止交付 */
+    /* 按页面汇总：同一页面的未写 ac 功能点合并成一条提醒，避免样例里逐条刷屏 */
+    (function acHints() {
+      var done = {}, byPage = [], byId = {};
+      (P.flows || []).forEach(function (fl) {
+        (fl.steps || []).forEach(function (s) {
+          var sp = W.pages[s.p];
+          if (!sp) return;
+          sp.fns.forEach(function (f) {
+            var key = sp.id + '/' + f.id;
+            var sts = (seen[sp.id] && seen[sp.id][f.id]) || [];
+            if (done[key] || D.removed(f) || f.ui === false || f.ac) return;
+            if (s.st && sts.indexOf(s.st) < 0) return;
+            done[key] = 1;
+            if (!byId[sp.id]) { byId[sp.id] = { page: sp, names: [], flows: [] }; byPage.push(byId[sp.id]); }
+            byId[sp.id].names.push('「' + f.name + '」');
+            if (byId[sp.id].flows.indexOf(fl.name) < 0) byId[sp.id].flows.push(fl.name);
+          });
+        });
+      });
+      byPage.forEach(function (b) {
+        Wn('AC_MISSING', b.page.id + ' ' + b.page.title + ' · 核心流程「' + b.flows.join('」「') + '」中有 ' + b.names.length + ' 个功能点未写 ac：' + b.names.join('、') + '。建议写 ac（前置条件、用户操作、预期结果），测试可直接据此写用例');
+      });
+    })();
     /* 字段、列表、提交类操作的说明是否完整 */
     Object.keys(fnBox).forEach(function (k) {
       var b = fnBox[k], f = b.fn, nm = '功能点「' + f.name + '」（' + b.where.split(' · ')[0] + '）';
@@ -485,6 +519,46 @@
     return finish(R);
   };
 
+  /* 范围基线：页面、状态、功能点（含公共组件功能点）的清单。key 稳定，用于和 prd/scope.json 对比 */
+  W.scopeInventory = function () {
+    var P = W.P, out = { pages: [], states: [], fns: [] };
+    if (!P || !W.order) return out;
+    (P.ends || []).forEach(function (e) {
+      (W.order[e.id] || []).forEach(function (id) {
+        var p = W.pages[id];
+        if (!p) return;
+        var pl = (p.title || '');
+        out.pages.push({ k: p.id, l: p.id + ' ' + pl });
+        (p.states || []).forEach(function (s) { out.states.push({ k: p.id + '/' + s.id, l: p.id + ' ' + pl + ' · 状态「' + (s.label || s.id) + '」' }); });
+        (p.fns || []).forEach(function (f) { out.fns.push({ k: p.id + '/' + f.id, l: p.id + ' ' + pl + ' · 功能点「' + (f.name || f.id) + '」' }); });
+      });
+    });
+    W.sharedGroups.forEach(function (g) {
+      (g.fns || []).forEach(function (f) { out.fns.push({ k: '公共/' + (g.id || '') + '/' + f.id, l: '公共组件「' + (g.title || g.id) + '」 · 功能点「' + (f.name || f.id) + '」' }); });
+    });
+    return out;
+  };
+  /* 读取构建时嵌入的基线（prd/scope.json），没有则返回 null */
+  W.scopeBaseline = function () {
+    var el = document.getElementById('prd-scope');
+    try { var t = el && el.textContent.trim(); return t ? JSON.parse(t) : null; } catch (e) { return null; }
+  };
+  /* 当前清单与基线对比：返回 null 表示没有基线。新增和移除都只提醒，不阻止交付 */
+  W.scopeDiff = function () {
+    var base = W.scopeBaseline();
+    if (!base) return null;
+    var inv = W.scopeInventory(), added = [], removed = [];
+    var kinds = { pages: '页面', states: '状态', fns: '功能点' };
+    ['pages', 'states', 'fns'].forEach(function (kind) {
+      var have = base[kind] || [];
+      var cur = inv[kind];
+      var curKeys = cur.map(function (x) { return x.k; });
+      cur.forEach(function (x) { if (have.indexOf(x.k) < 0) added.push({ kind: kinds[kind], key: x.k, label: x.l }); });
+      have.forEach(function (k) { if (curKeys.indexOf(k) < 0) removed.push({ kind: kinds[kind], key: k }); });
+    });
+    return { release: base.release || '', confirmedAt: base.confirmedAt || '', added: added, removed: removed };
+  };
+
   function finish(R) {
     var st = D.stats();
     return {
@@ -495,7 +569,9 @@
       warns: R.warns,
       stats: Object.assign(st, { interactive: R.interactive, covered: R.covered, ignored: R.ignored || 0, renders: R.renders, errors: R.errors.length, warns: R.warns.length }),
       fnStates: R.fnStates,
-      links: R.links
+      links: R.links,
+      inventory: W.scopeInventory(),
+      scope: W.scopeDiff()
     };
   }
 })();

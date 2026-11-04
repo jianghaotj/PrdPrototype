@@ -21,6 +21,12 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--md' || a === '--draft' || a === '--json' || a === '--quiet') o[a.slice(2)] = true;
+    else if (a === '--scope-baseline') o.scopeBaseline = true;
+    else if (a === '--confirmed-at') {
+      const v = argv[++i];
+      if (v == null || v.startsWith('--')) die('--confirmed-at 缺少日期值，格式为 YYYY-MM-DD');
+      o.confirmedAt = v;
+    }
     else if (a === '--out') o.out = argv[++i];
     else if (a.startsWith('--')) die('未知参数：' + a);
     else o._.push(a);
@@ -172,6 +178,36 @@ export function auditSingleFile(html) {
   (html.match(/<script\b[^>]*\bsrc\s*=/gi) || []).forEach((t) => issues.push(t));
   return issues;
 }
+/* 范围基线 prd/scope.json：确认范围后记录的页面、状态、功能点编号。没有该文件时不做增删对比。
+ * 格式：{ release, confirmedAt, pages: ["M01"], states: ["M01/list"], fns: ["M01/search"] }。
+ * 文件存在但格式不对时返回 error，构建会阻止交付。 */
+export function readScope(prd) {
+  const f = path.join(prd, 'scope.json');
+  if (!fs.existsSync(f)) return { data: null };
+  let d;
+  try { d = JSON.parse(read(f)); } catch (e) { return { error: 'prd/scope.json 不是合法的 JSON：' + e.message }; }
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return { error: 'prd/scope.json 应为对象' };
+  for (const k of ['pages', 'states', 'fns']) {
+    if (!Array.isArray(d[k])) return { error: 'prd/scope.json 缺少 ' + k + ' 或不是数组（三项都要写，没有内容时写 []）' };
+    if (d[k].some((x) => typeof x !== 'string')) return { error: 'prd/scope.json 的 ' + k + ' 应为字符串数组' };
+  }
+  return { data: { release: String(d.release || ''), confirmedAt: String(d.confirmedAt || ''), pages: d.pages || [], states: d.states || [], fns: d.fns || [] } };
+}
+/* 用构建检查得到的当前清单覆盖 prd/scope.json，返回写入的内容。
+ * confirmedAt 默认取构建当天；用户确认日期不是今天时用 --confirmed-at 指定。 */
+function writeScopeBaseline(prd, inv, release, confirmedAt) {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const data = {
+    release,
+    confirmedAt: confirmedAt || [d.getFullYear(), pad(d.getMonth() + 1), pad(d.getDate())].join('-'),
+    pages: inv.pages.map((x) => x.k),
+    states: inv.states.map((x) => x.k),
+    fns: inv.fns.map((x) => x.k)
+  };
+  fs.writeFileSync(path.join(prd, 'scope.json'), JSON.stringify(data, null, 2) + '\n');
+  return data;
+}
 function licenseComment(name, file) {
   return '<!--\n' + name + ' 许可\n' + read(path.join(VENDOR, file)).replace(/-->/g, '-- >') + '\n-->\n';
 }
@@ -181,6 +217,9 @@ export async function build(input, opts = {}) {
   const productFile = path.join(prd, 'product.js');
   const cfg = readProduct(productFile);
   const release = cfg.current || (cfg.releases && cfg.releases.length ? cfg.releases[cfg.releases.length - 1].id : cfg.version || 'V1.0');
+  if (opts.draft && opts.scopeBaseline) throw new Error('--draft 只组装不检查，不能写入范围基线');
+  if (opts.confirmedAt != null && !opts.scopeBaseline) throw new Error('--confirmed-at 只能和 --scope-baseline 一起用');
+  if (opts.confirmedAt != null && !/^\d{4}-\d{2}-\d{2}$/.test(opts.confirmedAt)) throw new Error('--confirmed-at 的格式应为 YYYY-MM-DD');
   const outName = opts.out || cfg.out || ((cfg.name || 'prototype') + '-原型需求.html');
   const outFile = path.resolve(project, outName);
   const tmpDir = path.join(project, '.prd-build');
@@ -199,6 +238,9 @@ export async function build(input, opts = {}) {
   /* 托管原型 */
   const buildWarns = [];
   const buildErrs = [];
+  const scopeRes = readScope(prd);
+  if (scopeRes.error) buildErrs.push({ code: 'SCOPE_FILE', msg: scopeRes.error });
+  const scope = scopeRes.data;
   const hostBlocks = [];
   const hostRemote = new Set();
   const netSeen = new Set();   /* 已报告过的网络脚本/样式，格式 “代码|地址”，运行时检查据此去重 */
@@ -247,6 +289,7 @@ export async function build(input, opts = {}) {
     '<body>',
     '<div id="app"><header id="top"></header><aside id="left"></aside><main id="stagewrap"><div id="stage"><div id="stage-in"></div></div><div id="flowbar"></div></main><aside id="right"></aside></div>',
     '<script type="application/json" id="prd-audit">' + (audit ? escJson(audit) : '') + '</script>',
+    '<script type="application/json" id="prd-scope">' + (scope ? escJson(scope) : '') + '</script>',
     ...hostBlocks,
     ...scripts.map((s) => '<script>\n' + s + '\n</script>'),
     licenseComment('DOMPurify 3.2.7（Apache-2.0 / MPL-2.0）', 'DOMPurify-LICENSE'),
@@ -292,6 +335,11 @@ export async function build(input, opts = {}) {
   });
   buildWarns.forEach((w) => report.warns.push(w));
   buildErrs.forEach((w) => report.errors.push(w));
+  /* 范围基线外的增删只提醒，不阻止交付；没有基线时 report.scope 为 null */
+  if (report.scope) {
+    report.scope.added.forEach((a) => report.warns.push({ code: 'SCOPE_ADDED', msg: '范围确认后新增：' + a.kind + ' · ' + a.label + '（不在范围基线中；先列给用户确认，确认保留后再用 --scope-baseline 刷新基线）' }));
+    report.scope.removed.forEach((r) => report.warns.push({ code: 'SCOPE_REMOVED', msg: '范围确认后移除：' + r.kind + ' · ' + r.key + '（基线中有，原型里已没有；确认后再用 --scope-baseline 刷新基线）' }));
+  }
   /* 断网运行时记录到的网络请求。
    * 脚本和样式按请求类型判定：来自托管端 iframe 且该端写了 online: true 的记为 ONLINE，其余记为 HOST_NET。
    * 同一地址同一代码只报告一次；静态检查已报告过的不再重复。图片、字体等只作为 RES 提醒。 */
@@ -330,6 +378,20 @@ export async function build(input, opts = {}) {
     const failed = path.join(tmpDir, base + '.failed.html');
     fs.writeFileSync(failed, assemble(report));
     return { ok: false, report, failed, release, name: cfg.name, outFile };
+  }
+  /* --scope-baseline：检查通过后用当前清单覆盖基线，再完整构建一次，让交付文件和需求文档都按新基线生成。
+     第二次构建失败时恢复原来的 scope.json，避免留下没有对应交付的基线。 */
+  if (opts.scopeBaseline) {
+    const scopeFile = path.join(prd, 'scope.json');
+    const prev = fs.existsSync(scopeFile) ? read(scopeFile) : null;
+    const baseline = writeScopeBaseline(prd, report.inventory, release, opts.confirmedAt);
+    const again = await build(input, { ...opts, scopeBaseline: false, confirmedAt: undefined });
+    if (!again.ok) {
+      if (prev == null) fs.rmSync(scopeFile, { force: true }); else fs.writeFileSync(scopeFile, prev);
+      return again;
+    }
+    again.baseline = baseline;
+    return again;
   }
   /* 版本变化时归档上一版交付文件 */
   let archived = null;
@@ -379,6 +441,7 @@ function printReport(r) {
     console.log('\n✓ 检查通过，已生成：' + r.file + '（' + Math.round(r.size / 1024) + ' KB）');
     if (r.mdFile) console.log('  Markdown：' + r.mdFile);
     if (r.archived) console.log('  上一版已归档：' + r.archived);
+    if (r.baseline) console.log('  已刷新范围基线 prd/scope.json：页面 ' + r.baseline.pages.length + ' · 状态 ' + r.baseline.states.length + ' · 功能点 ' + r.baseline.fns.length + '（' + r.baseline.confirmedAt + '）');
   }
 }
 
@@ -387,6 +450,10 @@ const USAGE = `用法：node scripts/build.mjs <项目目录> [选项]
   --out 文件  指定交付文件名（默认 <产品名>-原型需求.html）
   --json      以 JSON 输出检查结果
   --draft     只组装、不检查，输出到 .prd-build/（仅供排查画面，不可交付）
+  --scope-baseline  检查通过后，把当前页面、状态、功能点记为范围基线（prd/scope.json）。
+                    只用于刷新：先构建列出 SCOPE_ADDED / SCOPE_REMOVED，用户确认后再加此参数。
+                    首次建基线由 Agent 按确认的范围清单手写 prd/scope.json（格式见 references/spec-format.md）
+  --confirmed-at 日期  配合 --scope-baseline，记录用户确认范围的日期（YYYY-MM-DD，默认今天）
 检查未通过时不更新交付文件，在 .prd-build/ 留下 failed 版本供排查。`;
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--help') || process.argv.includes('-h')) { console.log(USAGE); process.exit(0); }

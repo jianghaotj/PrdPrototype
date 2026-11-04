@@ -353,6 +353,21 @@
     }
 
     if (!only) {
+      /* 验收条件（功能点的 ac，可选）：集中成一章，测试可直接据此写用例 */
+      var acRows = [];
+      function acRow(where, f) { return [T(where), T(f.name), T(f.ac.pre || '—'), T(f.ac.act), T(f.ac.expect)]; }
+      allPages.forEach(function (p) {
+        if (!p) return;
+        p.fns.forEach(function (f) { if (f.ac && !D.removed(f)) acRows.push(acRow(p.id + ' ' + p.title, f)); });
+      });
+      W.sharedGroups.forEach(function (g) {
+        g.fns.forEach(function (f) { if (f.ac && !D.removed(f)) acRows.push(acRow('公共组件「' + g.title + '」', f)); });
+      });
+      if (acRows.length) {
+        chapter('验收条件');
+        out.push('功能点写了验收条件（前置条件、用户操作、预期结果）的集中列在这里。未列出的功能点没有单独写验收条件，以功能点说明和规则为准。\n\n');
+        out.push(table(['位置', '功能点', '前置条件', '用户操作', '预期结果'], acRows));
+      }
       if (P.dict && P.dict.length) {
         chapter('数据字典');
         P.dict.forEach(function (d) {
@@ -381,6 +396,16 @@
           })));
         });
         if (gaps.length) out.push('### 需求中有、原型未体现\n\n研发按需求实现，测试按需求验收；原型后续补画。\n\n' + table(['页面', '功能点', '说明'], gaps));
+      }
+      /* 范围确认后新增 / 移除：和 prd/scope.json 基线对比。没有基线时不列 */
+      var sd = W.scopeDiff();
+      if (sd) {
+        chapter('范围确认后新增');
+        var when = (sd.confirmedAt ? '于 ' + sd.confirmedAt : '') + (sd.release ? '（' + sd.release + '）' : '');
+        out.push('范围清单' + (when ? when + ' ' : '') + '确认之后，原型里又多出下列页面、状态或功能点。它们没有经过范围确认，评审时请决定是否纳入本期。\n\n');
+        if (sd.added.length) out.push(table(['类别', '位置'], sd.added.map(function (x) { return [x.kind, T(x.label)]; })));
+        else out.push('确认之后没有新增的页面、状态或功能点。\n\n');
+        if (sd.removed.length) out.push('**确认之后已从原型中移除**\n\n' + table(['类别', '位置'], sd.removed.map(function (x) { return [x.kind, T(x.key)]; })));
       }
       var pend = D.pendingList();
       chapter('待确认与 AI 假设');
