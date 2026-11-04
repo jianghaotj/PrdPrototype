@@ -879,6 +879,54 @@ const BEH = path.join(SKILL, 'tests', 'fixtures', 'behave');
   } finally { await bb.close(); }
 }
 
+/* ---------- 11. 高教 PC 样例：课程管理（gaodeng-pc，只做 PC 端） ---------- */
+console.log('\n11. 高教 PC 样例（课程管理）');
+{
+  const COURSE = path.join(SKILL, 'examples', 'course-mgmt');
+  const cm = await build(variant(COURSE, []), { md: true });
+  ok(cm.ok, '课程管理样例（gaodeng-pc，PC 端）构建通过', cm.ok ? '' : JSON.stringify(cm.report.errors.slice(0, 3)));
+  const cmMd = cm.mdFile ? fs.readFileSync(cm.mdFile, 'utf8') : '';
+  ok(cm.ok && /【AI 假设】/.test(cmMd) && cm.report.stats.assumed > 0 && cm.report.stats.pending === 0, '课程管理需求文档标出 AI 假设且没有待确认项（AI 假设 ' + (cm.report.stats ? cm.report.stats.assumed : 0) + ' 条）');
+  ok(cm.ok && cmMd.includes('课程名称为必填项，为空时不能提交') && cmMd.includes('课程代码长度为 6–12 个字，不在此范围内时不能提交'), '课程管理需求文档由 h.fld 的 req / min / max 生成必填与长度规则');
+  /* 仓库里提交的需求文档与当前源码重新构建的结果一致（产物没有过期） */
+  const cmCommitted = fs.readFileSync(path.join(COURSE, '课程管理-需求文档.md'), 'utf8');
+  ok(cm.ok && cmMd === cmCommitted, '课程管理需求文档与仓库已提交的版本一致（产物未过期）');
+  /* 分页说明：每页 10 条，少于 10 条写“不足”；搜索计数是原型限制，单独成句 */
+  ok(cm.ok && cmMd.includes('课程不足 10 条时只显示“共 N 条”') && !cmMd.includes('不超过 10 条') && cmMd.includes('原型只展示第 1 页，搜索时计数不变'), '课程管理分页说明写作“不足 10 条”，原型限制单独成句');
+  /* 浏览器：列表按 gaodeng-pc 表格取值渲染；超过 10 条时只渲染第 1 页的 10 行，与分页文字一致 */
+  if (cm.ok) {
+    const bc = await launch();
+    try {
+      const pg = await bc.newPage({ width: 1520, height: 1080 });
+      const open = async (hash) => { await pg.goto('about:blank'); await pg.goto(fileUrl(cm.file) + hash); await pg.waitFor('window.__PRD_READY === true'); await sleep(300); };
+      await open('#/p/P01/list');
+      /* 用 offsetHeight 量高度：页面默认“适应窗口”缩放，getBoundingClientRect 会带上缩放比例 */
+      const styleJs = `JSON.stringify((function(){
+        var hd = document.querySelector('#ab [data-fscope]').previousElementSibling, row = document.querySelector('#ab [data-frow] > .row');
+        var a = getComputedStyle(hd), b = getComputedStyle(row);
+        return { hh: hd.offsetHeight, hbg: a.backgroundColor, hfs: a.fontSize, hfw: a.fontWeight, hc: a.color, hbb: a.borderBottomColor,
+          rh: row.offsetHeight, rfs: b.fontSize, rc: b.color, rbb: b.borderBottomColor };
+      })())`;
+      const st = JSON.parse(await pg.evaluate(styleJs));
+      ok(st.hh === 54 && st.hbg === 'rgb(245, 247, 250)' && st.hfs === '14px' && st.hfw === '500' && st.hc === 'rgb(26, 34, 51)' && st.hbb === 'rgb(225, 230, 240)' && st.rh === 54 && st.rfs === '14px' && st.rc === 'rgb(87, 92, 102)' && st.rbb === 'rgb(245, 247, 250)',
+        '课程管理列表表头与行按 gaodeng-pc 表格取值（表头 54 高、LV6 底、14px Medium、LV1 字、底边 LV5；行 54 高、LV2 字、行线 LV6）', JSON.stringify(st));
+      /* 连续新建两门课程（演示数据默认提交成功），列表应为 11 条，画面只渲染第 1 页 10 行 */
+      const submitOnce = async (no, name) => {
+        await open('#/p/P01/create');
+        await pg.evaluate(`(function(){ function set(sel, v) { var el = document.querySelector(sel); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }
+          set('#ab .wb-form input[data-field="no"]', ${JSON.stringify(no)}); set('#ab .wb-form input[data-field="name"]', ${JSON.stringify(name)});
+          set('#ab .wb-form select[data-field="college"]', '计算机学院'); set('#ab .wb-form select[data-field="credit"]', '3');
+          document.querySelector('#ab button[data-form="course"]').click(); return 1; })()`);
+        await sleep(900);
+      };
+      await submitOnce('CS4101', '数据库系统原理');
+      await submitOnce('CS4102', '编译原理');
+      const cap = JSON.parse(await pg.evaluate(`JSON.stringify({ items: W.get('list.items').length, rows: document.querySelectorAll('#ab [data-frow]').length, pager: document.querySelector('#ab .pager').textContent.replace(/\\s+/g, ' ').trim() })`));
+      ok(cap.items === 11 && cap.rows === 10 && cap.pager.indexOf('第 1~10 条 / 共 11 条') === 0, '课程管理 11 条时只渲染第 1 页 10 行，分页为“第 1~10 条 / 共 11 条”', JSON.stringify(cap));
+    } finally { await bc.close(); }
+  }
+}
+
 console.log('\n结果：' + pass + ' 通过，' + failN + ' 失败');
 if (failN) console.log('失败项：\n  - ' + fails.join('\n  - '));
 if (!KEEP && !failN) fs.rmSync(TMP, { recursive: true, force: true });
