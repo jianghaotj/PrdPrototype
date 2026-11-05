@@ -11,11 +11,11 @@ body.no-r #app{grid-template-columns:248px minmax(0,1fr) 0}
 body.no-l.no-r #app{grid-template-columns:0 minmax(0,1fr) 0}
 
 #top{grid-column:1/-1;display:flex;align-items:center;gap:18px;padding:0 14px 0 16px;background:#fff;border-bottom:1px solid var(--v-line);min-width:0;z-index:5}
-.brand{display:flex;align-items:center;gap:10px;font-weight:650;white-space:nowrap;cursor:pointer;text-decoration:none;min-width:0}
+.brand{display:flex;align-items:center;gap:10px;font-weight:650;white-space:nowrap;cursor:pointer;text-decoration:none;min-width:0;flex:0 1 320px;max-width:min(360px,28%)}
 .brand-m{width:26px;height:26px;border-radius:7px;background:var(--v-ink);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
 .brand .t{overflow:hidden;text-overflow:ellipsis}
-.brand small{font-weight:400;color:var(--v-ink3);font-size:12px}
-.vtabs{display:flex;gap:2px;height:100%;overflow-x:auto;scrollbar-width:none;min-width:0}
+.brand small{font-weight:400;color:var(--v-ink3);font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.vtabs{display:flex;gap:2px;height:100%;overflow-x:auto;scrollbar-width:none;min-width:140px;flex:1 1 0}
 .vtabs a{display:flex;align-items:center;padding:0 12px;color:var(--v-ink2);text-decoration:none;border-bottom:2px solid transparent;font-size:14px;white-space:nowrap;cursor:pointer}
 .vtabs a:hover{color:var(--v-ink)}
 .vtabs a.on{color:var(--v-ink);border-color:var(--v-ink);font-weight:600}
@@ -26,7 +26,7 @@ body.no-l.no-r #app{grid-template-columns:0 minmax(0,1fr) 0}
 .vbtn.chg.on{border-color:var(--v-chg);color:var(--v-chg);background:var(--v-chgw)}
 kbd{font:11px/1 ui-monospace,Menlo,monospace;border:1px solid var(--v-line);border-bottom-width:2px;border-radius:3px;padding:2px 4px;color:var(--v-ink3);background:#fff}
 .vbtn.on kbd{border-color:#b9c8f5;color:var(--v-acc)}
-.role-sel{height:30px;padding:0 8px;border:1px solid var(--v-line);background:#fff;border-radius:6px;font:13px/1 inherit;font-family:inherit;color:var(--v-ink2);cursor:pointer}
+.role-sel{height:30px;padding:0 8px;border:1px solid var(--v-line);background:#fff;border-radius:6px;font:13px/1 inherit;font-family:inherit;color:var(--v-ink2);cursor:pointer;max-width:140px}
 .role-sel:hover{border-color:#c5cad1;color:var(--v-ink)}
 .audit-badge{font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--v-line);color:var(--v-ink2);cursor:pointer;white-space:nowrap;text-decoration:none}
 .audit-badge.ok{border-color:#bfe3cf;color:var(--v-ok);background:var(--v-okw)}

@@ -141,6 +141,7 @@ node scripts/test-skill.mjs                                                   # 
 - `references/iteration.md`：版本迭代与本版变化。
 - `references/comments.md`：评审意见的留存、导出 JSON 格式与合并（流程 C）。
 - `references/export-csv.md`：功能点/字段/验收条件 CSV 与研发包（`--csv`、`--export-pack`）。
+- `references/roles.md`：按角色过滤原型（`fn.roles` 与顶栏角色下拉）。
 - `references/audit-codes.md`：构建检查代码与修改办法。
 - `examples/leave-approval/`：线框基线样例（手机端 + PC 端、表单、列表、抽屉、弹窗、流程、数据场景）。
 - `examples/course-mgmt/`：高教 PC 高保真样例（gaodeng-pc，列表搜索与分页、新建弹窗的校验与提交重试、详情抽屉）。

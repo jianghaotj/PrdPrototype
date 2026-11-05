@@ -20,11 +20,11 @@ body.no-r #app{grid-template-columns:248px minmax(0,1fr) 0}
 body.no-l.no-r #app{grid-template-columns:0 minmax(0,1fr) 0}
 
 #top{grid-column:1/-1;display:flex;align-items:center;gap:18px;padding:0 14px 0 16px;background:#fff;border-bottom:1px solid var(--v-line);min-width:0;z-index:5}
-.brand{display:flex;align-items:center;gap:10px;font-weight:650;white-space:nowrap;cursor:pointer;text-decoration:none;min-width:0}
+.brand{display:flex;align-items:center;gap:10px;font-weight:650;white-space:nowrap;cursor:pointer;text-decoration:none;min-width:0;flex:0 1 320px;max-width:min(360px,28%)}
 .brand-m{width:26px;height:26px;border-radius:7px;background:var(--v-ink);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
 .brand .t{overflow:hidden;text-overflow:ellipsis}
-.brand small{font-weight:400;color:var(--v-ink3);font-size:12px}
-.vtabs{display:flex;gap:2px;height:100%;overflow-x:auto;scrollbar-width:none;min-width:0}
+.brand small{font-weight:400;color:var(--v-ink3);font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.vtabs{display:flex;gap:2px;height:100%;overflow-x:auto;scrollbar-width:none;min-width:140px;flex:1 1 0}
 .vtabs a{display:flex;align-items:center;padding:0 12px;color:var(--v-ink2);text-decoration:none;border-bottom:2px solid transparent;font-size:14px;white-space:nowrap;cursor:pointer}
 .vtabs a:hover{color:var(--v-ink)}
 .vtabs a.on{color:var(--v-ink);border-color:var(--v-ink);font-weight:600}
@@ -35,7 +35,7 @@ body.no-l.no-r #app{grid-template-columns:0 minmax(0,1fr) 0}
 .vbtn.chg.on{border-color:var(--v-chg);color:var(--v-chg);background:var(--v-chgw)}
 kbd{font:11px/1 ui-monospace,Menlo,monospace;border:1px solid var(--v-line);border-bottom-width:2px;border-radius:3px;padding:2px 4px;color:var(--v-ink3);background:#fff}
 .vbtn.on kbd{border-color:#b9c8f5;color:var(--v-acc)}
-.role-sel{height:30px;padding:0 8px;border:1px solid var(--v-line);background:#fff;border-radius:6px;font:13px/1 inherit;font-family:inherit;color:var(--v-ink2);cursor:pointer}
+.role-sel{height:30px;padding:0 8px;border:1px solid var(--v-line);background:#fff;border-radius:6px;font:13px/1 inherit;font-family:inherit;color:var(--v-ink2);cursor:pointer;max-width:140px}
 .role-sel:hover{border-color:#c5cad1;color:var(--v-ink)}
 .audit-badge{font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--v-line);color:var(--v-ink2);cursor:pointer;white-space:nowrap;text-decoration:none}
 .audit-badge.ok{border-color:#bfe3cf;color:var(--v-ok);background:var(--v-okw)}
@@ -1019,7 +1019,7 @@ body.cmt-on .cmt-panel{display:flex}
 </head>
 <body>
 <div id="app"><header id="top"></header><aside id="left"></aside><main id="stagewrap"><div id="stage"><div id="stage-in"></div></div><div id="flowbar"></div></main><aside id="right"></aside></div>
-<script type="application/json" id="prd-audit">{"behave":{"P01":{"filter":["列表内容随输入实时筛选（匹配列表行中的文字），无匹配项时显示“没有匹配的结果”"],"create-form":["课程代码为必填项，为空时不能提交","课程代码长度为 6–12 个字，不在此范围内时不能提交","课程名称为必填项，为空时不能提交","课程名称长度为 2–30 个字，不在此范围内时不能提交","开课学院为必填项，为空时不能提交","学分为必填项，为空时不能提交","备注最多 200 个字，超出时不能提交"],"submit":["提交前先校验必填项和长度，不通过时在字段下方提示，不发出请求","提交中按钮禁用，重复点击只提交一次","提交失败时保留已填内容并提示，可直接重试（可在数据场景中切换，演示首次提交失败）","提交成功后在「开课课程列表」中新增一条，进入「课程管理」"]}},"ok":true,"at":"2026-11-05T08:54:52.826Z","release":"V1.0","errors":[],"warns":[],"stats":{"pages":1,"states":3,"fns":8,"fields":19,"pending":0,"assumed":31,"changes":0,"gaps":0,"release":"V1.0","interactive":14,"covered":14,"ignored":0,"renders":9,"errors":0,"warns":0,"netRequests":0,"netBlocked":0},"fnStates":{"P01":{"filter":["list"],"create-entry":["list"],"table":["list"],"pager":["list"],"create-form":["create"],"submit":["create"],"detail":["detail"]}},"links":{"P01":[]},"inventory":{"pages":[{"k":"P01","l":"P01 课程管理"}],"states":[{"k":"P01/list","l":"P01 课程管理 · 状态「课程列表」"},{"k":"P01/create","l":"P01 课程管理 · 状态「新建课程弹窗」"},{"k":"P01/detail","l":"P01 课程管理 · 状态「课程详情抽屉」"}],"fns":[{"k":"P01/filter","l":"P01 课程管理 · 功能点「课程搜索」"},{"k":"P01/table","l":"P01 课程管理 · 功能点「开课课程列表」"},{"k":"P01/pager","l":"P01 课程管理 · 功能点「分页计数」"},{"k":"P01/create-entry","l":"P01 课程管理 · 功能点「新建课程入口」"},{"k":"P01/create-form","l":"P01 课程管理 · 功能点「新建课程表单」"},{"k":"P01/submit","l":"P01 课程管理 · 功能点「提交新建课程」"},{"k":"P01/detail","l":"P01 课程管理 · 功能点「课程详情抽屉」"},{"k":"公共/pc-shell/pc-nav","l":"公共组件「教务管理台 顶部导航」 · 功能点「顶部导航与账号菜单」"}]},"scope":null,"needOnline":false}</script>
+<script type="application/json" id="prd-audit">{"behave":{"P01":{"filter":["列表内容随输入实时筛选（匹配列表行中的文字），无匹配项时显示“没有匹配的结果”"],"create-form":["课程代码为必填项，为空时不能提交","课程代码长度为 6–12 个字，不在此范围内时不能提交","课程名称为必填项，为空时不能提交","课程名称长度为 2–30 个字，不在此范围内时不能提交","开课学院为必填项，为空时不能提交","学分为必填项，为空时不能提交","备注最多 200 个字，超出时不能提交"],"submit":["提交前先校验必填项和长度，不通过时在字段下方提示，不发出请求","提交中按钮禁用，重复点击只提交一次","提交失败时保留已填内容并提示，可直接重试（可在数据场景中切换，演示首次提交失败）","提交成功后在「开课课程列表」中新增一条，进入「课程管理」"]}},"ok":true,"at":"2026-11-05T09:14:34.738Z","release":"V1.0","errors":[],"warns":[],"stats":{"pages":1,"states":3,"fns":8,"fields":19,"pending":0,"assumed":31,"changes":0,"gaps":0,"release":"V1.0","interactive":14,"covered":14,"ignored":0,"renders":9,"errors":0,"warns":0,"netRequests":0,"netBlocked":0},"fnStates":{"P01":{"filter":["list"],"create-entry":["list"],"table":["list"],"pager":["list"],"create-form":["create"],"submit":["create"],"detail":["detail"]}},"links":{"P01":[]},"inventory":{"pages":[{"k":"P01","l":"P01 课程管理"}],"states":[{"k":"P01/list","l":"P01 课程管理 · 状态「课程列表」"},{"k":"P01/create","l":"P01 课程管理 · 状态「新建课程弹窗」"},{"k":"P01/detail","l":"P01 课程管理 · 状态「课程详情抽屉」"}],"fns":[{"k":"P01/filter","l":"P01 课程管理 · 功能点「课程搜索」"},{"k":"P01/table","l":"P01 课程管理 · 功能点「开课课程列表」"},{"k":"P01/pager","l":"P01 课程管理 · 功能点「分页计数」"},{"k":"P01/create-entry","l":"P01 课程管理 · 功能点「新建课程入口」"},{"k":"P01/create-form","l":"P01 课程管理 · 功能点「新建课程表单」"},{"k":"P01/submit","l":"P01 课程管理 · 功能点「提交新建课程」"},{"k":"P01/detail","l":"P01 课程管理 · 功能点「课程详情抽屉」"},{"k":"公共/pc-shell/pc-nav","l":"公共组件「教务管理台 顶部导航」 · 功能点「顶部导航与账号菜单」"}]},"scope":null,"needOnline":false}</script>
 <script type="application/json" id="prd-scope"></script>
 <script>
 /*! @license DOMPurify 3.2.7 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.2.7/LICENSE */
