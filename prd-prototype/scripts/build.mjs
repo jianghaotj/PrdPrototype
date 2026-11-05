@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
-import { launch, fileUrl } from './lib/browser.mjs';
+import { launch, fileUrl, sleep } from './lib/browser.mjs';
 import { HINTS } from './lib/hints.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -21,6 +21,8 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--md' || a === '--draft' || a === '--json' || a === '--quiet') o[a.slice(2)] = true;
+    else if (a === '--csv') o.csv = true;
+    else if (a === '--export-pack') o.exportPack = true;
     else if (a === '--scope-baseline') o.scopeBaseline = true;
     else if (a === '--confirmed-at') {
       const v = argv[++i];
@@ -218,6 +220,7 @@ export async function build(input, opts = {}) {
   const cfg = readProduct(productFile);
   const release = cfg.current || (cfg.releases && cfg.releases.length ? cfg.releases[cfg.releases.length - 1].id : cfg.version || 'V1.0');
   if (opts.draft && opts.scopeBaseline) throw new Error('--draft 只组装不检查，不能写入范围基线');
+  if (opts.draft && (opts.csv || opts.exportPack)) throw new Error('--draft 只组装不检查，不能和 --csv、--export-pack 一起用');
   if (opts.confirmedAt != null && !opts.scopeBaseline) throw new Error('--confirmed-at 只能和 --scope-baseline 一起用');
   if (opts.confirmedAt != null && !/^\d{4}-\d{2}-\d{2}$/.test(opts.confirmedAt)) throw new Error('--confirmed-at 的格式应为 YYYY-MM-DD');
   const proto = cfg.stage === 'prototype';
@@ -316,6 +319,7 @@ export async function build(input, opts = {}) {
   fs.writeFileSync(tmp, assemble(null));
   const browser = await launch();
   let report, markdown = null, jsErrors = [], netReqs = [];
+  let csvSheets = null, csvRows = null, pageList = null;
   try {
     const page = await browser.newPage({ width: 1600, height: 1000, offline: true });
     await page.goto(fileUrl(tmp));
@@ -324,6 +328,11 @@ export async function build(input, opts = {}) {
     if (!hasAudit) throw new Error('页面没有正常启动（W.runAudit 不存在）：\n' + page.errors.join('\n'));
     report = await page.evaluate('W.runAudit().then(function (r) { W.audit = r; return r; })');
     if (opts.md) markdown = await page.evaluate('W.doc.markdown({ html: false })');
+    if (opts.csv || opts.exportPack) {
+      csvSheets = JSON.parse(await page.evaluate('JSON.stringify(W.doc.csvSheets())'));
+      csvRows = JSON.parse(await page.evaluate('JSON.stringify(W.doc.csvRows())'));
+      pageList = JSON.parse(await page.evaluate('JSON.stringify((W.P.ends || []).reduce(function (a, e) { return a.concat(W.order[e.id] || []); }, []).map(function (id) { var p = W.pages[id]; return { id: id, title: p.title || "", st: p.states[0] ? p.states[0].id : "" }; }))'));
+    }
     jsErrors = page.errors.slice();
     netReqs = page.requests.slice();
     await page.close();
@@ -417,7 +426,80 @@ export async function build(input, opts = {}) {
     mdFile = path.resolve(project, base.replace(/-原型需求$/, '') + '-需求文档.md');
     fs.writeFileSync(mdFile, markdown);
   }
-  return { ok: true, report, file: outFile, size: Buffer.byteLength(html), mdFile, archived, release, name: cfg.name };
+  /* --csv：三份 CSV 写到交付文件所在目录；--export-pack：研发包写到 <项目>/export/ 下（检查通过后才写） */
+  let csvFiles = null, pack = null;
+  if (opts.csv) csvFiles = writeCsvSet(path.dirname(outFile), cfg, release, csvSheets);
+  if (opts.exportPack) pack = await writeExportPack(project, cfg, release, outFile, outName, csvSheets, csvRows, pageList);
+  return { ok: true, report, file: outFile, size: Buffer.byteLength(html), mdFile, archived, release, name: cfg.name, csvFiles, pack };
+}
+
+/* ---------- CSV 与研发包 ---------- */
+const safeName = (s) => String(s).replace(/[\\/:*?"<>|]/g, '_');
+const safeFile = (s) => String(s).replace(/[\\/:*?"<>|\s]/g, '_');
+function csvNames(cfg, release) {
+  const base = safeName(cfg.name || 'prototype');
+  const ver = safeName(release);
+  return { fns: base + '-功能点-' + ver + '.csv', fields: base + '-字段-' + ver + '.csv', ac: base + '-验收条件-' + ver + '.csv' };
+}
+/* 三份 CSV 都带 UTF-8 BOM，Excel 双击即可正确显示中文 */
+function writeCsvSet(dir, cfg, release, sheets) {
+  const names = csvNames(cfg, release);
+  return ['fns', 'fields', 'ac'].map((k) => {
+    const f = path.join(dir, names[k]);
+    fs.writeFileSync(f, '\uFEFF' + sheets[k]);
+    return f;
+  });
+}
+/* 打开已写好的交付文件，逐页截默认状态的首页（与 snap.mjs 的等待方式一致） */
+async function shotPages(file, pages, dir) {
+  const browser = await launch();
+  const shots = [];
+  try {
+    const page = await browser.newPage({ width: 1600, height: 1000 });
+    await page.goto(fileUrl(file));
+    await page.waitFor('window.__PRD_READY === true', 20000);
+    for (const p of pages) {
+      const hash = '#/p/' + encodeURIComponent(p.id) + (p.st ? '/' + encodeURIComponent(p.st) : '');
+      await page.evaluate('location.hash = ' + JSON.stringify(hash) + ';1');
+      await sleep(450);
+      try { await page.waitFor('!document.querySelector("#hostf") || (document.querySelector("#hostf").contentDocument && document.querySelector("#hostf").contentDocument.readyState === "complete")', 8000); } catch (e) {}
+      await sleep(700);
+      const img = safeFile(p.id) + '.png';
+      await page.screenshot(path.join(dir, img));
+      shots.push({ id: p.id, title: p.title, img });
+    }
+    await page.close();
+  } finally {
+    await browser.close();
+  }
+  return shots;
+}
+/* 清单.md：功能点表（精简列）+ 每个页面一节截图。表格单元格里的 | 和换行要转义 */
+function packMarkdown(cfg, release, outName, rows, shots) {
+  const cell = (s) => String(s == null ? '' : s).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+  const out = [];
+  out.push('# ' + (cfg.name || '原型') + ' · 研发测试清单 · ' + release, '');
+  out.push('与原型「' + outName + '」同源，由 `build.mjs --export-pack` 生成。', '');
+  out.push('- 三份 CSV（功能点、字段、验收条件）：UTF-8 带 BOM，Excel 可直接打开。', '- `pages/`：每个页面默认状态的截图。', '');
+  out.push('## 功能点', '');
+  if (!rows.fns.length) out.push('（没有功能点）', '');
+  else {
+    out.push('| 页面 | 功能点 ID | 功能点 | 说明 | 状态 |', '| --- | --- | --- | --- | --- |');
+    rows.fns.forEach((r) => out.push('| ' + [cell(r.pageId + ' ' + r.pageTitle), cell(r.fnId), cell(r.fnName), cell(r.desc), cell(r.status)].join(' | ') + ' |'));
+    out.push('');
+  }
+  out.push('## 页面截图', '');
+  shots.forEach((s) => out.push('### ' + s.id + ' ' + s.title, '', '![' + s.id + ' ' + s.title.replace(/[\[\]]/g, '') + '](pages/' + encodeURIComponent(s.img) + ')', ''));
+  return out.join('\n');
+}
+async function writeExportPack(project, cfg, release, outFile, outName, sheets, rows, pages) {
+  const dir = path.join(project, 'export', safeName((cfg.name || 'prototype') + '-研发包-' + release));
+  const picDir = path.join(dir, 'pages');
+  fs.mkdirSync(picDir, { recursive: true });
+  const csv = writeCsvSet(dir, cfg, release, sheets);
+  const shots = await shotPages(outFile, pages, picDir);
+  fs.writeFileSync(path.join(dir, '清单.md'), packMarkdown(cfg, release, outName, rows, shots) + '\n');
+  return { dir, csv, shots };
 }
 
 function printReport(r) {
@@ -453,6 +535,8 @@ function printReport(r) {
     console.log('\n✓ 检查通过，已生成：' + r.file + '（' + Math.round(r.size / 1024) + ' KB）');
     if (r.mdFile) console.log('  Markdown：' + r.mdFile);
     if (r.archived) console.log('  上一版已归档：' + r.archived);
+    if (r.csvFiles) console.log('  CSV：' + r.csvFiles.map((f) => path.basename(f)).join('、'));
+    if (r.pack) console.log('  研发包：' + r.pack.dir + '（CSV 3 份，页面截图 ' + r.pack.shots.length + ' 张，清单.md）');
     if (r.baseline) console.log('  已刷新范围基线 prd/scope.json：页面 ' + r.baseline.pages.length + ' · 状态 ' + r.baseline.states.length + ' · 功能点 ' + r.baseline.fns.length + '（' + r.baseline.confirmedAt + '）');
   }
 }
@@ -462,6 +546,8 @@ const USAGE = `用法：node scripts/build.mjs <项目目录> [选项]
   --out 文件  指定交付文件名（默认 <产品名>-原型需求.html）
   product.js 写 stage: 'prototype' 时为原型阶段：默认输出 <产品名>-原型.html，不支持 --md
   --json      以 JSON 输出检查结果
+  --csv       检查通过后，在交付文件旁写三份 CSV：功能点、字段、验收条件（UTF-8 带 BOM，Excel 可直接打开）。原型阶段也可用
+  --export-pack  检查通过后，导出研发包到 export/<产品名>-研发包-<版本>/：三份 CSV、每页截图 pages/*.png、清单.md（默认不导出）
   --draft     只组装、不检查，输出到 .prd-build/（仅供排查画面，不可交付）
   --scope-baseline  检查通过后，把当前页面、状态、功能点记为范围基线（prd/scope.json）。
                     只用于刷新：先构建列出 SCOPE_ADDED / SCOPE_REMOVED，用户确认后再加此参数。
@@ -474,7 +560,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (!o._[0]) die(USAGE);
   build(o._[0], o).then((r) => {
     if (r.draft) { console.log('草稿（未检查，不可交付）：' + r.file); return; }
-    if (o.json) console.log(JSON.stringify({ ok: r.ok, file: r.file || null, failed: r.failed || null, errors: r.report.errors, warns: r.report.warns, stats: r.report.stats, ...(r.report.stage ? { stage: r.report.stage } : {}) }, null, 1));
+    if (o.json) console.log(JSON.stringify({ ok: r.ok, file: r.file || null, failed: r.failed || null, errors: r.report.errors, warns: r.report.warns, stats: r.report.stats, ...(r.report.stage ? { stage: r.report.stage } : {}), csv: r.csvFiles || null, pack: r.pack ? r.pack.dir : null }, null, 1));
     else printReport(r);
     process.exit(r.ok ? 0 : 1);
   }).catch((e) => { console.error('✗ 构建失败：' + (e && e.stack || e)); process.exit(2); });

@@ -20,15 +20,16 @@
 | AI 生成原型时多出很多需求里找不到的功能 | 原型里每个按钮、链接、输入框都必须属于已登记的功能点，否则构建失败 |
 | 照着 HTML 写需求，不是缺交互说明就是缺数据定义 | 按原型实际渲染出的元素反查：每个状态要有出现条件，有输入就要有字段定义和必填，有列表就要有空数据说明，有提交或删除就要有异常处理 |
 | 只给几句话就生成原型，AI 自由发挥 | 先轻量澄清（最多 2 轮、每轮不超过 6 题、每题带推荐答案），再确认范围清单，确认后才画；没有依据的内容必须标“AI 假设”或“待确认” |
-| 原型和文档两份文件，研发测试读着不连贯 | 只交一个 HTML：左侧页面目录、中间原型、右侧本页需求；顶部“需求文档”是全文，可导出 Markdown、打印 PDF |
+| 原型和文档两份文件，研发测试读着不连贯 | 只交一个 HTML：左侧页面目录、中间原型、右侧本页需求；顶部“需求文档”是全文，可导出 Markdown、CSV、打印 PDF |
 
 ## 交付物长什么样
 
 - **需求文档**（首页）：概述与范围、角色权限、信息架构、核心流程、全局规则、逐页需求（页面目标、状态与出现条件、功能点、字段表、规则、异常与边界）、公共组件、数据字典、需求与原型的差异、待确认与 AI 假设、澄清记录、变更记录。
 - **各端页面**：PC 浏览器框或手机框画板。画板上的编号圆点与右侧功能点卡片一一对应，点击互相定位，并高亮目标区域。弹层状态只显示最高层的功能点。
 - **核心流程**：逐步演示。直接点画板里的按钮也会前进。
-- **工具**：热区（`H`）、标注圆点（`N`）、缩放、目录和需求面板开关、数据场景切换、重置演示数据、本版变化、意见。
+- **工具**：热区（`H`）、标注圆点（`N`）、缩放、目录和需求面板开关、数据场景切换、重置演示数据、本版变化、意见、清单（原型阶段顶栏，导出研发测试 CSV）。
 - **意见**：评审的人可以在功能点上留意见，然后导出一个 JSON 文件。意见只存在评审人自己的浏览器里，不上传。`scripts/merge-comments.mjs` 把几份 JSON 合并成按功能点分组的 Markdown，交给修改需求的人或 Agent 逐条处理。
+- **研发测试清单**：默认模式在需求文档栏点「导出 CSV」，原型阶段在顶栏点「清单」，下载功能点、字段、验收条件（UTF-8 带 BOM，Excel 可直接打开）。命令行用 `build.mjs --csv` 写三份 CSV，或 `--export-pack` 再带上每页截图和清单.md。
 - **声明式交互**：表单必填和长度校验、提交（防重复点击、失败后可重试、成功后更新列表）、搜索筛选。这些由组件实现，规则会自动写进需求文档。
 - **范围基线**（可选）：确认范围后写入 `prd/scope.json`。之后新增或移除的页面、状态、功能点只给提醒，并在需求文档单列“范围确认后新增”。
 - **验收条件**（可选）：功能点可以写 `ac`（前置条件、用户操作、预期结果），集中列在需求文档的“验收条件”一章。
@@ -132,7 +133,7 @@ node prd-prototype/scripts/new.mjs <项目目录> --name "产品名" --id short-
 node prd-prototype/scripts/new.mjs <项目目录> --name "产品名" --id short-name --end pc:管理后台 --theme gaodeng-pc
 node prd-prototype/scripts/new.mjs <项目目录> --name "产品名" --host 已有原型.html
 node prd-prototype/scripts/probe-host.mjs 已有原型.html [--steps '[...]'] [--shot a.png]
-node prd-prototype/scripts/build.mjs <项目目录> [--md]
+node prd-prototype/scripts/build.mjs <项目目录> [--md] [--csv] [--export-pack]
 node prd-prototype/scripts/build.mjs <项目目录> --scope-baseline --confirmed-at 2026-11-04
 node prd-prototype/scripts/snap.mjs <产物.html> [--view "#/p/P01/list"]
 node prd-prototype/scripts/merge-comments.mjs 意见A.json 意见B.json -o 评审意见合并.md [--prd <项目目录>]
@@ -142,7 +143,7 @@ node prd-prototype/scripts/test-skill.mjs
 各命令的作用：
 
 - `new.mjs`：生成项目骨架。`--theme` 选用设计规范包，`--host` 进入托管模式。
-- `build.mjs`：构建并对账。`--md` 同时导出需求文档 Markdown。`--scope-baseline` 在用户确认范围增删后，刷新 `prd/scope.json`。
+- `build.mjs`：构建并对账。`--md` 同时导出需求文档 Markdown。`--csv` 写出功能点/字段/验收条件三份 CSV（原型阶段也可用）。`--export-pack` 写出研发包（CSV + 每页截图 + 清单.md）。`--scope-baseline` 在用户确认范围增删后，刷新 `prd/scope.json`。
 - `probe-host.mjs`：探测已有 HTML 的结构和风险点。
 - `snap.mjs`：截取交付物的各个视图，用来检查画面。
 - `merge-comments.mjs`：把交付物里导出的评审意见 JSON 合并成 Markdown，每条带序号。
@@ -167,6 +168,7 @@ node prd-prototype/scripts/test-skill.mjs
 - 规范包：`--theme`、PC 作用域、对话框、分页、缺省页。
 - 版本迭代与归档。
 - 评审意见：留意见、刷新后保留、导出 JSON、原型阶段和托管原型阶段的面板，以及多份意见的合并。
+- 研发测试导出：合并 CSV 下载、BOM 与转义、`--csv` 三份文件、原型阶段「清单」、托管模式、`--export-pack` 研发包，以及检查失败时不写出。
 - 浏览器端交互：圆点定位、状态切换、弹层层级、流程演示、快捷键、窄屏、托管状态识别、sandbox。
 - 内容安全：DOMPurify 清洗。
 - 脚手架。

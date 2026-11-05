@@ -25,7 +25,7 @@ description: "一站式产出“交互原型 + 需求文档”的单 HTML：从�
 - **需求文档**（首页）：概述、范围、角色、信息架构、核心流程、全局规则、逐页需求、公共组件、数据字典、验收条件（有 `ac` 时）、需求与原型的差异（托管模式）、范围确认后新增（有范围基线时）、待确认与 AI 假设、澄清记录、变更记录；右侧是评审摘要和构建检查结果。
 - **各端页面**：左侧目录，中间设备画板（PC 浏览器框或手机框），右侧需求面板（页面目标、状态与出现条件、编号功能点卡片、页面规则、入口、跳转）。画板上的编号圆点与卡片一一对应。
 - **核心流程**：逐步演示，可直接点画板前进。
-- 工具：热区 `H`、标注圆点 `N`、缩放、目录/需求面板开关、重置演示数据、本版变化（多版本时）、意见（顶栏“意见”，评审意见可导出 JSON，见 `references/comments.md`）。
+- 工具：热区 `H`、标注圆点 `N`、缩放、目录/需求面板开关、重置演示数据、本版变化（多版本时）、意见（顶栏“意见”，评审意见可导出 JSON，见 `references/comments.md`）、清单（原型阶段顶栏导出研发测试 CSV，见 `references/export-csv.md`）。
 
 ## 任务路由
 
@@ -125,7 +125,7 @@ node scripts/new.mjs <项目目录> --name "产品名" --end pc:管理后台 --t
 node scripts/new.mjs <项目目录> --name "产品名" --host <已有原型.html>        # 托管模式
 node scripts/probe-host.mjs <已有原型.html> [--steps '[{"js":"showPage(\"x\")"}]'] [--boot '[...]'] [--shot a.png]
 # product.js 写 stage: 'prototype' 时为原型阶段：默认输出 <产品名>-原型.html（托管端也可用），--md 会报错
-node scripts/build.mjs <项目目录> [--md] [--out 文件名.html]                  # --md 同时导出需求文档 Markdown
+node scripts/build.mjs <项目目录> [--md] [--csv] [--export-pack] [--out 文件名.html]  # --md 导出 Markdown；--csv 写三份 CSV；--export-pack 写研发包
 node scripts/build.mjs <项目目录> --scope-baseline [--confirmed-at 2026-11-04]  # 用户确认增删后：检查通过则刷新 prd/scope.json（新建时手写，见 spec-format.md）
 node scripts/snap.mjs <产物.html> [--view "#/p/P01/list"]... [--only] [--out 截图目录]   # 默认含需求文档和各端首页；原型阶段只含各端首页
 node scripts/merge-comments.mjs <意见1.json> [意见2.json ...] [-o 评审意见合并.md] [--prd <项目目录>]   # 合并交付 HTML 导出的评审意见
@@ -140,6 +140,7 @@ node scripts/test-skill.mjs                                                   # 
 - `references/host-mode.md`：为已有 HTML 补需求。
 - `references/iteration.md`：版本迭代与本版变化。
 - `references/comments.md`：评审意见的留存、导出 JSON 格式与合并（流程 C）。
+- `references/export-csv.md`：功能点/字段/验收条件 CSV 与研发包（`--csv`、`--export-pack`）。
 - `references/audit-codes.md`：构建检查代码与修改办法。
 - `examples/leave-approval/`：线框基线样例（手机端 + PC 端、表单、列表、抽屉、弹窗、流程、数据场景）。
 - `examples/course-mgmt/`：高教 PC 高保真样例（gaodeng-pc，列表搜索与分页、新建弹窗的校验与提交重试、详情抽屉）。

@@ -437,6 +437,66 @@
     return out.join('');
   };
 
+  /* ---------- CSV：研发与测试导出（功能点、字段、验收条件）。与 Markdown 各自独立，不改 D.markdown ---------- */
+  var FN_COLS = ['pageId', 'pageTitle', 'endId', 'fnId', 'fnName', 'desc', 'perm', 'src', 'status'];
+  var FIELD_COLS = ['pageId', 'fnId', 'fnName', 'key', 'name', 'type', 'required', 'def', 'options', 'rule'];
+  var AC_COLS = ['pageId', 'fnId', 'fnName', 'pre', 'act', 'expect'];
+  /* 合并文本的表头：三张表列的并集，sheet 列标明行属于哪张表；不适用的单元格留空 */
+  var ALL_COLS = ['sheet', 'pageId', 'pageTitle', 'endId', 'fnId', 'fnName', 'desc', 'perm', 'src', 'status', 'key', 'name', 'type', 'required', 'def', 'options', 'rule', 'pre', 'act', 'expect'];
+  function csvCell(v) {
+    var s = v == null ? '' : String(v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function csvLine(cols, row) {
+    return cols.map(function (c) { return csvCell(row[c]); }).join(',');
+  }
+  function csvSheet(cols, rows) {
+    return [cols.join(',')].concat(rows.map(function (r) { return csvLine(cols, r); })).join('\r\n') + '\r\n';
+  }
+  /* 待确认 / AI 假设 标记写进状态列；已确认留空 */
+  function csvStatus(x) {
+    var s = ownStatus(x);
+    return s === 'pending' ? '待确认' : s === 'assumed' ? 'AI 假设' : '';
+  }
+  /* 行对象：fns / fields / ac 三组，已删除（removed）的功能点和字段不导出 */
+  D.csvRows = function () {
+    var out = { fns: [], fields: [], ac: [] };
+    function collect(pageId, pageTitle, endId, fns) {
+      fns.forEach(function (f) {
+        if (D.removed(f)) return;
+        out.fns.push({ sheet: 'fns', pageId: pageId, pageTitle: pageTitle, endId: endId, fnId: f.id, fnName: f.name || '', desc: f.desc || '', perm: f.perm || '', src: joinSrc(f.src) || '', status: csvStatus(f) });
+        (f.fields || []).forEach(function (x) {
+          if (D.removed(x)) return;
+          out.fields.push({ sheet: 'fields', pageId: pageId, fnId: f.id, fnName: f.name || '', key: x.key || '', name: x.name || '', type: x.type || '', required: x.required ? '是' : '否', def: x.def == null ? '' : String(x.def), options: Array.isArray(x.options) ? x.options.join('、') : (x.options || ''), rule: x.rule || '' });
+        });
+        if (f.ac) out.ac.push({ sheet: 'ac', pageId: pageId, fnId: f.id, fnName: f.name || '', pre: f.ac.pre || '', act: f.ac.act || '', expect: f.ac.expect || '' });
+      });
+    }
+    (W.P.ends || []).forEach(function (e) {
+      (W.order[e.id] || []).forEach(function (id) {
+        var p = W.pages[id];
+        if (p) collect(id, p.title || '', e.id, p.fns || []);
+      });
+    });
+    /* 公共组件的 pageId 写作 S:端ID，与评审意见的 target 写法一致 */
+    W.sharedGroups.forEach(function (g) { collect('S:' + g.end, g.title || '', g.end, g.fns || []); });
+    return out;
+  };
+  /* 合并 CSV 文本（不含 BOM；下载时由 viewer 在前面加 \uFEFF） */
+  D.csvText = function () {
+    var r = D.csvRows();
+    return csvSheet(ALL_COLS, r.fns.concat(r.fields, r.ac));
+  };
+  /* 三份独立 CSV 文本（各带表头，不含 sheet 列） */
+  D.csvSheets = function () {
+    var r = D.csvRows();
+    return {
+      fns: csvSheet(FN_COLS, r.fns),
+      fields: csvSheet(FIELD_COLS, r.fields),
+      ac: csvSheet(AC_COLS, r.ac)
+    };
+  };
+
   /* ---------- 统计、待确认、变更 ---------- */
   /* 待确认与 AI 假设清单：收集所有需求文字里的 [待确认] / [AI 假设] 标记，以及标了 status 的条目 */
   var MARK = /\[待确认\]|\[(?:AI\s*假设|AI)\]/g;

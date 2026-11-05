@@ -156,6 +156,7 @@
       '<button class="vbtn" data-tool="hot" title="显示画板中所有可点击区域">热区 <kbd>H</kbd></button>' +
       '<button class="vbtn" data-tool="dots" title="显示或隐藏功能点标注圆点">标注 <kbd>N</kbd></button>' +
       '<button class="vbtn" data-tool="comments" title="查看、添加和导出评审意见">意见<span class="cmt-badge">' + cmtBadgeText() + '</span></button>' +
+      (ui.proto ? '<button class="vbtn" data-tool="csv" title="导出功能点、字段、验收条件（CSV），给开发和测试用">清单</button>' : '') +
       (D.multiRelease() ? '<button class="vbtn chg" data-tool="chg" title="只看 ' + h.esc(D.cur()) + ' 新增、修改、移除的功能点">本版变化</button>' : '') +
       '<button class="vbtn" data-tool="zoom" id="zoomBtn"><span class="lb">适应窗口</span></button>' +
       '<button class="vbtn" data-tool="left"><span class="lb">目录</span></button>' +
@@ -817,7 +818,7 @@
       var md = D.markdown({ html: true, changesOnly: only, stats: statsHTML(only) });
       $('#stage-in').innerHTML = '<div class="doc" id="doc"><div class="doc-bar"><span class="l">需求文档与原型同源；改需求请改源文件后重新构建</span>' +
         (D.multiRelease() ? '<button class="vbtn chg' + (only ? ' on' : '') + '" data-tool="chg">只看 ' + h.esc(D.cur()) + ' 变化</button>' : '') +
-        '<button class="vbtn" data-act-doc="print">打印 / 存为 PDF</button><button class="vbtn" data-act-doc="md">导出 Markdown</button></div><div id="docbody"></div></div>';
+        '<button class="vbtn" data-act-doc="print">打印 / 存为 PDF</button><button class="vbtn" data-act-doc="md">导出 Markdown</button><button class="vbtn" data-act-doc="csv" title="功能点、字段、验收条件，CSV，Excel 可直接打开">导出 CSV</button></div><div id="docbody"></div></div>';
       W.md.into($('#docbody'), md);
       ui.docKey = key;
       renderDocLeft();
@@ -869,6 +870,17 @@
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = (W.P.name || '需求') + '-需求文档-' + D.cur() + (chgOn() && D.multiRelease() ? '-本版变化' : '') + '.md';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+
+  /* 导出 CSV：文件带 UTF-8 BOM，Excel 双击即可正确显示中文 */
+  function exportCsv() {
+    var blob = new Blob(['\uFEFF' + D.csvText()], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (W.P.name || '需求') + '-研发测试清单-' + D.cur() + '.csv';
     document.body.appendChild(a);
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
@@ -1031,6 +1043,7 @@
     var ad = t.closest('[data-act-doc]');
     if (ad) {
       if (ad.dataset.actDoc === 'md') exportMd();
+      if (ad.dataset.actDoc === 'csv') exportCsv();
       if (ad.dataset.actDoc === 'print') window.print();
       return;
     }
@@ -1040,6 +1053,7 @@
       if (k2 === 'hot') toggleHot();
       if (k2 === 'dots') toggleDots();
       if (k2 === 'comments') cmtToggle();
+      if (k2 === 'csv') exportCsv();
       if (k2 === 'sdots') { pref('sharedDots', !pref('sharedDots')); tool.classList.toggle('on', !!pref('sharedDots')); placeDots(); }
       if (k2 === 'chg') { B.toggle('chg-on'); pref('chg', B.contains('chg-on')); ui.docKey = ''; render({ keepSel: true }); }
       if (k2 === 'zoom') { ui.zoom = ui.zoom === 'fit' ? '100' : 'fit'; fit(); }

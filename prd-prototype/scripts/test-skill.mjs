@@ -1268,6 +1268,161 @@ console.log('\n13. 评审意见回收');
   }
 }
 
+/* ---------- 14. 导出给开发测试 ---------- */
+console.log('\n14. 导出给开发测试');
+{
+  const BUILD = path.join(SKILL, 'scripts', 'build.mjs');
+  const COURSE = path.join(SKILL, 'examples', 'course-mgmt');
+  const PROTO_EDIT14 = [PROD, 'W.product({', "W.product({\n  stage: 'prototype',"];
+  /* 最小 RFC 4180 解析，只用于测试：支持引号、双引号转义、单元格内换行 */
+  const parseCsv = (text) => {
+    const rows = [];
+    let row = [], cur = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+        else cur += c;
+      } else if (c === '"') q = true;
+      else if (c === ',') { row.push(cur); cur = ''; }
+      else if (c === '\r') { /* 行尾 CRLF 的 CR */ }
+      else if (c === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+      else cur += c;
+    }
+    if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+    return rows;
+  };
+  const toObjs = (rows) => { const [head, ...body] = rows; return body.map((r) => Object.fromEntries(head.map((k, i) => [k, r[i] == null ? '' : r[i]]))); };
+  const bomOf = (f) => { const b = fs.readFileSync(f); return b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf; };
+  const runBuild = (args) => { try { execFileSync(process.execPath, [BUILD, ...args], { stdio: 'pipe' }); return { status: 0, out: '' }; } catch (e) { return { status: e.status, out: String(e.stderr || '') + String(e.stdout || '') }; } };
+  /* 在页面里点击导出按钮，截获下载的文件名与字节（不经过真实下载） */
+  const downloadFrom = async (pg, selector) => JSON.parse(await pg.evaluate(`(function () {
+    var got = null, names = [], orig = URL.createObjectURL, oc = HTMLAnchorElement.prototype.click;
+    URL.createObjectURL = function (b) { got = b; return orig.call(URL, b); };
+    HTMLAnchorElement.prototype.click = function () { names.push(this.download); };
+    try { var el = document.querySelector(${JSON.stringify(selector)}); if (el) el.click(); }
+    finally { HTMLAnchorElement.prototype.click = oc; URL.createObjectURL = orig; }
+    if (!got) return JSON.stringify({ names: names, bytes: [], text: null });
+    return got.arrayBuffer().then(function (buf) {
+      return JSON.stringify({ names: names, bytes: Array.from(new Uint8Array(buf.slice(0, 3))), text: new TextDecoder('utf-8', { ignoreBOM: true }).decode(buf) });
+    });
+  })()`));
+
+  /* A. 默认模式（课程管理）：文档栏的“导出 CSV”、BOM、三张表内容、RFC 转义、removed 不导出 */
+  const cmDir = variant(COURSE, []);
+  const cmRes = await build(cmDir, {});
+  ok(cmRes.ok, '课程管理样例构建通过（导出 CSV 的前置）', cmRes.ok ? '' : JSON.stringify(cmRes.report.errors.slice(0, 3)));
+  if (cmRes.ok) {
+    const bA = await launch();
+    try {
+      const pg = await bA.newPage({ width: 1600, height: 1000 });
+      await pg.goto(fileUrl(cmRes.file));
+      await pg.waitFor('window.__PRD_READY === true', 20000);
+      await pg.evaluate('location.hash = "#/doc"; 1');
+      await sleep(500);
+      const hasBtn = await pg.evaluate('(function(){ var b = document.querySelector("[data-act-doc=csv]"); return !!b && b.textContent.trim() === "导出 CSV"; })()');
+      ok(hasBtn === true, '默认模式：需求文档栏有「导出 CSV」按钮（与「导出 Markdown」并列）');
+      const d = await downloadFrom(pg, '[data-act-doc=csv]');
+      ok(d.names.length === 1 && d.names[0] === '课程管理-研发测试清单-V1.0.csv', '导出 CSV 的文件名为 (产品名)-研发测试清单-(release).csv', JSON.stringify(d.names));
+      ok(d.bytes[0] === 0xef && d.bytes[1] === 0xbb && d.bytes[2] === 0xbf, '导出的 CSV 以 UTF-8 BOM 开头（Excel 可直接打开）');
+      const rows = parseCsv((d.text || '').replace(/^\uFEFF/, ''));
+      const objs = toObjs(rows);
+      ok(rows[0][0] === 'sheet' && objs.some((r) => r.sheet === 'fns' && r.pageId === 'P01' && r.fnId === 'table'), 'CSV 含 sheet=fns 的功能点行，能找到已知功能点 P01 / table');
+      ok(objs.some((r) => r.sheet === 'fields' && r.fnId === 'table' && r.key === 'no') && objs.some((r) => r.sheet === 'fields'), 'CSV 含字段行（sheet=fields）');
+      ok(objs.some((r) => r.sheet === 'fields' && r.key === 'college' && r.options && r.options.indexOf('、') > 0 && !r.rule), '字段 CSV 含 options（开课学院枚举），无 rule 时仍保留可选值');
+      ok(objs.some((r) => r.sheet === 'ac' && r.fnId === 'filter' && r.expect.indexOf('列表只留下名称含') === 0), 'CSV 含验收条件行（sheet=ac），预期结果原文写入');
+      ok(objs.some((r) => r.sheet === 'fns' && r.pageId === 'S:pc' && r.fnId === 'pc-nav'), '公共组件的 pageId 写作 S:端ID（S:pc）');
+      /* RFC 4180：逗号、双引号、换行写进单元格后，导出再解析要原样读回 */
+      const esc = await pg.evaluate(`(function () {
+        W.pages.P01.fns.forEach(function (f) { if (f.id === 'filter') f.desc = 'a,"b"\\n三'; });
+        return W.doc.csvText();
+      })()`);
+      const escRow = toObjs(parseCsv(esc)).find((r) => r.sheet === 'fns' && r.fnId === 'filter');
+      ok(escRow && escRow.desc === 'a,"b"\n三', 'CSV 单元格转义：逗号、双引号、换行原样往返（RFC 4180）', escRow ? JSON.stringify(escRow.desc) : '无行');
+      const remv = await pg.evaluate(`(function () {
+        W.pages.P01.fns.forEach(function (f) { if (f.id === 'pager') f.changes = [{ ver: 'V1.0', type: 'removed' }]; });
+        return W.doc.csvRows().fns.some(function (r) { return r.fnId === 'pager'; });
+      })()`);
+      ok(remv === false, '标记为移除（removed）的功能点不导出');
+    } finally { await bA.close(); }
+  }
+
+  /* B. build.mjs --csv（请假审批，默认模式）：三份 CSV 写到交付文件旁，无 ac 时验收条件文件只有表头 */
+  const lvDir = variant(EXAMPLE, []);
+  const lvCsv = runBuild([lvDir, '--csv']);
+  const lvNames = ['请假审批-功能点-V1.0.csv', '请假审批-字段-V1.0.csv', '请假审批-验收条件-V1.0.csv'];
+  ok(lvCsv.status === 0 && lvNames.every((n) => fs.existsSync(path.join(lvDir, n))), 'build.mjs --csv：输出目录出现三份 CSV（功能点、字段、验收条件）', lvCsv.out.slice(0, 300));
+  if (lvCsv.status === 0) {
+    const fnsCsv = fs.readFileSync(path.join(lvDir, lvNames[0]), 'utf8').replace(/^\uFEFF/, '');
+    const fnsObjs = toObjs(parseCsv(fnsCsv));
+    ok(lvNames.slice(0).every((n) => bomOf(path.join(lvDir, n))) && fnsObjs.some((r) => r.pageId === 'M02' && r.fnId === 'submit'), 'build.mjs --csv：功能点文件带 BOM，含已知功能点 M02 / submit');
+    const acLines = fs.readFileSync(path.join(lvDir, lvNames[2]), 'utf8').replace(/^\uFEFF/, '').trim().split(/\r?\n/);
+    ok(acLines.length === 1 && acLines[0] === 'pageId,fnId,fnName,pre,act,expect', '样例没写 ac 时，验收条件文件只有表头，其余留空不报错');
+  }
+
+  /* C. 原型阶段：--csv 成功，--md 仍拒绝；原型里有“清单”按钮（不在文档栏），点击下载同一 CSV */
+  const pvDir = variant(EXAMPLE, [PROTO_EDIT14]);
+  const pvCsv = runBuild([pvDir, '--csv']);
+  ok(pvCsv.status === 0 && fs.existsSync(path.join(pvDir, '请假审批-功能点-V1.0.csv')) && fs.readFileSync(path.join(pvDir, '请假审批-功能点-V1.0.csv'), 'utf8').indexOf('M02,') >= 0, '原型阶段 build.mjs --csv 成功，功能点文件含 M02 行', pvCsv.out.slice(0, 300));
+  const pvMd = runBuild([pvDir, '--md']);
+  ok(pvMd.status !== 0 && /--md/.test(pvMd.out), '原型阶段 build.mjs --md 仍然失败（只放开 CSV）', 'exit=' + pvMd.status);
+  const pvHtml = path.join(pvDir, '请假审批-原型.html');
+  if (fs.existsSync(pvHtml)) {
+    const bC = await launch();
+    try {
+      const pg = await bC.newPage({ width: 1600, height: 1000 });
+      await pg.goto(fileUrl(pvHtml));
+      await pg.waitFor('window.__PRD_READY === true', 20000);
+      const btn = await pg.evaluate('(function(){ var b = document.querySelector("[data-tool=csv]"); return !!b && b.textContent.trim() === "清单" && !document.querySelector("[data-act-doc=csv]"); })()');
+      ok(btn === true, '原型阶段：顶栏有「清单」按钮，文档栏没有重复的导出按钮');
+      const d = await downloadFrom(pg, '[data-tool=csv]');
+      const rows = d.text ? toObjs(parseCsv(d.text.replace(/^\uFEFF/, ''))) : [];
+      ok(d.names[0] === '请假审批-研发测试清单-V1.0.csv' && rows.some((r) => r.sheet === 'fns' && r.fnId === 'submit'), '原型阶段点「清单」：下载同一份 CSV，含功能点行', JSON.stringify(d.names));
+    } finally { await bC.close(); }
+  }
+
+  /* D/E. 托管模式：默认和原型都能导出 CSV，并且有功能点行 */
+  const hostD = await build(variant(HOSTFX, []), { csv: true });
+  ok(hostD.ok && hostD.csvFiles && hostD.csvFiles.length === 3, '托管模式（默认）build --csv 检查通过，写出三份 CSV', hostD.ok ? '' : JSON.stringify(hostD.report.errors.slice(0, 2)));
+  const hostP = await build(variant(HOSTFX, [PROTO_EDIT14]), { csv: true });
+  ok(hostP.ok && hostP.csvFiles && hostP.csvFiles.length === 3, '托管模式（原型阶段）build --csv 检查通过，写出三份 CSV', hostP.ok ? '' : JSON.stringify(hostP.report.errors.slice(0, 2)));
+  for (const [r, sel, label] of [[hostD, '[data-act-doc=csv]', '托管默认'], [hostP, '[data-tool=csv]', '托管原型']]) {
+    if (!r.ok) continue;
+    const b = await launch();
+    try {
+      const pg = await b.newPage({ width: 1600, height: 1000 });
+      await pg.goto(fileUrl(r.file));
+      await pg.waitFor('window.__PRD_READY === true', 20000);
+      if (sel === '[data-act-doc=csv]') { await pg.evaluate('location.hash = "#/doc"; 1'); await sleep(500); }
+      const d = await downloadFrom(pg, sel);
+      const rows = d.text ? toObjs(parseCsv(d.text.replace(/^\uFEFF/, ''))) : [];
+      ok(rows.filter((x) => x.sheet === 'fns').length > 0, label + '：点击导出得到 CSV，含功能点行（' + rows.filter((x) => x.sheet === 'fns').length + ' 行）', JSON.stringify(d.names));
+    } finally { await b.close(); }
+  }
+
+  /* F. --export-pack：研发包目录含三份 CSV、页面截图和清单.md（图片引用指向 pages/） */
+  const pkDir = variant(EXAMPLE, []);
+  const pk = await build(pkDir, { exportPack: true });
+  ok(pk.ok && pk.pack, '--export-pack：检查通过并生成研发包', pk.ok ? '' : JSON.stringify(pk.report.errors.slice(0, 2)));
+  if (pk.ok && pk.pack) {
+    const dir = pk.pack.dir;
+    ok(dir === path.join(pkDir, 'export', '请假审批-研发包-V1.0') && lvNames.every((n) => fs.existsSync(path.join(dir, n))), '研发包在 export/<产品名>-研发包-<版本>/ 下，含三份 CSV', dir);
+    const pngs = fs.existsSync(path.join(dir, 'pages')) ? fs.readdirSync(path.join(dir, 'pages')).filter((n) => /\.png$/.test(n)) : [];
+    const pngHead = pngs.length ? fs.readFileSync(path.join(dir, 'pages', pngs[0])).subarray(0, 8).toString('hex') : '';
+    ok(pngs.length >= 1 && pngHead === '89504e470d0a1a0a', '研发包含页面截图（PNG，' + pngs.length + ' 张）');
+    const list = fs.readFileSync(path.join(dir, '清单.md'), 'utf8');
+    ok(/!\[[^\]]*\]\(pages\/M01\.png\)/.test(list) && list.includes('| M02 发起请假 | submit |'), '清单.md 含页面截图引用，并列出功能点表');
+  }
+
+  /* G. 检查未通过时不写研发包和 CSV；--draft 与 --csv 同用时报错 */
+  const bad = variant(HOSTFX, [['existing/crm.html', '</head>', '<script src="https://cdn.example.com/lib.js"></script>\n</head>']]);
+  const badR = await build(bad, { exportPack: true, csv: true });
+  ok(!badR.ok && !fs.existsSync(path.join(bad, 'export')) && !fs.readdirSync(bad).some((n) => /功能点-|研发测试/.test(n)), '检查未通过：不写研发包，也不写 CSV');
+  let draftErr = null;
+  try { await build(variant(EXAMPLE, []), { draft: true, csv: true }); } catch (e) { draftErr = e; }
+  ok(draftErr && /--draft/.test(draftErr.message), '--draft 与 --csv 同用时报错，不静默忽略');
+}
+
 console.log('\n结果：' + pass + ' 通过，' + failN + ' 失败');
 if (failN) console.log('失败项：\n  - ' + fails.join('\n  - '));
 if (!KEEP && !failN) fs.rmSync(TMP, { recursive: true, force: true });
