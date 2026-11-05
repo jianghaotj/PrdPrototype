@@ -33,6 +33,7 @@
 ends: [{
   id: 'web', name: '管理后台', device: 'pc', home: 'D01',
   host: '../原型/crm.html',          // 相对 prd/ 的路径
+  // online: true,                    // 可选：原型确需联网（引用 CDN 脚本或样式）时显式放行，交付标“需联网”
   width: 1440, height: 900,           // 原型的设计尺寸
   ignore: [                           // 原型里有、不纳入本次需求的元素
     { sel: '#btn-export', name: '导出 Excel 按钮', why: '原型多出的功能，本期不做' },
@@ -128,6 +129,16 @@ PRD 里有、已有原型没画的功能（或原型画法与需求不同），�
 - `enter` 执行失败或执行后 `match` 不成立，构建失败。
 - 检查时原生 `alert / confirm / prompt` 会被自动确认并给出提醒，不会卡住。
 - 原型引用的图片、字体缺失或在网络上，只给提醒（断网时可能显示异常）。
+- 原型引用的网络脚本或样式（`<script src="https://…">`、`<link rel="stylesheet" href="https://…">`）会阻止交付（`HOST_NET`）：构建在断网环境下运行，这类资源加载不了，原型会失效。确需联网的端，在 `ends` 里写 `online: true`，构建改为 `ONLINE` 提醒，交付说明里标“需联网”。
+
+## 原型阶段
+
+在 `product.js` 写 `stage: 'prototype'`，托管项目交付 `<产品名>-原型.html`，打开直接进第一个端的首页。
+
+- `sel` 绑定和 `ignore`（含 `why`）仍要写。原型阶段只放宽需求说明类的提醒；`HOST_SEL`、`HOST`、`UNREGISTERED`、`FN_UNUSED` 照常报错。
+- 虚线框（`ignore` 标出的元素）和编号圆点一起默认隐藏。按 `N` 一起显示，再按一起隐藏。打开页面时回到隐藏，显示状态不保存。
+- 该端写 `online: true` 时，顶部标为“原型阶段 · 检查通过 · 需联网”。
+- 不能用 `--md` 导出需求文档，构建会直接报错。
 
 ## 常见问题
 

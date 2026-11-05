@@ -3,10 +3,11 @@
 // 用法：node scripts/build.mjs <项目目录> [--out 文件名.html] [--md] [--draft] [--json]
 //   检查未通过时不写交付文件，只在 <项目>/.prd-build/ 留下 failed 版本供排查。
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
-import { launch, fileUrl } from './lib/browser.mjs';
+import { launch, fileUrl, sleep } from './lib/browser.mjs';
 import { HINTS } from './lib/hints.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -20,6 +21,14 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--md' || a === '--draft' || a === '--json' || a === '--quiet') o[a.slice(2)] = true;
+    else if (a === '--csv') o.csv = true;
+    else if (a === '--export-pack') o.exportPack = true;
+    else if (a === '--scope-baseline') o.scopeBaseline = true;
+    else if (a === '--confirmed-at') {
+      const v = argv[++i];
+      if (v == null || v.startsWith('--')) die('--confirmed-at 缺少日期值，格式为 YYYY-MM-DD');
+      o.confirmedAt = v;
+    }
     else if (a === '--out') o.out = argv[++i];
     else if (a.startsWith('--')) die('未知参数：' + a);
     else o._.push(a);
@@ -69,21 +78,47 @@ function mime(f) {
 function dataUri(f) { return 'data:' + mime(f) + ';base64,' + fs.readFileSync(f).toString('base64'); }
 function attr(tag, name) { const m = new RegExp('\\b' + name + '\\s*=\\s*(["\'])(.*?)\\1', 'i').exec(tag) || new RegExp('\\b' + name + '\\s*=\\s*([^\\s>]+)', 'i').exec(tag); return m ? (m[2] !== undefined ? m[2] : m[1]) : null; }
 function localPath(base, u) { try { return path.resolve(base, decodeURI(u.split(/[?#]/)[0])); } catch (e) { return path.resolve(base, u.split(/[?#]/)[0]); } }
-function inlineCssUrls(css, base, warns, src) {
-  return css.replace(/url\(\s*(["']?)([^"')]+)\1\s*\)/gi, (m, q, u) => {
+/* 处理 CSS 中的 @import 和 url()。
+ * @import 远程样式交给 onStyle（按样式阻止或放行）；@import 本地文件则内联进来，保证交付仍是单文件。
+ * url() 里的远程地址只作为图片、字体提醒，不在这里阻止。 */
+function inlineCssUrls(css, base, warns, src, remote, onStyle, depth = 0) {
+  const re = /@import\s+(?:url\(\s*(["']?)([^"')]+)\1\s*\)|(["'])([^"']+)\3)[^;]*;|url\(\s*(["']?)([^"')]+)\5\s*\)/gi;
+  return css.replace(re, (m, q1, u1, q3, u3, q5, u5) => {
+    if (/^@import/i.test(m)) {
+      const u = u1 || u3;
+      if (isInline(u)) return m;
+      if (isRemote(u)) { onStyle(u); return m; }
+      const f = localPath(base, u);
+      if (!fs.existsSync(f) || depth > 5) { warns.push('托管原型引用的样式文件不存在：' + u + '（' + src + '）'); return ''; }
+      return inlineCssUrls(read(f), path.dirname(f), warns, src, remote, onStyle, depth + 1);
+    }
+    const u = u5;
     if (isInline(u)) return m;
-    if (isRemote(u)) { warns.push('托管原型引用了网络资源 ' + u + '（' + src + '），断网时可能显示异常'); return m; }
+    if (isRemote(u)) { remote.push(u); warns.push('托管原型引用了网络资源 ' + u + '（' + src + '），断网时可能显示异常'); return m; }
     const f = localPath(base, u);
     if (fs.existsSync(f)) return 'url("' + dataUri(f) + '")';
     warns.push('托管原型引用的文件不存在：' + u + '（' + src + '）');
     return m;
   });
 }
-/* 把托管原型的本地 CSS / JS / 图片内联，保证最终仍是单文件 */
-export function inlineHost(file) {
+/* 把托管原型的本地 CSS / JS / 图片内联，保证最终仍是单文件。
+ * 远程脚本和样式：默认作为阻止交付的 blocks；端上写 online: true 时改为 online 提醒（需联网）。
+ * 远程图片和字体：只作为 warns 提醒。remote 列出所有远程地址，供断网检查时去重。 */
+export function inlineHost(file, opts = {}) {
   if (!fs.existsSync(file)) die('托管原型文件不存在：' + file);
   const base = path.dirname(file);
-  const warns = [];
+  const warns = [], blocks = [], online = [], remote = [], netCodes = [];
+  const remoteCode = (what, u) => {
+    remote.push(u);
+    if (opts.online) {
+      online.push('托管原型引用了网络' + what + ' ' + u + '，该端已写 online: true 显式放行，交付后需联网才能正常显示或运行');
+      netCodes.push({ code: 'ONLINE', url: u });
+    } else {
+      blocks.push('托管原型引用了网络' + what + ' ' + u + '，断网时原型会失去样式或无法运行。确需联网请在该端写 online: true');
+      netCodes.push({ code: 'HOST_NET', url: u });
+    }
+  };
+  const onStyle = (u) => remoteCode('样式', u);
   let html = read(file);
   if (!/<html|<body|<div|<main/i.test(html)) die('托管原型不像 HTML 文件：' + file);
   html = html.replace(/<link\b[^>]*>/gi, (tag) => {
@@ -91,16 +126,20 @@ export function inlineHost(file) {
     const href = attr(tag, 'href');
     if (!href || isInline(href)) return tag;
     if (!/stylesheet|icon/i.test(rel)) return tag;
-    if (isRemote(href)) { warns.push('托管原型引用了网络资源 ' + href + '，断网时可能显示异常'); return tag; }
+    if (isRemote(href)) {
+      if (/stylesheet/i.test(rel)) remoteCode('样式', href);
+      else { remote.push(href); warns.push('托管原型引用了网络资源 ' + href + '，断网时可能显示异常'); }
+      return tag;
+    }
     const f = localPath(base, href);
     if (!fs.existsSync(f)) { warns.push('托管原型引用的文件不存在：' + href); return ''; }
     if (/icon/i.test(rel)) return tag.replace(href, dataUri(f));
-    return '<style>\n' + inlineCssUrls(read(f), path.dirname(f), warns, href) + '\n</style>';
+    return '<style>\n' + inlineCssUrls(read(f), path.dirname(f), warns, href, remote, onStyle) + '\n</style>';
   });
   html = html.replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi, (m, attrs, body) => {
     const src = attr('<x ' + attrs + '>', 'src');
     if (!src) return m;
-    if (isRemote(src)) { warns.push('托管原型引用了网络脚本 ' + src + '，断网时原型可能无法运行'); return m; }
+    if (isRemote(src)) { remoteCode('脚本', src); return m; }
     const f = localPath(base, src);
     if (!fs.existsSync(f)) { warns.push('托管原型引用的脚本不存在：' + src); return m; }
     const js = read(f).replace(/<\/script/gi, '<\\/script');
@@ -108,13 +147,14 @@ export function inlineHost(file) {
   });
   html = html.replace(/(<(?:img|source|video|audio)\b[^>]*?\b(?:src|poster)\s*=\s*)(["'])([^"']+)\2/gi, (m, pre, q, u) => {
     if (isInline(u)) return m;
-    if (isRemote(u)) { warns.push('托管原型引用了网络图片 ' + u + '，断网时不显示'); return m; }
+    if (isRemote(u)) { remote.push(u); warns.push('托管原型引用了网络图片 ' + u + '，断网时不显示'); return m; }
     const f = localPath(base, u);
     if (!fs.existsSync(f)) { warns.push('托管原型引用的图片不存在：' + u); return m; }
     return pre + q + dataUri(f) + q;
   });
-  html = html.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (m, a, css) => '<style' + a + '>' + inlineCssUrls(css, base, warns, '内联样式') + '</style>');
-  return { html, warns: Array.from(new Set(warns)) };
+  html = html.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (m, a, css) => '<style' + a + '>' + inlineCssUrls(css, base, warns, '内联样式', remote, onStyle) + '</style>');
+  const uniq = (a) => Array.from(new Set(a));
+  return { html, warns: uniq(warns), blocks: uniq(blocks), online: uniq(online), remote: uniq(remote), netCodes };
 }
 /* 交付文件不允许引用外部或相对资源（托管原型的 JSON 字符串除外，已单独检查） */
 export function auditSingleFile(html) {
@@ -140,6 +180,36 @@ export function auditSingleFile(html) {
   (html.match(/<script\b[^>]*\bsrc\s*=/gi) || []).forEach((t) => issues.push(t));
   return issues;
 }
+/* 范围基线 prd/scope.json：确认范围后记录的页面、状态、功能点编号。没有该文件时不做增删对比。
+ * 格式：{ release, confirmedAt, pages: ["M01"], states: ["M01/list"], fns: ["M01/search"] }。
+ * 文件存在但格式不对时返回 error，构建会阻止交付。 */
+export function readScope(prd) {
+  const f = path.join(prd, 'scope.json');
+  if (!fs.existsSync(f)) return { data: null };
+  let d;
+  try { d = JSON.parse(read(f)); } catch (e) { return { error: 'prd/scope.json 不是合法的 JSON：' + e.message }; }
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return { error: 'prd/scope.json 应为对象' };
+  for (const k of ['pages', 'states', 'fns']) {
+    if (!Array.isArray(d[k])) return { error: 'prd/scope.json 缺少 ' + k + ' 或不是数组（三项都要写，没有内容时写 []）' };
+    if (d[k].some((x) => typeof x !== 'string')) return { error: 'prd/scope.json 的 ' + k + ' 应为字符串数组' };
+  }
+  return { data: { release: String(d.release || ''), confirmedAt: String(d.confirmedAt || ''), pages: d.pages || [], states: d.states || [], fns: d.fns || [] } };
+}
+/* 用构建检查得到的当前清单覆盖 prd/scope.json，返回写入的内容。
+ * confirmedAt 默认取构建当天；用户确认日期不是今天时用 --confirmed-at 指定。 */
+function writeScopeBaseline(prd, inv, release, confirmedAt) {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const data = {
+    release,
+    confirmedAt: confirmedAt || [d.getFullYear(), pad(d.getMonth() + 1), pad(d.getDate())].join('-'),
+    pages: inv.pages.map((x) => x.k),
+    states: inv.states.map((x) => x.k),
+    fns: inv.fns.map((x) => x.k)
+  };
+  fs.writeFileSync(path.join(prd, 'scope.json'), JSON.stringify(data, null, 2) + '\n');
+  return data;
+}
 function licenseComment(name, file) {
   return '<!--\n' + name + ' 许可\n' + read(path.join(VENDOR, file)).replace(/-->/g, '-- >') + '\n-->\n';
 }
@@ -149,7 +219,13 @@ export async function build(input, opts = {}) {
   const productFile = path.join(prd, 'product.js');
   const cfg = readProduct(productFile);
   const release = cfg.current || (cfg.releases && cfg.releases.length ? cfg.releases[cfg.releases.length - 1].id : cfg.version || 'V1.0');
-  const outName = opts.out || cfg.out || ((cfg.name || 'prototype') + '-原型需求.html');
+  if (opts.draft && opts.scopeBaseline) throw new Error('--draft 只组装不检查，不能写入范围基线');
+  if (opts.draft && (opts.csv || opts.exportPack)) throw new Error('--draft 只组装不检查，不能和 --csv、--export-pack 一起用');
+  if (opts.confirmedAt != null && !opts.scopeBaseline) throw new Error('--confirmed-at 只能和 --scope-baseline 一起用');
+  if (opts.confirmedAt != null && !/^\d{4}-\d{2}-\d{2}$/.test(opts.confirmedAt)) throw new Error('--confirmed-at 的格式应为 YYYY-MM-DD');
+  const proto = cfg.stage === 'prototype';
+  if (proto && opts.md) throw new Error('原型阶段不导出需求文档（--md）。需求定了以后，先去掉 product.stage 再构建');
+  const outName = opts.out || cfg.out || ((cfg.name || 'prototype') + (proto ? '-原型.html' : '-原型需求.html'));
   const outFile = path.resolve(project, outName);
   const tmpDir = path.join(project, '.prd-build');
   fs.mkdirSync(tmpDir, { recursive: true });
@@ -166,12 +242,25 @@ export async function build(input, opts = {}) {
 
   /* 托管原型 */
   const buildWarns = [];
+  const buildErrs = [];
+  const scopeRes = readScope(prd);
+  if (scopeRes.error) buildErrs.push({ code: 'SCOPE_FILE', msg: scopeRes.error });
+  const scope = scopeRes.data;
   const hostBlocks = [];
+  const hostRemote = new Set();
+  const netSeen = new Set();   /* 已报告过的网络脚本/样式，格式 “代码|地址”，运行时检查据此去重 */
+  const endOnline = {};        /* 端 id → 是否写了 online: true；只对托管端生效 */
   (cfg.ends || []).forEach((e) => {
     if (!e.host) return;
+    endOnline[e.id] = e.online === true;
     const f = path.resolve(prd, e.host);
-    const r = inlineHost(f);
-    r.warns.forEach((w) => buildWarns.push({ code: 'HOST_RES', msg: '端「' + e.name + '」：' + w }));
+    const r = inlineHost(f, { online: e.online === true });
+    const who = '端「' + e.name + '」：';
+    r.warns.forEach((w) => buildWarns.push({ code: 'HOST_RES', msg: who + w }));
+    r.blocks.forEach((m) => buildErrs.push({ code: 'HOST_NET', msg: who + m }));
+    r.online.forEach((m) => buildWarns.push({ code: 'ONLINE', msg: who + m }));
+    r.remote.forEach((u) => hostRemote.add(u));
+    r.netCodes.forEach((x) => netSeen.add(x.code + '|' + x.url));
     hostBlocks.push('<script type="application/json" id="prd-host-' + e.id + '">' + escJson(r.html) + '</script>');
   });
 
@@ -182,12 +271,12 @@ export async function build(input, opts = {}) {
   const rt = (n) => read(path.join(RT, n));
   const scripts = [
     ...vendor,
-    rt('core.js'), rt('md.js'), rt('doc.js'), rt('host.js'), rt('audit.js'),
+    rt('core.js'), rt('behave.js'), rt('md.js'), rt('doc.js'), rt('host.js'), rt('audit.js'),
     ...userJs.map((x) => '/* ' + path.relative(prd, x.f).split(path.sep).join('/') + ' */\n' + x.src),
-    rt('viewer.js')
+    rt('comments.js'), rt('viewer.js')
   ];
   scripts.forEach((s, i) => { if (/<\/script/i.test(s) && i >= vendor.length) die('运行时脚本中出现 </script'); });
-  const title = (cfg.name || '原型') + ' · ' + release + ' · 原型需求';
+  const title = (cfg.name || '原型') + ' · ' + release + (proto ? ' · 原型' : ' · 原型需求');
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const assemble = (audit) => [
     '<!doctype html>',
@@ -197,6 +286,7 @@ export async function build(input, opts = {}) {
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     '<meta name="generator" content="prd-prototype">',
     '<meta name="prd-release" content="' + esc(release) + '">',
+    proto ? '<meta name="prd-stage" content="prototype">' : '',
     '<title>' + esc(title) + '</title>',
     '<style>\n' + rt('viewer.css') + '\n</style>',
     '<style>\n' + rt('wire.css') + '\n</style>',
@@ -205,6 +295,7 @@ export async function build(input, opts = {}) {
     '<body>',
     '<div id="app"><header id="top"></header><aside id="left"></aside><main id="stagewrap"><div id="stage"><div id="stage-in"></div></div><div id="flowbar"></div></main><aside id="right"></aside></div>',
     '<script type="application/json" id="prd-audit">' + (audit ? escJson(audit) : '') + '</script>',
+    '<script type="application/json" id="prd-scope">' + (scope ? escJson(scope) : '') + '</script>',
     ...hostBlocks,
     ...scripts.map((s) => '<script>\n' + s + '\n</script>'),
     licenseComment('DOMPurify 3.2.7（Apache-2.0 / MPL-2.0）', 'DOMPurify-LICENSE'),
@@ -222,42 +313,98 @@ export async function build(input, opts = {}) {
     return { ok: true, draft: true, file: draft, release, name: cfg.name };
   }
 
-  const tmp = path.join(tmpDir, base + '.check.html');
+  /* 断网检查：复制到系统临时目录，禁止所有网络请求地址后逐状态运行检查，并记录页面发出的网络请求 */
+  const offlineDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prd-offline-'));
+  const tmp = path.join(offlineDir, base + '.check.html');
   fs.writeFileSync(tmp, assemble(null));
   const browser = await launch();
-  let report, markdown = null, jsErrors = [];
+  let report, markdown = null, jsErrors = [], netReqs = [];
+  let csvSheets = null, csvRows = null, pageList = null;
   try {
-    const page = await browser.newPage({ width: 1600, height: 1000 });
+    const page = await browser.newPage({ width: 1600, height: 1000, offline: true });
     await page.goto(fileUrl(tmp));
     try { await page.waitFor('window.__PRD_READY === true', 20000); } catch (e) { /* 启动失败也继续拿检查结果 */ }
     const hasAudit = await page.evaluate('!!(window.W && W.runAudit)');
     if (!hasAudit) throw new Error('页面没有正常启动（W.runAudit 不存在）：\n' + page.errors.join('\n'));
     report = await page.evaluate('W.runAudit().then(function (r) { W.audit = r; return r; })');
     if (opts.md) markdown = await page.evaluate('W.doc.markdown({ html: false })');
+    if (opts.csv || opts.exportPack) {
+      csvSheets = JSON.parse(await page.evaluate('JSON.stringify(W.doc.csvSheets())'));
+      csvRows = JSON.parse(await page.evaluate('JSON.stringify(W.doc.csvRows())'));
+      pageList = JSON.parse(await page.evaluate('JSON.stringify((W.P.ends || []).reduce(function (a, e) { return a.concat(W.order[e.id] || []); }, []).map(function (id) { var p = W.pages[id]; return { id: id, title: p.title || "", st: p.states[0] ? p.states[0].id : "" }; }))'));
+    }
     jsErrors = page.errors.slice();
+    netReqs = page.requests.slice();
     await page.close();
   } finally {
     await browser.close();
+    try { fs.rmSync(offlineDir, { recursive: true, force: true }); } catch (e) {}
   }
   jsErrors.forEach((m) => {
     /* 资源加载失败（原型引用的图片、字体不存在）不阻止交付，作为提醒；脚本错误仍阻止 */
-    if (/Failed to load resource|ERR_FILE_NOT_FOUND|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|net::ERR_/.test(m)) report.warns.push({ code: 'RES', msg: '有资源加载失败：' + m.replace(/^浏览器错误：/, '').replace(/file:\/\/[^）]*\.prd-build\//, '') + '。托管原型请检查原文件引用的图片/字体是否存在' });
+    if (/Failed to load resource|ERR_FILE_NOT_FOUND|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|net::ERR_/.test(m)) report.warns.push({ code: 'RES', msg: '有资源加载失败：' + m.replace(/^浏览器错误：/, '').replace(/（?file:\/\/\S*）?/g, '').trim() + '。托管原型请检查原文件引用的图片/字体是否存在' });
     else report.errors.push({ code: 'JS', msg: m });
   });
   buildWarns.forEach((w) => report.warns.push(w));
+  buildErrs.forEach((w) => report.errors.push(w));
+  /* 范围基线外的增删只提醒，不阻止交付；没有基线时 report.scope 为 null */
+  if (report.scope) {
+    report.scope.added.forEach((a) => report.warns.push({ code: 'SCOPE_ADDED', msg: '范围确认后新增：' + a.kind + ' · ' + a.label + '（不在范围基线中；先列给用户确认，确认保留后再用 --scope-baseline 刷新基线）' }));
+    report.scope.removed.forEach((r) => report.warns.push({ code: 'SCOPE_REMOVED', msg: '范围确认后移除：' + r.kind + ' · ' + r.key + '（基线中有，原型里已没有；确认后再用 --scope-baseline 刷新基线）' }));
+  }
+  /* 断网运行时记录到的网络请求。
+   * 脚本和样式按请求类型判定：来自托管端 iframe 且该端写了 online: true 的记为 ONLINE，其余记为 HOST_NET。
+   * 同一地址同一代码只报告一次；静态检查已报告过的不再重复。图片、字体等只作为 RES 提醒。 */
+  const isNet = (q) => /^(?:https?|wss?):\/\//i.test(q.url);
+  const seenRes = new Set(hostRemote);
+  netReqs.forEach((q) => {
+    if (!isNet(q)) return;
+    if (q.type === 'Script' || q.type === 'Stylesheet') {
+      const what = q.type === 'Script' ? '脚本 ' : '样式 ';
+      /* 检查 iframe（prd-host-audit-<端>）和查看器里的托管 iframe（prd-host-view-<端>）都能归到对应端 */
+      const hosted = /^prd-host-(?:audit|view)-(.+)$/.exec(q.frameName || '');
+      const allowed = !!hosted && endOnline[hosted[1]] === true;
+      const code = allowed ? 'ONLINE' : 'HOST_NET';
+      if (netSeen.has(code + '|' + q.url)) return;
+      netSeen.add(code + '|' + q.url);
+      if (allowed) report.warns.push({ code, msg: '需联网：托管原型运行时加载了网络' + what + q.url + '（该端已写 online: true 显式放行，交付后需联网）' });
+      else if (hosted) report.errors.push({ code, msg: '托管原型运行时加载了网络' + what + q.url + '（断网检查时发出）。改为本地文件，或在该端写 online: true 显式放行' });
+      else report.errors.push({ code, msg: '原型运行时加载了网络' + what + q.url + '（断网检查时发出）。改为本地文件' });
+    } else {
+      if (seenRes.has(q.url)) return;
+      seenRes.add(q.url);
+      report.warns.push({ code: 'RES', msg: '断网检查时原型请求了网络资源（' + (q.type || '未知类型') + '）' + q.url + '，断网时可能显示异常' });
+    }
+  });
+  report.needOnline = report.warns.some((w) => w.code === 'ONLINE');
   report.ok = report.errors.length === 0;
   report.stats.errors = report.errors.length;
   report.stats.warns = report.warns.length;
+  report.stats.netRequests = netReqs.filter(isNet).length;
+  report.stats.netBlocked = netReqs.filter((q) => isNet(q) && q.failed).length;
   const html = assemble(report);
   const single = auditSingleFile(html);
   single.forEach((m) => report.errors.push({ code: 'SINGLE_FILE', msg: '交付文件引用了外部或相对资源：' + m }));
   report.ok = report.errors.length === 0;
-  try { fs.unlinkSync(tmp); } catch (e) {}
 
   if (!report.ok) {
     const failed = path.join(tmpDir, base + '.failed.html');
     fs.writeFileSync(failed, assemble(report));
     return { ok: false, report, failed, release, name: cfg.name, outFile };
+  }
+  /* --scope-baseline：检查通过后用当前清单覆盖基线，再完整构建一次，让交付文件和需求文档都按新基线生成。
+     第二次构建失败时恢复原来的 scope.json，避免留下没有对应交付的基线。 */
+  if (opts.scopeBaseline) {
+    const scopeFile = path.join(prd, 'scope.json');
+    const prev = fs.existsSync(scopeFile) ? read(scopeFile) : null;
+    const baseline = writeScopeBaseline(prd, report.inventory, release, opts.confirmedAt);
+    const again = await build(input, { ...opts, scopeBaseline: false, confirmedAt: undefined });
+    if (!again.ok) {
+      if (prev == null) fs.rmSync(scopeFile, { force: true }); else fs.writeFileSync(scopeFile, prev);
+      return again;
+    }
+    again.baseline = baseline;
+    return again;
   }
   /* 版本变化时归档上一版交付文件 */
   let archived = null;
@@ -279,13 +426,87 @@ export async function build(input, opts = {}) {
     mdFile = path.resolve(project, base.replace(/-原型需求$/, '') + '-需求文档.md');
     fs.writeFileSync(mdFile, markdown);
   }
-  return { ok: true, report, file: outFile, size: Buffer.byteLength(html), mdFile, archived, release, name: cfg.name };
+  /* --csv：三份 CSV 写到交付文件所在目录；--export-pack：研发包写到 <项目>/export/ 下（检查通过后才写） */
+  let csvFiles = null, pack = null;
+  if (opts.csv) csvFiles = writeCsvSet(path.dirname(outFile), cfg, release, csvSheets);
+  if (opts.exportPack) pack = await writeExportPack(project, cfg, release, outFile, outName, csvSheets, csvRows, pageList);
+  return { ok: true, report, file: outFile, size: Buffer.byteLength(html), mdFile, archived, release, name: cfg.name, csvFiles, pack };
+}
+
+/* ---------- CSV 与研发包 ---------- */
+const safeName = (s) => String(s).replace(/[\\/:*?"<>|]/g, '_');
+const safeFile = (s) => String(s).replace(/[\\/:*?"<>|\s]/g, '_');
+function csvNames(cfg, release) {
+  const base = safeName(cfg.name || 'prototype');
+  const ver = safeName(release);
+  return { fns: base + '-功能点-' + ver + '.csv', fields: base + '-字段-' + ver + '.csv', ac: base + '-验收条件-' + ver + '.csv' };
+}
+/* 三份 CSV 都带 UTF-8 BOM，Excel 双击即可正确显示中文 */
+function writeCsvSet(dir, cfg, release, sheets) {
+  const names = csvNames(cfg, release);
+  return ['fns', 'fields', 'ac'].map((k) => {
+    const f = path.join(dir, names[k]);
+    fs.writeFileSync(f, '\uFEFF' + sheets[k]);
+    return f;
+  });
+}
+/* 打开已写好的交付文件，逐页截默认状态的首页（与 snap.mjs 的等待方式一致） */
+async function shotPages(file, pages, dir) {
+  const browser = await launch();
+  const shots = [];
+  try {
+    const page = await browser.newPage({ width: 1600, height: 1000 });
+    await page.goto(fileUrl(file));
+    await page.waitFor('window.__PRD_READY === true', 20000);
+    for (const p of pages) {
+      const hash = '#/p/' + encodeURIComponent(p.id) + (p.st ? '/' + encodeURIComponent(p.st) : '');
+      await page.evaluate('location.hash = ' + JSON.stringify(hash) + ';1');
+      await sleep(450);
+      try { await page.waitFor('!document.querySelector("#hostf") || (document.querySelector("#hostf").contentDocument && document.querySelector("#hostf").contentDocument.readyState === "complete")', 8000); } catch (e) {}
+      await sleep(700);
+      const img = safeFile(p.id) + '.png';
+      await page.screenshot(path.join(dir, img));
+      shots.push({ id: p.id, title: p.title, img });
+    }
+    await page.close();
+  } finally {
+    await browser.close();
+  }
+  return shots;
+}
+/* 清单.md：功能点表（精简列）+ 每个页面一节截图。表格单元格里的 | 和换行要转义 */
+function packMarkdown(cfg, release, outName, rows, shots) {
+  const cell = (s) => String(s == null ? '' : s).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+  const out = [];
+  out.push('# ' + (cfg.name || '原型') + ' · 研发测试清单 · ' + release, '');
+  out.push('与原型「' + outName + '」同源，由 `build.mjs --export-pack` 生成。', '');
+  out.push('- 三份 CSV（功能点、字段、验收条件）：UTF-8 带 BOM，Excel 可直接打开。', '- `pages/`：每个页面默认状态的截图。', '');
+  out.push('## 功能点', '');
+  if (!rows.fns.length) out.push('（没有功能点）', '');
+  else {
+    out.push('| 页面 | 功能点 ID | 功能点 | 说明 | 状态 |', '| --- | --- | --- | --- | --- |');
+    rows.fns.forEach((r) => out.push('| ' + [cell(r.pageId + ' ' + r.pageTitle), cell(r.fnId), cell(r.fnName), cell(r.desc), cell(r.status)].join(' | ') + ' |'));
+    out.push('');
+  }
+  out.push('## 页面截图', '');
+  shots.forEach((s) => out.push('### ' + s.id + ' ' + s.title, '', '![' + s.id + ' ' + s.title.replace(/[\[\]]/g, '') + '](pages/' + encodeURIComponent(s.img) + ')', ''));
+  return out.join('\n');
+}
+async function writeExportPack(project, cfg, release, outFile, outName, sheets, rows, pages) {
+  const dir = path.join(project, 'export', safeName((cfg.name || 'prototype') + '-研发包-' + release));
+  const picDir = path.join(dir, 'pages');
+  fs.mkdirSync(picDir, { recursive: true });
+  const csv = writeCsvSet(dir, cfg, release, sheets);
+  const shots = await shotPages(outFile, pages, picDir);
+  fs.writeFileSync(path.join(dir, '清单.md'), packMarkdown(cfg, release, outName, rows, shots) + '\n');
+  return { dir, csv, shots };
 }
 
 function printReport(r) {
   const s = r.report.stats;
   const cov = s.interactive ? Math.round((s.covered / s.interactive) * 100) + '%' : '—';
-  console.log('原型需求构建：' + r.name + ' ' + r.release);
+  const proto = r.report.stage === 'prototype';
+  console.log((proto ? '原型构建（原型阶段）：' : '原型需求构建：') + r.name + ' ' + r.release);
   console.log('  页面 ' + s.pages + ' · 状态 ' + s.states + ' · 功能点 ' + s.fns + ' · 字段 ' + s.fields + ' · 渲染 ' + s.renders + ' 次 · 交互元素 ' + s.interactive + '（归属到功能点 ' + cov + (s.ignored ? '；另有 ' + s.ignored + ' 个按 ignore 不纳入' : '') + '）');
   console.log('  待确认 ' + s.pending + ' · AI 假设 ' + s.assumed + (s.gaps ? ' · 原型未体现 ' + s.gaps : '') + (s.changes ? ' · 本版变化 ' + s.changes : ''));
   if (!r.ok) {
@@ -299,22 +520,39 @@ function printReport(r) {
     });
     console.log('\n排查用文件（含右侧检查结果）：' + r.failed);
   }
-  if (r.report.warns.length) {
-    console.log('\n提醒 ' + r.report.warns.length + ' 条（不阻止交付）：');
-    r.report.warns.slice(0, 30).forEach((w) => console.log('  - [' + w.code + '] ' + w.msg));
+  const softWarns = r.report.warns.filter((w) => w.soft);
+  const hardWarns = r.report.warns.filter((w) => !w.soft);
+  if (softWarns.length) {
+    const byCode = {};
+    softWarns.forEach((w) => { byCode[w.code] = (byCode[w.code] || 0) + 1; });
+    console.log('\n原型阶段：以下需求检查降为提醒，补需求时会变回错误：' + Object.keys(byCode).map((c) => c + ' ' + byCode[c] + ' 条').join('、'));
+  }
+  if (hardWarns.length) {
+    console.log('\n提醒 ' + hardWarns.length + ' 条（不阻止交付）：');
+    hardWarns.slice(0, 30).forEach((w) => console.log('  - [' + w.code + '] ' + w.msg));
   }
   if (r.ok) {
     console.log('\n✓ 检查通过，已生成：' + r.file + '（' + Math.round(r.size / 1024) + ' KB）');
     if (r.mdFile) console.log('  Markdown：' + r.mdFile);
     if (r.archived) console.log('  上一版已归档：' + r.archived);
+    if (r.csvFiles) console.log('  CSV：' + r.csvFiles.map((f) => path.basename(f)).join('、'));
+    if (r.pack) console.log('  研发包：' + r.pack.dir + '（CSV 3 份，页面截图 ' + r.pack.shots.length + ' 张，清单.md）');
+    if (r.baseline) console.log('  已刷新范围基线 prd/scope.json：页面 ' + r.baseline.pages.length + ' · 状态 ' + r.baseline.states.length + ' · 功能点 ' + r.baseline.fns.length + '（' + r.baseline.confirmedAt + '）');
   }
 }
 
 const USAGE = `用法：node scripts/build.mjs <项目目录> [选项]
   --md        同时导出需求文档 Markdown（<产品名>-需求文档.md）
   --out 文件  指定交付文件名（默认 <产品名>-原型需求.html）
+  product.js 写 stage: 'prototype' 时为原型阶段：默认输出 <产品名>-原型.html，不支持 --md
   --json      以 JSON 输出检查结果
+  --csv       检查通过后，在交付文件旁写三份 CSV：功能点、字段、验收条件（UTF-8 带 BOM，Excel 可直接打开）。原型阶段也可用
+  --export-pack  检查通过后，导出研发包到 export/<产品名>-研发包-<版本>/：三份 CSV、每页截图 pages/*.png、清单.md（默认不导出）
   --draft     只组装、不检查，输出到 .prd-build/（仅供排查画面，不可交付）
+  --scope-baseline  检查通过后，把当前页面、状态、功能点记为范围基线（prd/scope.json）。
+                    只用于刷新：先构建列出 SCOPE_ADDED / SCOPE_REMOVED，用户确认后再加此参数。
+                    首次建基线由 Agent 按确认的范围清单手写 prd/scope.json（格式见 references/spec-format.md）
+  --confirmed-at 日期  配合 --scope-baseline，记录用户确认范围的日期（YYYY-MM-DD，默认今天）
 检查未通过时不更新交付文件，在 .prd-build/ 留下 failed 版本供排查。`;
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--help') || process.argv.includes('-h')) { console.log(USAGE); process.exit(0); }
@@ -322,7 +560,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (!o._[0]) die(USAGE);
   build(o._[0], o).then((r) => {
     if (r.draft) { console.log('草稿（未检查，不可交付）：' + r.file); return; }
-    if (o.json) console.log(JSON.stringify({ ok: r.ok, file: r.file || null, failed: r.failed || null, errors: r.report.errors, warns: r.report.warns, stats: r.report.stats }, null, 1));
+    if (o.json) console.log(JSON.stringify({ ok: r.ok, file: r.file || null, failed: r.failed || null, errors: r.report.errors, warns: r.report.warns, stats: r.report.stats, ...(r.report.stage ? { stage: r.report.stage } : {}), csv: r.csvFiles || null, pack: r.pack ? r.pack.dir : null }, null, 1));
     else printReport(r);
     process.exit(r.ok ? 0 : 1);
   }).catch((e) => { console.error('✗ 构建失败：' + (e && e.stack || e)); process.exit(2); });

@@ -55,7 +55,7 @@
 
   W.runAudit = async function (opts) {
     opts = opts || {};
-    var R = { errors: [], warns: [], fnStates: {}, links: {}, interactive: 0, covered: 0, renders: 0, ignored: 0, dialogs: [] };
+    var R = { errors: [], warns: [], fnStates: {}, links: {}, behave: {}, interactive: 0, covered: 0, renders: 0, ignored: 0, dialogs: [] };
     var uniq = {}, unreg = {}, unregOrder = [];
     /* 交互元素按“页面 + 元素文字 + 归属”去重计数，避免同一按钮在多个状态、多个数据场景下重复计 */
     function countEl(p, el, fnId) {
@@ -73,16 +73,24 @@
     function E(code, msg, where) { var k = code + msg; if (seenErr[k]) return; seenErr[k] = 1; R.errors.push({ code: code, msg: msg, where: where || '' }); }
     function Wn(code, msg, where) { var k = 'w' + code + msg; if (seenErr[k]) return; seenErr[k] = 1; R.warns.push({ code: code, msg: msg, where: where || '' }); }
     var P = W.P;
+    var PROTO = !!(P && P.stage === 'prototype');
+    /* 原型阶段：没写需求说明只提醒（soft: true）；其他情况等同 E */
+    function M(code, msg, where) {
+      if (!PROTO) return E(code, msg, where);
+      var k = 'w' + code + msg; if (seenErr[k]) return; seenErr[k] = 1;
+      R.warns.push({ code: code, msg: msg, where: where || '', soft: true });
+    }
     W.errors.forEach(function (m) { E('BOOT', m); });
     if (!P) { E('BOOT', '缺少 W.product(...)'); return finish(R); }
 
     /* ---------- 一、需求完整性（静态） ---------- */
     if (!P.name) E('PRODUCT', 'product.name 未填写产品名称');
     if (!P.id) E('PRODUCT', 'product.id 未填写（用于本地存储，建议英文短名）');
-    if (!P.background || String(P.background).length < 20) E('PRODUCT', 'product.background 业务背景缺失或过短（至少说明谁、在什么场景、要解决什么问题）');
-    if (!P.scope || !Array.isArray(P.scope.out)) E('PRODUCT', 'product.scope.out 未声明“本期不做”的内容；没有边界会导致原型自由发挥');
+    if (P.stage != null && P.stage !== 'prototype') E('PRODUCT', 'product.stage 只能写 "prototype"（原型阶段），完整需求阶段不要写这个字段');
+    if (!P.background || String(P.background).length < 20) M('PRODUCT', 'product.background 业务背景缺失或过短（至少说明谁、在什么场景、要解决什么问题）');
+    if (!P.scope || !Array.isArray(P.scope.out)) M('PRODUCT', 'product.scope.out 未声明“本期不做”的内容；没有边界会导致原型自由发挥');
     else if (!P.scope.out.length) Wn('SCOPE', '“本期不做”为空，请确认是否真的没有排除项');
-    if (!P.roles || !P.roles.length) E('PRODUCT', 'product.roles 未声明角色');
+    if (!P.roles || !P.roles.length) M('PRODUCT', 'product.roles 未声明角色');
     if (!P.ends || !P.ends.length) E('PRODUCT', 'product.ends 未声明任何端');
     var rels = (P.releases || []).map(function (r) { return r.id; });
     if (!rels.length) E('PRODUCT', 'product.releases 至少需要一个版本，例如 [{ id: "V1.0", date: "2026-11-03", summary: "首版" }]');
@@ -106,9 +114,9 @@
     var KNOWN = {
       page: 'id end group title goal entry perm scenarios states fns rules todo render after acts changes match enter host',
       state: 'id label when layer set enter match changes',
-      fn: 'id name desc fields rules errors empty perm src status statusNote ui gap dot sel text changes',
+      fn: 'id name desc fields rules errors empty perm src status statusNote ui gap dot sel text changes ac roles',
       field: 'key name type required def options rule status statusNote changes',
-      product: 'id name date fidelity version current releases background goals scope roles ends groups rules nfr dict flows sections todo demo scenarios clarify out demoNote outOfScope'
+      product: 'id name date fidelity version current releases background goals scope roles ends groups rules nfr dict flows sections todo demo scenarios clarify out demoNote outOfScope stage'
     };
     function unknown(obj, kind, where) {
       if (!obj || typeof obj !== 'object') return;
@@ -139,18 +147,38 @@
       if (!f.name) E('FN', w + ' 缺少 name');
       if (D.removed(f)) { checkChanges(f, w); return; }
       if (f.gap != null && (typeof f.gap !== 'string' || f.gap.length < 4)) E('FN', w + ' 的 gap 要写成一句话：原型里缺了什么、以哪份需求为准');
-      if (!f.desc || String(f.desc).replace(/\s/g, '').length < 8) E('FN_DESC', w + ' 缺少交互说明 desc（写清用户怎么操作、系统怎么响应，至少一句完整的话）');
+      if (!f.desc || String(f.desc).replace(/\s/g, '').length < 8) M('FN_DESC', w + ' 缺少交互说明 desc（写清用户怎么操作、系统怎么响应，至少一句完整的话）');
       var st = f.status;
       if (st && ['pending', 'assumed', 'confirmed'].indexOf(st) < 0) E('FN_SRC', w + ' 的 status 只能是 confirmed / pending / assumed');
-      if (!f.src && st !== 'pending' && st !== 'assumed') E('FN_SRC', w + ' 没有来源 src；有依据就写来源（如“需求材料 §2”“澄清 Q3”），没有依据就标 status: "assumed"（AI 假设）或 "pending"（待确认）');
+      if (!f.src && st !== 'pending' && st !== 'assumed') M('FN_SRC', w + ' 没有来源 src；有依据就写来源（如“需求材料 §2”“澄清 Q3”），没有依据就标 status: "assumed"（AI 假设）或 "pending"（待确认）');
+      /* 验收条件 ac（可选）：写了就必须有用户操作和预期结果 */
+      if (f.ac != null) {
+        if (typeof f.ac !== 'object' || Array.isArray(f.ac)) E('AC', w + ' 的 ac 要写成对象 { pre, act, expect }（前置条件、用户操作、预期结果）');
+        else {
+          if (f.ac.pre != null && typeof f.ac.pre !== 'string') E('AC', w + ' 的 ac.pre（前置条件）要写成文字');
+          if (!f.ac.act || typeof f.ac.act !== 'string' || f.ac.act.replace(/\s/g, '').length < 4) E('AC', w + ' 的 ac 缺少 act（用户操作），要写成一句完整的话');
+          if (!f.ac.expect || typeof f.ac.expect !== 'string' || f.ac.expect.replace(/\s/g, '').length < 4) E('AC', w + ' 的 ac 缺少 expect（预期结果），要写成一句完整的话');
+          Object.keys(f.ac).forEach(function (k) { if (['pre', 'act', 'expect'].indexOf(k) < 0) Wn('UNKNOWN_KEY', w + ' 的 ac 有未识别的字段「' + k + '」（可用：pre、act、expect）'); });
+        }
+      }
       (f.fields || []).forEach(function (x) {
         var fw = w + ' 的字段「' + (x.name || x.key || '?') + '」';
-        if (!x.name) E('FIELD', fw + ' 缺少 name');
-        if (!x.type) E('FIELD', fw + ' 缺少 type（如 文本 / 数字 / 枚举 / 日期 / 金额 / 文件）');
-        if (!x.rule && !x.options) E('FIELD', fw + ' 缺少 rule（校验、格式、口径或来源）或 options（可选值）');
+        if (!x.name) M('FIELD', fw + ' 缺少 name');
+        if (!x.type) M('FIELD', fw + ' 缺少 type（如 文本 / 数字 / 枚举 / 日期 / 金额 / 文件）');
+        if (!x.rule && !x.options) M('FIELD', fw + ' 缺少 rule（校验、格式、口径或来源）或 options（可选值）');
         if (x.required != null && typeof x.required !== 'boolean') E('FIELD', fw + ' 的 required 只能写 true 或 false');
         checkChanges(x, fw);
       });
+      /* 角色权限：roles 如果有值，每个 ID 必须在 product.roles 中存在 */
+      if (f.roles) {
+        if (!Array.isArray(f.roles)) E('ROLE_ID', w + ' 的 roles 要写成数组，例如 ["admin"]');
+        else {
+          if (!P.roles || !P.roles.length) E('ROLE_ID', w + ' 写了 roles，但 product.roles 为空或未声明');
+          var roleIds = {};
+          (P.roles || []).forEach(function (r) { roleIds[r.id] = 1; });
+          f.roles.forEach(function (rid) { if (!roleIds[rid]) E('ROLE_ID', w + ' 的 roles 引用了不存在的角色 ID「' + rid + '」（已声明的角色：' + (P.roles || []).map(function (r) { return r.id; }).join(' / ') + '）'); });
+        }
+      }
       checkChanges(f, w);
       D.items(f.rules).forEach(function (r, i) { checkChanges(r, w + ' 规则 ' + (i + 1)); });
       D.items(f.errors).forEach(function (r, i) { checkChanges(r, w + ' 异常 ' + (i + 1)); });
@@ -165,14 +193,14 @@
       p.states.forEach(function (s) { unknown(s, 'state', where + ' 状态「' + (s.label || s.id) + '」'); checkChanges(s, where + ' 状态「' + (s.label || s.id) + '」'); });
       p.fns.forEach(function (f) { unknown(f, 'fn', where + ' 功能点「' + (f.name || f.id) + '」'); (f.fields || []).forEach(function (x) { unknown(x, 'field', where + ' 功能点「' + (f.name || f.id) + '」的字段「' + (x.name || x.key) + '」'); }); });
       if (!p.title) E('PAGE', p.id + ' 缺少 title');
-      if (!p.goal) E('PAGE', where + ' 缺少页面目标 goal（谁在什么情况下用这个页面完成什么）');
+      if (!p.goal) M('PAGE', where + ' 缺少页面目标 goal（谁在什么情况下用这个页面完成什么）');
       if (!p.states.length) E('STATE', where + ' 没有声明页面状态 states（至少一个默认状态）');
       var sids = {};
       p.states.forEach(function (s) {
         if (!s.id || !s.label) E('STATE', where + '：状态需要 id 和 label');
         if (sids[s.id]) E('STATE', where + '：状态 ID 重复「' + s.id + '」');
         sids[s.id] = 1;
-        if (!s.when || String(s.when).length < 4) E('STATE_WHEN', where + ' 的状态「' + (s.label || s.id) + '」缺少出现条件 when（什么数据或操作下会看到这个状态）');
+        if (!s.when || String(s.when).length < 4) M('STATE_WHEN', where + ' 的状态「' + (s.label || s.id) + '」缺少出现条件 when（什么数据或操作下会看到这个状态）');
         if (s.layer && ['modal', 'drawer', 'sheet', 'alert', 'popover'].indexOf(s.layer) < 0) E('STATE', where + ' 的状态「' + s.label + '」layer 只能是 modal / drawer / sheet / alert / popover');
         if (s.set) checkSet(s.set, where + ' 状态「' + s.label + '」');
       });
@@ -185,7 +213,7 @@
       D.items(p.rules).forEach(function (r, i) { checkChanges(r, where + ' 页面规则 ' + (i + 1)); });
       checkChanges(p, where);
       if (W.host.isHosted(p)) {
-        p.fns.forEach(function (f) { if (!f.sel && f.ui !== false && !f.gap && !D.removed(f)) E('HOST_SEL', where + ' · 功能点「' + f.name + '」是托管页面，需要 sel（CSS 选择器）绑定原型元素，或在原型副本上加 data-fn="' + f.id + '"', where); });
+        p.fns.forEach(function (f) { if (!f.sel && f.ui !== false && !f.gap && !D.removed(f)) E('HOST_SEL', where + ' · 功能点「' + f.name + '」是托管页面，需要 sel（CSS 选择器）绑定原型元素', where); });
         if (!p.match && !p.states.some(function (s) { return s.match; })) Wn('HOST_MATCH', where + ' 没有 match，在原型里点击跳转到此页时，右侧需求面板无法自动切换');
       }
     });
@@ -259,6 +287,8 @@
       if (W.host.isHosted(p)) continue;
       var e = W.end(p.end) || {};
       box.style.width = (e.width || (e.device === 'mobile' ? 375 : 1280)) + 'px';
+      ab.setAttribute('data-device', e.device === 'mobile' ? 'mobile' : 'pc');
+      W.device = e.device === 'mobile' ? 'mobile' : 'pc';
       var sets = [null].concat(presetIds);
       for (var si = 0; si < p.states.length; si++) {
         var s = p.states[si];
@@ -339,8 +369,22 @@
         var ref = o && W.findFn(p, o.getAttribute('data-fn'));
         var key = el.getAttribute('data-field');
         if (!ref) return;
-        if (fieldKeys(ref.fn).indexOf(key) < 0) E('FIELD_UNDECLARED', where + '：元素 data-field="' + key + '" 没有在功能点「' + ref.fn.name + '」的 fields 中定义');
+        if (fieldKeys(ref.fn).indexOf(key) < 0) M('FIELD_UNDECLARED', where + '：元素 data-field="' + key + '" 没有在功能点「' + ref.fn.name + '」的 fields 中定义');
+        var dec = (ref.fn.fields || []).find(function (x) { return x.key === key; });
+        /* 必填一致性以 h.fld 为准（只有它带组件级校验）。data-field 可以写在 h.fld 上，也可以只写在控件上。
+           写在 h.fld 上时由这里检查；只写在控件上时由所在的 h.fld 检查，避免同一个字段报两次。 */
+        var fld = el.classList.contains('fld') ? el : (el.matches(CONTROL) && !el.closest('.fld[data-field]') ? el.closest('.fld') : null);
+        if (dec && typeof dec.required === 'boolean' && fld) {
+          var has = fld.hasAttribute('data-req');
+          if (has !== dec.required) E('FIELD_REQ', where + '：字段「' + (dec.name || key) + '」在 fields 中是 required: ' + dec.required + '，界面上的 h.fld 却是' + (has ? '必填' : '非必填') + '。两边要一致：h.fld 写 req: 1，或把 fields 改成对应的值');
+        }
         if (el.matches(CONTROL) || el.querySelector(CONTROL)) need(p, ref, 'field', key, where);
+      });
+      /* 组件行为（必填、长度、提交、筛选）转成规则，写进需求文档 */
+      W.behaveCollect(scope).forEach(function (x) {
+        var m = R.behave[p.id] = R.behave[p.id] || {};
+        var l = m[x.fn] = m[x.fn] || [];
+        if (l.indexOf(x.text) < 0) l.push(x.text);
       });
       /* 跳转目标 */
       scope.querySelectorAll('[data-go]').forEach(function (el) {
@@ -360,13 +404,20 @@
     /* 托管页面：逐状态加载原有 HTML */
     var hostedPages = pageList.filter(function (p) { return W.host.isHosted(p); });
     if (hostedPages.length) {
-      var frame = document.createElement('iframe');
-      frame.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(frame);
+      /* 每个托管端一个隐藏 iframe，name 为 prd-host-audit-<端 id>，构建脚本据此把网络请求归到对应端 */
+      var hostFrames = {};
       for (var hi = 0; hi < hostedPages.length; hi++) {
         var hp = hostedPages[hi];
         var he = W.end(hp.end);
         if (!he || W.host.html(he.id) == null) continue;
+        var frame = hostFrames[he.id];
+        if (!frame) {
+          frame = document.createElement('iframe');
+          frame.name = 'prd-host-audit-' + he.id;
+          frame.setAttribute('aria-hidden', 'true');
+          document.body.appendChild(frame);
+          hostFrames[he.id] = frame;
+        }
         var sz = W.host.size(he);
         frame.style.cssText = 'position:fixed;left:-40000px;top:0;border:0;width:' + sz.w + 'px;height:' + sz.h + 'px';
         for (var hs = 0; hs < hp.states.length; hs++) {
@@ -384,7 +435,7 @@
           scanHosted(hp, st, he, win, hw);
         }
       }
-      frame.remove();
+      Object.keys(hostFrames).forEach(function (k) { hostFrames[k].remove(); });
     }
     function scanHosted(p, s, e, win, where) {
       var doc = win.document;
@@ -450,19 +501,43 @@
         if (!ends.some(function (en) { return seenShared[en + ':' + f.id]; })) E('FN_UNUSED', '公共组件「' + g.title + '」· 功能点「' + f.name + '」没有在任何页面出现');
       });
     });
+    /* 核心流程里出现的功能点建议写 ac，测试可直接据此写用例；只提醒，不阻止交付 */
+    /* 按页面汇总：同一页面的未写 ac 功能点合并成一条提醒，避免样例里逐条刷屏 */
+    (function acHints() {
+      var done = {}, byPage = [], byId = {};
+      (P.flows || []).forEach(function (fl) {
+        (fl.steps || []).forEach(function (s) {
+          var sp = W.pages[s.p];
+          if (!sp) return;
+          sp.fns.forEach(function (f) {
+            var key = sp.id + '/' + f.id;
+            var sts = (seen[sp.id] && seen[sp.id][f.id]) || [];
+            if (done[key] || D.removed(f) || f.ui === false || f.ac) return;
+            if (s.st && sts.indexOf(s.st) < 0) return;
+            done[key] = 1;
+            if (!byId[sp.id]) { byId[sp.id] = { page: sp, names: [], flows: [] }; byPage.push(byId[sp.id]); }
+            byId[sp.id].names.push('「' + f.name + '」');
+            if (byId[sp.id].flows.indexOf(fl.name) < 0) byId[sp.id].flows.push(fl.name);
+          });
+        });
+      });
+      byPage.forEach(function (b) {
+        Wn('AC_MISSING', b.page.id + ' ' + b.page.title + ' · 核心流程「' + b.flows.join('」「') + '」中有 ' + b.names.length + ' 个功能点未写 ac：' + b.names.join('、') + '。建议写 ac（前置条件、用户操作、预期结果），测试可直接据此写用例');
+      });
+    })();
     /* 字段、列表、提交类操作的说明是否完整 */
     Object.keys(fnBox).forEach(function (k) {
       var b = fnBox[k], f = b.fn, nm = '功能点「' + f.name + '」（' + b.where.split(' · ')[0] + '）';
-      if (b.ctl.length && !(f.fields || []).length) E('FIELD_MISSING', nm + ' 包含 ' + b.ctl.slice(0, 3).join('、') + (b.ctl.length > 3 ? ' 等 ' + b.ctl.length + ' 个控件' : '') + '，但没有定义 fields（类型、必填、校验、默认值）');
+      if (b.ctl.length && !(f.fields || []).length) M('FIELD_MISSING', nm + ' 包含 ' + b.ctl.slice(0, 3).join('、') + (b.ctl.length > 3 ? ' 等 ' + b.ctl.length + ' 个控件' : '') + '，但没有定义 fields（类型、必填、校验、默认值）');
       var noneReq = b.ctl.length && (f.fields || []).length && !(f.fields || []).some(function (x) { return typeof x.required === 'boolean'; });
-      if (noneReq) E('FIELD_MISSING', nm + ' 有输入控件，但 fields 都没有写 required: true / false');
+      if (noneReq) M('FIELD_MISSING', nm + ' 有输入控件，但 fields 都没有写 required: true / false');
       if (!noneReq) Object.keys(b.fieldsBound).forEach(function (key) {
         var x = (f.fields || []).find(function (y) { return y.key === key; });
-        if (x && typeof x.required !== 'boolean') E('FIELD', nm + ' 的字段「' + (x.name || key) + '」绑定了输入控件，需要写 required: true / false');
+        if (x && typeof x.required !== 'boolean') M('FIELD', nm + ' 的字段「' + (x.name || key) + '」绑定了输入控件，需要写 required: true / false');
       });
-      if (b.list && !(f.fields || []).length) E('LIST_FIELDS', nm + ' 是列表或表格，需要用 fields 定义每一列/每一项的含义、格式和来源');
-      if (b.list && !f.empty) E('LIST_EMPTY', nm + ' 是列表或表格，需要写 empty：没有数据时显示什么、能做什么');
-      if (b.submit.length && !D.items(f.errors).length) E('ERRORS', nm + ' 包含 ' + b.submit.slice(0, 3).join('、') + '，需要写 errors：失败、重复提交、权限不足或网络异常时怎么处理');
+      if (b.list && !(f.fields || []).length) M('LIST_FIELDS', nm + ' 是列表或表格，需要用 fields 定义每一列/每一项的含义、格式和来源');
+      if (b.list && !f.empty) M('LIST_EMPTY', nm + ' 是列表或表格，需要写 empty：没有数据时显示什么、能做什么');
+      if (b.submit.length && !D.items(f.errors).length) M('ERRORS', nm + ' 包含 ' + b.submit.slice(0, 3).join('、') + '，需要写 errors：失败、重复提交、权限不足或网络异常时怎么处理');
     });
     /* 可达性 */
     pageList.forEach(function (p) {
@@ -476,9 +551,52 @@
     return finish(R);
   };
 
+  /* 范围基线：页面、状态、功能点（含公共组件功能点）的清单。key 稳定，用于和 prd/scope.json 对比 */
+  W.scopeInventory = function () {
+    var P = W.P, out = { pages: [], states: [], fns: [] };
+    if (!P || !W.order) return out;
+    (P.ends || []).forEach(function (e) {
+      (W.order[e.id] || []).forEach(function (id) {
+        var p = W.pages[id];
+        if (!p) return;
+        var pl = (p.title || '');
+        out.pages.push({ k: p.id, l: p.id + ' ' + pl });
+        (p.states || []).forEach(function (s) { out.states.push({ k: p.id + '/' + s.id, l: p.id + ' ' + pl + ' · 状态「' + (s.label || s.id) + '」' }); });
+        (p.fns || []).forEach(function (f) { out.fns.push({ k: p.id + '/' + f.id, l: p.id + ' ' + pl + ' · 功能点「' + (f.name || f.id) + '」' }); });
+      });
+    });
+    W.sharedGroups.forEach(function (g) {
+      (g.fns || []).forEach(function (f) { out.fns.push({ k: '公共/' + (g.id || '') + '/' + f.id, l: '公共组件「' + (g.title || g.id) + '」 · 功能点「' + (f.name || f.id) + '」' }); });
+    });
+    return out;
+  };
+  /* 读取构建时嵌入的基线（prd/scope.json），没有则返回 null */
+  W.scopeBaseline = function () {
+    var el = document.getElementById('prd-scope');
+    try { var t = el && el.textContent.trim(); return t ? JSON.parse(t) : null; } catch (e) { return null; }
+  };
+  /* 当前清单与基线对比：返回 null 表示没有基线。新增和移除都只提醒，不阻止交付 */
+  W.scopeDiff = function () {
+    var base = W.scopeBaseline();
+    if (!base) return null;
+    var inv = W.scopeInventory(), added = [], removed = [];
+    var kinds = { pages: '页面', states: '状态', fns: '功能点' };
+    ['pages', 'states', 'fns'].forEach(function (kind) {
+      var have = base[kind] || [];
+      var cur = inv[kind];
+      var curKeys = cur.map(function (x) { return x.k; });
+      cur.forEach(function (x) { if (have.indexOf(x.k) < 0) added.push({ kind: kinds[kind], key: x.k, label: x.l }); });
+      have.forEach(function (k) { if (curKeys.indexOf(k) < 0) removed.push({ kind: kinds[kind], key: k }); });
+    });
+    return { release: base.release || '', confirmedAt: base.confirmedAt || '', added: added, removed: removed };
+  };
+
   function finish(R) {
     var st = D.stats();
-    return {
+    W.behaveApply({ behave: R.behave });
+    var isProto = !!(W.P && W.P.stage === 'prototype');
+    return Object.assign({
+      behave: R.behave,
       ok: R.errors.length === 0,
       at: new Date().toISOString(),
       release: st.release,
@@ -486,7 +604,9 @@
       warns: R.warns,
       stats: Object.assign(st, { interactive: R.interactive, covered: R.covered, ignored: R.ignored || 0, renders: R.renders, errors: R.errors.length, warns: R.warns.length }),
       fnStates: R.fnStates,
-      links: R.links
-    };
+      links: R.links,
+      inventory: W.scopeInventory(),
+      scope: W.scopeDiff()
+    }, isProto ? { stage: 'prototype' } : {});
   }
 })();

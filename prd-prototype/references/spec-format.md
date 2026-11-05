@@ -7,6 +7,7 @@
 ├─ prd/
 │  ├─ product.js        产品级需求（W.product）
 │  ├─ kit.js            公共外壳与公共功能点（W.shared、W.ui、W.MTABS）
+│  ├─ scope.json        可选：范围基线（确认范围后写入，格式见文末）
 │  ├─ theme.css         可选：设计变量覆盖
 │  ├─ *.js              可选：共享演示数据等，按文件名顺序加载
 │  └─ pages/
@@ -42,8 +43,11 @@
 | `demo` | | 演示数据默认值，页面通过 `c.s` 读取 |
 | `scenarios` | | `{ label: '数据场景', presets: [{ id, label, set }] }`，一键切换演示数据 |
 | `clarify` | | 澄清记录 `[{ no, q, a, by }]` |
-| `out` | | 输出文件名，默认 `<name>-原型需求.html` |
+| `out` | | 输出文件名。默认 `<name>-原型需求.html`；原型阶段默认 `<name>-原型.html`。原型阶段不建议写 `out`，以免和完整版同名 |
+| `stage` | | 写 `'prototype'` 进入原型阶段（见 `SKILL.md` 流程 E）；写其他值报 `PRODUCT`。完整需求阶段不写这一行 |
 | `demoNote` | | 画板下方的数据说明，默认“画面中的数据均为演示数据” |
+
+原型阶段（`stage: 'prototype'`）下，`background`、`scope.out`、`roles` 缺失或过短只给提醒。`name`、`id`、`ends`、`releases` 仍必填。
 
 ### 端 ends
 
@@ -54,8 +58,8 @@
 | `home` | 该端首页的页面 ID |
 | `url` | PC 地址栏里的演示地址 |
 | `desc` | 端的说明，进入“信息架构” |
-| `width`、`height` | 画板尺寸，默认 PC 1280 宽、手机 375×812 |
-| `host`、`ignore`、`boot`、`settle`、`resetKeys` | 托管模式专用，见 `host-mode.md` |
+| `width`、`height` | 画板尺寸，默认 PC 1280 宽、手机 375×812；选用规范包（`--theme`）时 PC 为 1440×900 |
+| `host`、`ignore`、`boot`、`settle`、`resetKeys`、`online` | 托管模式专用，见 `host-mode.md`。`online: true` 放行该端的网络脚本和样式（需联网） |
 
 ## W.page({...})
 
@@ -109,10 +113,16 @@ W.page({
   errors: ['网络失败：提示“提交失败，请重试”，保留填写内容'],
   empty: '……',              // 列表/表格必填：没有数据时显示什么、能做什么
   perm: '……',               // 与页面不同的权限
+  roles: ['admin', 'manager'],  // 可选：只有这些角色的用户能看到该功能点；缺省或空数组 = 所有角色可见
   src: '需求材料 §2 · 澄清 Q2',
   status: 'assumed',        // 可选：pending 待确认 / assumed AI 假设；不写视为已确认
   statusNote: '……',         // 为什么是假设或待确认；会显示在清单里，要能单独读懂
   ui: false,                // 可选：无界面的后台逻辑（定时任务、通知规则），不要求出现在原型中
+  ac: {                     // 可选：验收条件，测试可直接据此写用例
+    pre: '已有一条未审批的单据',   // 前置条件，可省略
+    act: '点击“通过”并确认',       // 用户操作，一句完整的话
+    expect: '单据状态变为已通过，申请人收到通知'  // 预期结果，一句完整的话
+  },
   gap: '原型未画出……',      // 可选，仅托管模式：需求有、已有原型没画，以需求为准
   dot: [1.05, -0.3]         // 可选：圆点位置，按元素宽高的比例；默认在右上角外侧。可以写 0–1 之外的值把圆点放到元素外
 }
@@ -126,6 +136,10 @@ W.page({
 | 输入框、下拉、选项组、开关等控件 | `fields`，至少一个字段写 `required: true / false`；用 `data-field` 绑定在输入控件上的字段都要写 `required`（纯展示字段不用） |
 | 列表或表格（`h.table`、`h.list`） | `fields`（每列/每项的含义、格式、来源）和 `empty` |
 | 提交、保存、删除、通过、驳回、支付、上传等按钮 | `errors`（失败、重复提交、权限不足、并发冲突） |
+
+原型阶段（`stage: 'prototype'`）下，上表里的 `desc`、`src`、`fields`、`empty`、`errors` 缺失只给提醒，见 `audit-codes.md`“原型阶段”。原型里的可点元素仍要登记成功能点。
+
+`ac`（验收条件）可选。核心流程里出现的功能点建议写上，写不写由需求方决定：没写时构建给出 `AC_MISSING` 提醒，不阻止交付。写了的功能点会集中列在需求文档的“验收条件”一章。
 
 ### 字段 fields
 
@@ -209,3 +223,45 @@ W.shared({
 - 不要为标题、返回、普通导航单独写功能点：顶部/底部导航登记为公共组件，面包屑用 `h.crumb()`，返回箭头和抽屉关闭叉由组件自动豁免。
 - 一个功能点内可交互元素超过 15 个，通常说明它应该拆开。
 - 数量由页面复杂度决定：简单页面 1–3 个功能点，复杂页面 6–10 个；不为凑数拆分。
+
+## 范围基线 prd/scope.json
+
+范围基线记录用户确认范围时的页面、状态、功能点。构建时拿它和当前原型对比：确认之后新增的内容给出 `SCOPE_ADDED`，删掉的给出 `SCOPE_REMOVED`，并列入需求文档“范围确认后新增”一章。两类提醒都不阻止交付。
+
+**什么时候写**
+
+- **新建（流程 A）**：用户确认范围清单后，先用 `new.mjs` 建项目（它会生成 `prd/kit.js` 里的公共导航），再在写页面代码之前，Agent 按清单手写 `prd/scope.json`。清单里的每个页面、状态、功能点都要列入，`kit.js` 里的公共功能点（如 `公共/pc-shell/pc-nav`、`公共/m-shell/m-tab`）也要列入。这样，写页面期间多出来的内容会被当作“确认后新增”。
+- **修改、迭代（流程 C、D）**：先构建（不加 `--scope-baseline`），把 `SCOPE_ADDED` / `SCOPE_REMOVED` 逐条列给用户；用户确认后，再执行 `node scripts/build.mjs <项目目录> --scope-baseline` 刷新基线。确认前不刷新。
+- 只改文字、不增删页面、状态或功能点时，不需要动这个文件。
+- 没有这个文件时，构建不做增删对比。
+
+**格式**
+
+```json
+{
+  "release": "V1.0",
+  "confirmedAt": "2026-11-04",
+  "pages": ["M01", "M02", "P01"],
+  "states": ["M01/list", "M01/empty", "M02/form", "M02/err"],
+  "fns": ["M01/balance", "M02/submit", "P01/table", "公共/pc-shell/pc-nav"]
+}
+```
+
+| 字段 | 说明 |
+| --- | --- |
+| `release` | 确认范围的版本，如 `V1.0` |
+| `confirmedAt` | 用户确认范围的日期，`YYYY-MM-DD` |
+| `pages`、`states`、`fns` | 字符串数组，三项都要写；没有内容时写 `[]` |
+
+**key 规则**：编号必须和 `W.page` 的 `id`、状态的 `id`、功能点的 `id` 完全一致（区分大小写）。
+
+| 类别 | 写法 | 示例 |
+| --- | --- | --- |
+| 页面 `pages` | `页面ID` | `M02` |
+| 状态 `states` | `页面ID/状态ID` | `M02/err` |
+| 功能点 `fns` | `页面ID/功能点ID` | `M02/submit` |
+| 公共组件功能点 `fns` | `公共/组ID/功能点ID`（组 ID 是 `W.shared` 的 `id`） | `公共/pc-shell/pc-nav` |
+
+key 写错会同时出现 `SCOPE_ADDED`（新 key 不在基线里）和 `SCOPE_REMOVED`（基线里的 key 找不到），按提醒改正即可。文件不是合法 JSON，或 `pages` / `states` / `fns` 不是字符串数组时，构建给出 `SCOPE_FILE` 并阻止交付。
+
+**由 `--scope-baseline` 生成**：刷新时构建会按当前原型覆盖文件。确认日期不是当天时，加 `--confirmed-at YYYY-MM-DD`。

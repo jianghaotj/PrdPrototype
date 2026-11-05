@@ -190,7 +190,8 @@
   /* 表单项：h.fld('标签', 控件, {req:1, hint:'', err:'', field:'key', fn:''}) */
   h.fld = function (label, inner, o) {
     o = o || {};
-    return '<div class="fld"' + h.attrs({ fn: o.fn, field: o.field }) + '>' + (label ? '<div class="lbl">' + label + (o.req ? '<em>*</em>' : '') + '</div>' : '') + inner + (o.hint ? '<div class="hint">' + o.hint + '</div>' : '') + (o.err ? '<div class="ferr">' + o.err + '</div>' : '') + '</div>';
+    var v = (o.req ? ' data-req="1"' : '') + (o.min != null ? ' data-min="' + (+o.min) + '"' : '') + (o.max != null ? ' data-max="' + (+o.max) + '"' : '');
+    return '<div class="fld"' + h.attrs({ fn: o.fn, field: o.field }) + v + '>' + (label ? '<div class="lbl">' + label + (o.req ? '<em>*</em>' : '') + '</div>' : '') + inner + (o.hint ? '<div class="hint">' + o.hint + '</div>' : '') + (o.err ? '<div class="ferr">' + o.err + '</div>' : '') + '</div>';
   };
   /* 输入框：h.inp('值')；{e:1} 时作占位；{sel:1, options:[]} 下拉；{date:1} 日期；{area:1, rows:4} 多行 */
   h.inp = function (v, o) {
@@ -213,7 +214,7 @@
   h.sel = function (v, options, o) { o = o || {}; o.sel = 1; o.options = options; return h.inp(v, o); };
   h.search = function (ph, o) {
     o = o || {};
-    return '<div class="inp srch"' + (o.style ? ' style="' + o.style + '"' : '') + '>' + h.i('search', 15) + '<input class="bare" data-ctl' + h.attrs({ fn: o.fn, field: o.field }) + ' placeholder="' + h.esc(ph) + '" value="' + h.esc(o.value || '') + '"></div>';
+    return '<div class="inp srch"' + (o.style ? ' style="' + o.style + '"' : '') + '>' + h.i('search', 15) + '<input class="bare" data-ctl' + h.attrs({ fn: o.fn, field: o.field }) + (o.filter ? ' data-filter="' + h.esc(o.filter) + '"' : '') + ' placeholder="' + h.esc(ph) + '" value="' + h.esc(o.value || '') + '"></div>';
   };
   /* 单选/多选按钮组：h.opts(['a','b'], 0, {multi:1, field:'k'}) */
   h.opts = function (list, on, o) {

@@ -4,7 +4,7 @@
   var W = window.W, h = W.h, D = W.doc, HOST = W.host;
   function $(s, r) { return (r || document).querySelector(s); }
   function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
-  var ui = { zoom: 'fit', last: {}, scale: 1, cur: null, sel: null, visible: {}, docKey: '', enterSeq: 0, hostEnd: null, unknown: false };
+  var ui = { zoom: 'fit', last: {}, scale: 1, cur: null, sel: null, visible: {}, docKey: '', enterSeq: 0, hostEnd: null, unknown: false, proto: false, cmt: { scope: 'page', sel: null, page: null, draft: '', popDraft: '', pop: null }, role: 'all' };
   var PREF;
   function pref(k, v) {
     try {
@@ -14,6 +14,14 @@
       localStorage.setItem(PREF, JSON.stringify(o));
     } catch (e) { return undefined; }
   }
+
+  /* 判断功能点是否属于角色 R：「全部角色」或未选时全可见；没有 roles / 空数组 / 含 R 时可见 */
+  function fnVisibleForRole(fn, role) {
+    if (!role || role === 'all') return true;
+    if (!fn.roles || !fn.roles.length) return true;
+    return fn.roles.indexOf(role) >= 0;
+  }
+  W.fnVisibleForRole = fnVisibleForRole;
 
   /* ---------- 启动整理 ---------- */
   function finalize() {
@@ -45,8 +53,17 @@
     if (!P.releases || !P.releases.length) P.releases = [{ id: P.version || 'V1.0', date: P.date || '' }];
     D.inheritChanges();
     try { var a = document.getElementById('prd-audit'); W.audit = a && a.textContent.trim() ? JSON.parse(a.textContent) : null; } catch (e) { W.audit = null; }
+    W.behaveApply(W.audit);
     PREF = 'prd-viewer:' + (P.id || P.name);
+    /* 原型阶段：打开即原型，没有需求文档栏目、需求面板、需求按钮，圆点默认隐藏且不记住偏好 */
+    ui.proto = P.stage === 'prototype';
+    /* 初始化角色偏好：记住上次选择的角色，没有则默认"全部角色" */
+    if (P.roles && P.roles.length) {
+      ui.role = pref('role') || 'all';
+      if (ui.role !== 'all' && !P.roles.some(function (r) { return r.id === ui.role; })) ui.role = 'all';
+    }
   }
+  function protoHome() { return ui.last[W.P.ends[0].id]; }
 
   /* ---------- 路由 ---------- */
   function parse() {
@@ -64,6 +81,8 @@
     if (parts[0] === 'p' && parts[1] && W.pages[parts[1]]) return { view: 'page', id: parts[1], st: parts[2] || '', q: q };
     if (parts[0] === 'flow') return { view: 'flow', q: q };
     if (parts[0] === 'end' && W.end(parts[1])) return { view: 'page', id: ui.last[parts[1]], st: '', q: q };
+    /* 原型阶段没有需求文档，#/doc 和空路由都回到第一个端的首页 */
+    if (ui.proto) return { view: 'page', id: protoHome(), st: '', q: q };
     if (parts[0] === 'doc') return { view: 'doc', anchor: parts[1] || '', q: q };
     return { view: 'doc', anchor: '', q: q };
   }
@@ -132,26 +151,36 @@
   /* ---------- 顶栏 ---------- */
   function renderTop() {
     var P = W.P;
-    var tabs = '<a data-tab="doc">需求文档</a>' + P.ends.map(function (e) { return '<a data-tab="' + h.esc(e.id) + '">' + h.esc(e.name) + '</a>'; }).join('') + ((P.flows || []).length ? '<a data-tab="flow">核心流程</a>' : '');
+    var tabs = (ui.proto ? '' : '<a data-tab="doc">需求文档</a>') + P.ends.map(function (e) { return '<a data-tab="' + h.esc(e.id) + '">' + h.esc(e.name) + '</a>'; }).join('') + ((P.flows || []).length ? '<a data-tab="flow">核心流程</a>' : '');
     var a = W.audit, badge = '';
-    if (a) {
+    if (a && ui.proto) {
+      badge = '<span class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" style="cursor:default" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '原型阶段 · 检查通过' : '原型阶段 · 检查未通过') + (a.needOnline ? ' · 需联网' : '') + '</span>';
+    } else if (a) {
       var st0 = D.stats();
       var parts = [];
       if (st0.pending) parts.push('待确认 ' + st0.pending);
       if (st0.assumed) parts.push('AI 假设 ' + st0.assumed);
+      if (a.needOnline) parts.unshift('需联网');
       badge = '<a class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" href="#/doc" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '检查通过' : '检查未通过') + (parts.length ? ' · ' + parts.join(' · ') : '') + '</a>';
     }
     $('#top').innerHTML = '<a class="brand" data-tab="doc"><span class="brand-m">' + h.esc((P.name || '原')[0]) + '</span><span class="t">' + h.esc(P.name || '') + '</span><small>' + h.esc([D.cur(), P.date, P.fidelity || '低保真'].filter(Boolean).join(' · ')) + '</small></a>' +
       '<nav class="vtabs">' + tabs + '</nav>' +
       '<div class="vtools">' + badge +
+      (P.roles && P.roles.length ? '<select id="role-sel" class="role-sel"><option value="all">全部角色</option>' + P.roles.map(function (r) { return '<option value="' + h.esc(r.id) + '">' + h.esc(r.name) + '</option>'; }).join('') + '</select>' : '') +
       '<button class="vbtn" data-tool="hot" title="显示画板中所有可点击区域">热区 <kbd>H</kbd></button>' +
       '<button class="vbtn" data-tool="dots" title="显示或隐藏功能点标注圆点">标注 <kbd>N</kbd></button>' +
+      '<button class="vbtn" data-tool="comments" title="查看、添加和导出评审意见">意见<span class="cmt-badge">' + cmtBadgeText() + '</span></button>' +
+      (ui.proto ? '<button class="vbtn" data-tool="csv" title="导出功能点、字段、验收条件（CSV），给开发和测试用">清单</button>' : '') +
       (D.multiRelease() ? '<button class="vbtn chg" data-tool="chg" title="只看 ' + h.esc(D.cur()) + ' 新增、修改、移除的功能点">本版变化</button>' : '') +
       '<button class="vbtn" data-tool="zoom" id="zoomBtn"><span class="lb">适应窗口</span></button>' +
       '<button class="vbtn" data-tool="left"><span class="lb">目录</span></button>' +
-      '<button class="vbtn" data-tool="right"><span class="lb">需求</span></button>' +
+      (ui.proto ? '' : '<button class="vbtn" data-tool="right"><span class="lb">需求</span></button>') +
       (W.presets().length || Object.keys(W.P.demo || {}).length || P.ends.some(function (e) { return e.resetKeys; }) ? '<button class="vbtn" data-tool="reset" title="把演示数据恢复为默认"><span class="lb">重置演示数据</span></button>' : '') +
       '</div>';
+    if (P.roles && P.roles.length) {
+      var roleSel = $('#role-sel');
+      if (roleSel) roleSel.value = ui.role;
+    }
   }
   function setTab(tab) { $$('.vtabs a').forEach(function (a) { a.classList.toggle('on', a.dataset.tab === tab); }); }
   function syncTools() {
@@ -165,6 +194,8 @@
     if (c) c.classList.toggle('on', B.contains('chg-on'));
     var hot = $('[data-tool="hot"]');
     if (hot) hot.classList.toggle('on', B.contains('hot'));
+    var cm = $('[data-tool="comments"]');
+    if (cm) cm.classList.toggle('on', B.contains('cmt-on'));
   }
 
   /* ---------- 主渲染 ---------- */
@@ -172,8 +203,8 @@
     o = o || {};
     var r = parse();
     document.body.classList.remove('m-l', 'm-r');
-    if (r.view === 'doc') return renderDoc(r);
-    if (r.view === 'flow') return renderFlowIndex(r);
+    if (r.view === 'doc') { renderDoc(r); return cmtSync(); }
+    if (r.view === 'flow') { renderFlowIndex(r); return cmtSync(); }
     var p = W.pages[r.id];
     var st = stOf(r.id, r.st);
     var flow = r.q.f ? flowById(r.q.f) : null;
@@ -189,14 +220,16 @@
     setTab(flow ? 'flow' : p.end);
     ui.last[p.end] = p.id;
     ui.cur = { p: p, st: st, flow: flow, q: r.q };
+    if (ui.cmt.page !== p.id) { ui.cmt.page = p.id; ui.cmt.sel = null; }
     ui.docKey = '';
     ui.unknown = false;
     if (!o.keepSel) ui.sel = r.q.fn || null;
     var paintNow = HOST.isHosted(p) ? renderHosted(p, st, o.fromDetect) : (renderNative(p, st, r.q), true);
     renderLeft(p.end, r, flow);
-    renderRight(p, st);
+    if (!ui.proto) renderRight(p, st);
     renderFlowbar(r, flow);
     if (paintNow) afterPaint();
+    cmtSync();
   }
   W.render = render;
 
@@ -215,12 +248,15 @@
     var e = W.end(p.end);
     var ctx = { st: st, s: W.store, p: p, q: q || {}, end: e };
     var html;
+    /* 组件扩展（如规范包 theme-kit.js）按这个值判断当前端，手机端走原有实现 */
+    W.device = e.device === 'mobile' ? 'mobile' : 'pc';
     try { html = p.render(ctx); } catch (err) {
       console.error(err);
       html = '<div style="padding:40px;color:#c4322a">渲染出错：' + h.esc(err.message) + '</div>';
     }
     ui.hostEnd = null;
-    $('#stage-in').innerHTML = '<div id="devwrap">' + devHTML(e, '<div class="ab" id="ab">' + html + '</div>') + '</div><div class="cap">' + capHTML(p, st) + '</div>';
+    var device = e.device === 'mobile' ? 'mobile' : 'pc';
+    $('#stage-in').innerHTML = '<div id="devwrap">' + devHTML(e, '<div class="ab" id="ab" data-device="' + device + '">' + html + '</div>') + '</div><div class="cap">' + capHTML(p, st) + '</div>';
     fit();
     var ab = $('#ab');
     $$('.body,.pane,.m-body,.drw-b', ab).forEach(function (el) { el.scrollTop = 0; });
@@ -232,7 +268,7 @@
     var e = W.end(p.end);
     var frame = $('#hostf');
     if (!frame || ui.hostEnd !== e.id) {
-      $('#stage-in').innerHTML = '<div id="devwrap">' + devHTML(e, '<iframe id="hostf" sandbox="' + HOST.SANDBOX + '" title="' + h.esc(e.name) + '原型"></iframe>') + '</div><div class="cap">' + capHTML(p, st) + '</div>';
+      $('#stage-in').innerHTML = '<div id="devwrap">' + devHTML(e, '<iframe id="hostf" name="prd-host-view-' + h.esc(e.id) + '" sandbox="' + HOST.SANDBOX + '" title="' + h.esc(e.name) + '原型"></iframe>') + '</div><div class="cap">' + capHTML(p, st) + '</div>';
       ui.hostEnd = e.id;
       frame = $('#hostf');
       fit();
@@ -367,6 +403,7 @@
     var only = chgOn(), showShared = pref('sharedDots');
     res.list.forEach(function (x) {
       if (x.shared && !showShared) return;
+      if (!fnVisibleForRole(x.f, ui.role)) return;
       var c = D.chg(x.f);
       if (only && !c) return;
       var el = x.els[0];
@@ -414,8 +451,55 @@
   }
   var pdT;
   function placeDotsSoon() { clearTimeout(pdT); pdT = setTimeout(placeDots, 40); }
+  function applyRoleFilter() {
+    /* 只在产品声明了角色时按角色隐藏画板元素；恢复时只碰我们自己藏过的（有 data-display-backup） */
+    if (!ui.cur || !ui.cur.p) return;
+    var P = W.P;
+    if (!P.roles || !P.roles.length) return;
+    var p = ui.cur.p;
+    var isHosted = W.host.isHosted(p);
+    (p.fns || []).forEach(function (f) {
+      var visible = fnVisibleForRole(f, ui.role);
+      if (isHosted) {
+        if (!f.sel) return;
+        var frame = $('#hostf');
+        if (!frame || !frame.contentDocument) return;
+        Array.prototype.forEach.call(frame.contentDocument.querySelectorAll(f.sel), function (el) {
+          if (visible) {
+            if (el.hasAttribute('data-display-backup')) {
+              el.style.display = el.getAttribute('data-display-backup');
+              el.removeAttribute('data-display-backup');
+            }
+          } else {
+            if (!el.hasAttribute('data-display-backup')) {
+              el.setAttribute('data-display-backup', el.style.display);
+            }
+            el.style.display = 'none';
+          }
+        });
+      } else {
+        /* 原生：只动画板 #ab，不动需求卡片 */
+        var ab = $('#ab');
+        if (!ab) return;
+        $$('[data-fn="' + String(f.id).replace(/"/g, '') + '"]', ab).forEach(function (el) {
+          if (visible) {
+            if (el.hasAttribute('data-display-backup')) {
+              el.style.display = el.getAttribute('data-display-backup');
+              el.removeAttribute('data-display-backup');
+            }
+          } else {
+            if (!el.hasAttribute('data-display-backup')) {
+              el.setAttribute('data-display-backup', el.style.display);
+            }
+            el.style.display = 'none';
+          }
+        });
+      }
+    });
+  }
   function afterPaint() {
     placeDots();
+    applyRoleFilter();
     setTimeout(placeDots, 260);
     setTimeout(placeDots, 900);
     if (ui.sel) setTimeout(function () { selectFn(ui.sel, true); }, 60);
@@ -444,7 +528,7 @@
     if (card) {
       card.classList.remove('fold');
       if (scroll) {
-        if (innerWidth > 1100 && document.body.classList.contains('no-r')) { document.body.classList.remove('no-r'); setTimeout(fit, 220); syncTools(); }
+        if (!ui.proto && innerWidth > 1100 && document.body.classList.contains('no-r')) { document.body.classList.remove('no-r'); setTimeout(fit, 220); syncTools(); }
         card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     }
@@ -452,6 +536,182 @@
     drawBoxes(key);
     clearTimeout(ui.hlT);
     ui.hlT = setTimeout(function () { ui.hl = null; drawBoxes(null); }, 1600);
+  }
+
+  /* ---------- 评审意见 ---------- */
+  /* 对象：功能点 `页面/功能点`，公共组件 `S:端/功能点`，页面级 `页面`。卡片 key 与之对应 */
+  function cmtTarget(key) {
+    var p = ui.cur && ui.cur.p;
+    if (!p || !key) return '';
+    return /^S:/.test(key) ? 'S:' + p.end + '/' + key.slice(2) : p.id + '/' + key;
+  }
+  function cmtLabel(target) {
+    var s = String(target), sh = /^S:/.test(s), parts = (sh ? s.slice(2) : s).split('/');
+    var a = parts[0], fid = parts.slice(1).join('/');
+    if (sh) {
+      var sf = W.sharedFns(a).find(function (x) { return x.fn.id === fid; });
+      return sf ? '公共 · ' + sf.fn.name : s;
+    }
+    var p = W.pages[a];
+    if (!p) return s;
+    if (!fid) return p.title;
+    var f = p.fns.find(function (x) { return x.id === fid; });
+    return f ? f.name : s;
+  }
+  function cmtBadgeText() {
+    var n = W.comments.count();
+    return n ? String(n) : '';
+  }
+  function cmtBtnHTML(key) {
+    var c = W.comments.count(cmtTarget(key));
+    return '<button class="cmt-btn' + (c ? ' has' : '') + '" data-cmt="' + h.esc(key) + '" title="对这个功能点留意见">意见 (<span class="cmt-n">' + c + '</span>)</button>';
+  }
+  /* 当前要挂的对象：圆点选中的功能点；没有选中时挂到本页 */
+  function cmtOwn() {
+    if (ui.cmt.sel) return ui.cmt.sel;
+    return ui.cur ? ui.cur.p.id : '';
+  }
+  /* 当前页范围：本页的页面级意见、本页功能点的意见，以及本端公共组件的意见 */
+  function cmtShown(list) {
+    if (ui.cmt.scope !== 'page' || !ui.cur) return list;
+    var p = ui.cur.p;
+    return list.filter(function (c) {
+      if (c.pageId === p.id) return true;
+      return c.target.indexOf('S:' + p.end + '/') === 0;
+    });
+  }
+  function cmtItemHTML(c) {
+    return '<div class="cmt-item"><div class="cmt-m"><b>' + h.esc(c.author || '未署名') + '</b><span>' + h.esc(D.localTime(c.at)) + '</span>' +
+      '<button class="cmt-act sm" data-cmt-act="del" data-cid="' + h.esc(c.id) + '">删除</button></div><div class="cmt-t">' + h.esc(c.text) + '</div></div>';
+  }
+  function cmtGroupsHTML(list) {
+    var order = [], map = {};
+    list.forEach(function (c) {
+      if (!map[c.target]) { map[c.target] = []; order.push(c.target); }
+      map[c.target].push(c);
+    });
+    return order.map(function (t) {
+      return '<div class="cmt-g' + (t === ui.cmt.sel ? ' on' : '') + '"><h4><code>' + h.esc(t) + '</code> ' + h.esc(cmtLabel(t)) + ' · ' + map[t].length + ' 条</h4>' +
+        map[t].map(cmtItemHTML).join('') + '</div>';
+    }).join('');
+  }
+  function cmtPanelHTML() {
+    var all = W.comments.list(), shown = cmtShown(all), own = cmtOwn();
+    var sc = ui.cmt.scope === 'page';
+    return '<div class="cmt-h"><b>评审意见</b><span>共 ' + all.length + ' 条</span><button class="cmt-x" data-cmt-act="close" title="关闭">×</button></div>' +
+      '<div class="cmt-tools"><label>作者 <input class="cmt-inp" id="cmt-author" value="' + h.esc(W.comments.author()) + '" placeholder="可不填"></label>' +
+      '<button class="cmt-act sm' + (sc ? ' on' : '') + '" data-cmt-act="scope" data-v="page">本页</button><button class="cmt-act sm' + (sc ? '' : ' on') + '" data-cmt-act="scope" data-v="all">全部</button></div>' +
+      '<div class="cmt-compose"><div class="cmt-to">挂到：<b>' + h.esc(own ? cmtLabel(own) : '请先打开一个页面') + '</b>' + (ui.cmt.sel ? '<a data-cmt-act="page">改为本页</a>' : '') + '</div>' +
+      '<textarea class="cmt-ta" id="cmt-text" rows="3" placeholder="写下修改意见，例如：驳回时要填写原因">' + h.esc(ui.cmt.draft) + '</textarea>' +
+      '<div class="cmt-row"><span class="cmt-err" id="cmt-err"></span><button class="cmt-act pri" data-cmt-act="submit">提交意见</button></div></div>' +
+      '<div class="cmt-body">' + (shown.length ? cmtGroupsHTML(shown) : '<p class="cmt-empty">' + (sc && ui.cur ? '本页还没有意见。' : '还没有意见。') + '</p>') + '</div>' +
+      '<div class="cmt-foot"><span>意见保存在本机浏览器，导出后交给负责修改的人。</span><button class="cmt-act" data-cmt-act="export">导出意见 JSON</button></div>';
+  }
+  function cmtRenderPanel() {
+    var box = $('#cmt-panel');
+    if (!box) return;
+    var body = box.querySelector('.cmt-body'), top = body ? body.scrollTop : 0;
+    box.innerHTML = cmtPanelHTML();
+    body = box.querySelector('.cmt-body');
+    if (body) body.scrollTop = top;
+  }
+  function cmtPopHTML(target) {
+    var list = W.comments.list(target);
+    return '<div class="cmt-h"><b>' + h.esc(cmtLabel(target)) + '</b><span>' + h.esc(target) + '</span><button class="cmt-x" data-cmt-act="popclose" title="关闭">×</button></div>' +
+      '<div class="cmt-body">' + (list.length ? list.map(cmtItemHTML).join('') : '<p class="cmt-empty">还没有意见。</p>') + '</div>' +
+      '<div class="cmt-compose"><textarea class="cmt-ta" id="cmt-pop-text" rows="3" placeholder="对这个功能点写意见">' + h.esc(ui.cmt.popDraft) + '</textarea>' +
+      '<div class="cmt-row"><span class="cmt-err" id="cmt-pop-err"></span><button class="cmt-act pri" data-cmt-act="popsubmit">提交</button></div></div>';
+  }
+  function cmtRenderPop() {
+    var box = $('#cmt-pop');
+    if (!box || !ui.cmt.pop) return;
+    box.innerHTML = cmtPopHTML(ui.cmt.pop);
+  }
+  function cmtOpenPop(target, anchor) {
+    var box = $('#cmt-pop');
+    if (!box) return;
+    ui.cmt.pop = target;
+    cmtRenderPop();
+    box.classList.add('open');
+    var r = anchor.getBoundingClientRect();
+    var left = r.left - 340;
+    if (left < 8) left = Math.min(r.right + 8, innerWidth - 340);
+    box.style.left = Math.max(8, left) + 'px';
+    box.style.top = Math.max(60, Math.min(r.top, innerHeight - 260)) + 'px';
+  }
+  function cmtClosePop() {
+    var box = $('#cmt-pop');
+    ui.cmt.pop = null;
+    if (box) { box.classList.remove('open'); box.innerHTML = ''; }
+  }
+  function cmtToggle(on) {
+    var B = document.body.classList;
+    B.toggle('cmt-on', on === undefined ? !B.contains('cmt-on') : !!on);
+    if (!B.contains('cmt-on')) cmtClosePop();
+    cmtSync();
+  }
+  /* 数据变化或画面切换后同步：顶栏角标、卡片按钮计数、打开中的面板 */
+  function cmtSync() {
+    if (!W.comments) return;
+    var badge = cmtBadgeText();
+    $$('.cmt-badge').forEach(function (b) { b.textContent = badge; });
+    $$('[data-cmt]').forEach(function (b) {
+      var c = W.comments.count(cmtTarget(b.dataset.cmt));
+      b.classList.toggle('has', c > 0);
+      var n = b.querySelector('.cmt-n');
+      if (n) n.textContent = c;
+    });
+    if (document.body.classList.contains('cmt-on')) cmtRenderPanel();
+    if (ui.cmt.pop) cmtRenderPop();
+    syncTools();
+  }
+  /* 点圆点时，若意见面板开着，把意见挂到这个功能点 */
+  function cmtFollow(key) {
+    if (!document.body.classList.contains('cmt-on')) return;
+    var t = cmtTarget(key);
+    if (!t) return;
+    ui.cmt.sel = t;
+    cmtSync();
+    var g = $('#cmt-panel .cmt-g.on');
+    if (g) g.scrollIntoView({ block: 'nearest' });
+  }
+  function cmtSave(target, text, errId) {
+    try {
+      W.comments.add({ target: target, text: text });
+      return true;
+    } catch (e) {
+      var el = $('#' + errId);
+      if (el) el.textContent = e.message;
+      return false;
+    }
+  }
+  function cmtAct(el) {
+    var k = el.dataset.cmtAct;
+    if (k === 'close') return cmtToggle(false);
+    if (k === 'scope') { ui.cmt.scope = el.dataset.v; return cmtSync(); }
+    if (k === 'page') { ui.cmt.sel = null; return cmtSync(); }
+    if (k === 'submit') {
+      var t = cmtOwn();
+      if (!t) { $('#cmt-err').textContent = '先打开一个页面，再留意见。'; return; }
+      if (!cmtSave(t, ($('#cmt-text') || {}).value || '', 'cmt-err')) return;
+      ui.cmt.draft = '';
+      return cmtSync();
+    }
+    if (k === 'popsubmit') {
+      if (!cmtSave(ui.cmt.pop, ($('#cmt-pop-text') || {}).value || '', 'cmt-pop-err')) return;
+      ui.cmt.popDraft = '';
+      return cmtSync();
+    }
+    if (k === 'del') { W.comments.remove(el.dataset.cid); return cmtSync(); }
+    if (k === 'export') { W.comments.download(W.comments.author()); return; }
+    if (k === 'popclose') { cmtClosePop(); return; }
+  }
+  /* 卡片上的“意见”按钮：打开或关闭该功能点的浮层 */
+  function cmtCardBtn(btn) {
+    var t = cmtTarget(btn.dataset.cmt);
+    if (!t) return;
+    if (ui.cmt.pop === t) return cmtClosePop();
+    cmtOpenPop(t, btn);
   }
 
   /* ---------- 左侧目录 ---------- */
@@ -487,8 +747,9 @@
     var key = (shared ? 'S:' : '') + f.id;
     var st = D.status(f);
     var removed = D.removed(f);
+    var visible = fnVisibleForRole(f, ui.role);
     var n = shared ? D.letter(i) : i + 1;
-    return '<div class="fc' + (removed ? ' removed fold' : '') + '" data-fid="' + h.esc(key) + '"><div class="fc-h" data-fc="' + h.esc(key) + '"><span class="n' + (shared ? ' sh' : st !== 'confirmed' ? ' st-' + st : '') + '">' + n + '</span><b>' + h.esc(f.name) + '<span class="fid">' + h.esc(f.id) + '</span> ' + D.badgeHTML(f, D.multiRelease() ? D.cur() : '__none__') + (f.ui === false ? '<span class="bdg ui">无界面</span>' : '') + '</b></div>' +
+    return '<div class="fc' + (removed ? ' removed fold' : !visible ? ' hidden-role' : '') + '" data-fid="' + h.esc(key) + '" data-fn="' + h.esc(f.id) + '" style="' + (!visible ? 'display:none' : '') + '"><div class="fc-h" data-fc="' + h.esc(key) + '"><span class="n' + (shared ? ' sh' : st !== 'confirmed' ? ' st-' + st : '') + '">' + n + '</span><b>' + h.esc(f.name) + '<span class="fid">' + h.esc(f.id) + '</span> ' + D.badgeHTML(f, D.multiRelease() ? D.cur() : '__none__') + (f.ui === false ? '<span class="bdg ui">无界面</span>' : '') + '</b>' + cmtBtnHTML(key) + '</div>' +
       '<div class="fc-b">' + D.fnBodyHTML(f, p, { states: states, ver: D.multiRelease() ? D.cur() : '__none__', showRemoved: chgOn() }) + '</div></div>';
   }
   function renderRight(p, st) {
@@ -592,7 +853,7 @@
     ui.hostEnd = null;
     ui.docKey = '';
     renderLeft('flow', r, null);
-    $('#right').innerHTML = '<div class="np"><h2>核心流程</h2><p class="goal">从左侧选择一条流程。演示中可以直接点击画板里的按钮前进，也可以使用底部的“上一步／下一步”。</p></div>';
+    if (!ui.proto) $('#right').innerHTML = '<div class="np"><h2>核心流程</h2><p class="goal">从左侧选择一条流程。演示中可以直接点击画板里的按钮前进，也可以使用底部的“上一步／下一步”。</p></div>';
     $('#stage-in').innerHTML = '<div class="doc"><h1>核心流程演示</h1><p>共 ' + (W.P.flows || []).length + ' 条流程。</p>' + (W.P.flows || []).map(function (f) {
       return '<h3>' + h.esc(f.name) + '</h3>' + (f.desc ? '<p>' + W.md.inline(f.desc) + '</p>' : '') + '<p><a href="#" data-step="' + h.esc(f.id) + '|0">▶ 开始演示（' + f.steps.length + ' 步）</a></p>';
     }).join('') + '</div>';
@@ -610,6 +871,7 @@
     var cells = [['页面', st.pages], ['页面状态', st.states], ['功能点', st.fns], ['字段', st.fields], ['待确认', st.pending], ['AI 假设', st.assumed]];
     if (D.multiRelease()) cells.push([st.release + ' 变化', st.changes]);
     if (a) cells.push(['交互元素覆盖', a.stats.interactive ? Math.round(a.stats.covered / a.stats.interactive * 100) + '%' : '—']);
+    if (a && a.needOnline) cells.push(['交付条件', '需联网']);
     return '<div class="stats">' + cells.map(function (c) { return '<div><b>' + c[1] + '</b><span>' + c[0] + '</span></div>'; }).join('') + '</div>';
   }
   function renderDoc(r) {
@@ -623,7 +885,7 @@
       var md = D.markdown({ html: true, changesOnly: only, stats: statsHTML(only) });
       $('#stage-in').innerHTML = '<div class="doc" id="doc"><div class="doc-bar"><span class="l">需求文档与原型同源；改需求请改源文件后重新构建</span>' +
         (D.multiRelease() ? '<button class="vbtn chg' + (only ? ' on' : '') + '" data-tool="chg">只看 ' + h.esc(D.cur()) + ' 变化</button>' : '') +
-        '<button class="vbtn" data-act-doc="print">打印 / 存为 PDF</button><button class="vbtn" data-act-doc="md">导出 Markdown</button></div><div id="docbody"></div></div>';
+        '<button class="vbtn" data-act-doc="print">打印 / 存为 PDF</button><button class="vbtn" data-act-doc="md">导出 Markdown</button><button class="vbtn" data-act-doc="csv" title="功能点、字段、验收条件，CSV，Excel 可直接打开">导出 CSV</button></div><div id="docbody"></div></div>';
       W.md.into($('#docbody'), md);
       ui.docKey = key;
       renderDocLeft();
@@ -648,9 +910,11 @@
       '<div class="np-sec"><div class="sum-k"><div><b>' + st.pages + '</b><span>页面</span></div><div><b>' + st.fns + '</b><span>功能点</span></div><div><b>' + st.pending + '</b><span>待确认</span></div><div><b>' + st.assumed + '</b><span>AI 假设</span></div></div></div>';
     if (a) {
       s += '<div class="np-sec"><h3>构建检查<span>' + h.esc(D.localTime(a.at)) + '</span></h3>' +
-        '<div class="issue ' + (a.ok ? '' : 'e') + '">' + (a.ok ? '通过：原型中 ' + a.stats.interactive + ' 个可交互元素全部对应到需求功能点' + (a.stats.ignored ? '（另有 ' + a.stats.ignored + ' 个标为不纳入本次需求）' : '') + '，需求中的功能点全部在原型中出现' + (st.gaps ? '或已标注“原型未体现”' : '') + '。' : '未通过：' + a.errors.length + ' 个问题') + '</div>' +
+        '<div class="issue ' + (a.ok ? '' : 'e') + '">' + (a.ok ? '通过：原型中 ' + a.stats.interactive + ' 个可交互元素全部对应到需求功能点' + (a.stats.ignored ? '（另有 ' + a.stats.ignored + ' 个标为不纳入本次需求）' : '') + '，需求中的功能点全部在原型中出现' + (st.gaps ? '或已标注“原型未体现”' : '') + '。' : '未通过：' + a.errors.length + ' 个问题') + (a.needOnline ? '本原型标为“需联网”，交付后需联网才能完整使用。' : '') + '</div>' +
         (a.errors || []).slice(0, 10).map(function (x) { return '<div class="issue e">' + h.esc(x.msg) + '</div>'; }).join('') +
-        (a.warns || []).slice(0, 12).map(function (x) { return '<div class="issue w">' + h.esc(x.msg) + '</div>'; }).join('') + '</div>';
+        /* “需联网”提醒不参与截断，保证交付方一定能看到 */
+        (a.warns || []).filter(function (x) { return x.code === 'ONLINE'; }).map(function (x) { return '<div class="issue w">' + h.esc(x.msg) + '</div>'; }).join('') +
+        (a.warns || []).filter(function (x) { return x.code !== 'ONLINE'; }).slice(0, 12).map(function (x) { return '<div class="issue w">' + h.esc(x.msg) + '</div>'; }).join('') + '</div>';
     } else s += '<div class="np-sec"><h3>构建检查</h3><div class="issue w">此文件未经过构建检查。</div></div>';
     if (W.errors.length) s += '<div class="np-sec"><h3>运行错误</h3>' + W.errors.slice(0, 20).map(function (m) { return '<div class="issue e">' + h.esc(m) + '</div>'; }).join('') + '</div>';
     s += '<div class="np-sec"><h3>浏览方式</h3><ul>' +
@@ -673,6 +937,17 @@
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = (W.P.name || '需求') + '-需求文档-' + D.cur() + (chgOn() && D.multiRelease() ? '-本版变化' : '') + '.md';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+
+  /* 导出 CSV：文件带 UTF-8 BOM，Excel 双击即可正确显示中文 */
+  function exportCsv() {
+    var blob = new Blob(['\uFEFF' + D.csvText()], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (W.P.name || '需求') + '-研发测试清单-' + D.cur() + '.csv';
     document.body.appendChild(a);
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
@@ -752,7 +1027,20 @@
   }
 
   /* ---------- 事件 ---------- */
+  function setRole(roleId) {
+    ui.role = roleId;
+    pref('role', roleId);
+    var roleSel = $('#role-sel');
+    if (roleSel) roleSel.value = roleId;
+    render({ keepSel: true });
+  }
+  W.setRole = setRole;
   function onKey(e) {
+    if (e.key === 'Escape' && (ui.cmt.pop || document.body.classList.contains('cmt-on'))) {
+      if (ui.cmt.pop) cmtClosePop();
+      else cmtToggle(false);
+      return;
+    }
     if (e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'h' || e.key === 'H') toggleHot();
@@ -771,12 +1059,18 @@
   }
   function toggleDots() {
     document.body.classList.toggle('no-dots');
-    pref('noDots', document.body.classList.contains('no-dots'));
+    if (!ui.proto) pref('noDots', document.body.classList.contains('no-dots'));
     $$('.mini-sw[data-tool="dots"]').forEach(function (x) { x.classList.toggle('on', !document.body.classList.contains('no-dots')); });
     syncTools();
   }
   document.addEventListener('click', function (e) {
     var t = e.target;
+    var cb = t.closest('[data-cmt]');
+    if (cb) { cmtCardBtn(cb); return; }
+    var ca = t.closest('[data-cmt-act]');
+    if (ca) { cmtAct(ca); return; }
+    if (ui.cmt.pop && !t.closest('#cmt-pop')) cmtClosePop();
+    if (t.closest('#cmt-panel,#cmt-pop')) return;
     var tb = t.closest('[data-tab]');
     if (tb) {
       e.preventDefault();
@@ -787,7 +1081,7 @@
       return;
     }
     var fdot = t.closest('[data-fdot]');
-    if (fdot) { selectFn(fdot.dataset.fdot, true); return; }
+    if (fdot) { cmtFollow(fdot.dataset.fdot); selectFn(fdot.dataset.fdot, true); return; }
     var fch = t.closest('[data-fc]');
     if (fch) {
       var card = fch.parentNode;
@@ -824,6 +1118,7 @@
     var ad = t.closest('[data-act-doc]');
     if (ad) {
       if (ad.dataset.actDoc === 'md') exportMd();
+      if (ad.dataset.actDoc === 'csv') exportCsv();
       if (ad.dataset.actDoc === 'print') window.print();
       return;
     }
@@ -832,6 +1127,8 @@
       var k2 = tool.dataset.tool, B = document.body.classList;
       if (k2 === 'hot') toggleHot();
       if (k2 === 'dots') toggleDots();
+      if (k2 === 'comments') cmtToggle();
+      if (k2 === 'csv') exportCsv();
       if (k2 === 'sdots') { pref('sharedDots', !pref('sharedDots')); tool.classList.toggle('on', !!pref('sharedDots')); placeDots(); }
       if (k2 === 'chg') { B.toggle('chg-on'); pref('chg', B.contains('chg-on')); ui.docKey = ''; render({ keepSel: true }); }
       if (k2 === 'zoom') { ui.zoom = ui.zoom === 'fit' ? '100' : 'fit'; fit(); }
@@ -877,6 +1174,13 @@
   document.addEventListener('change', function (e) {
     var sl = e.target;
     if (sl.matches && sl.matches('select[data-pick]')) sl.classList.toggle('e', !sl.value);
+    if (sl.id === 'cmt-author') W.comments.setAuthor(sl.value);
+    if (sl.id === 'role-sel') setRole(sl.value);
+  });
+  /* 意见草稿实时保存在内存里，面板重绘时不丢字 */
+  document.addEventListener('input', function (e) {
+    if (e.target.id === 'cmt-text') ui.cmt.draft = e.target.value;
+    if (e.target.id === 'cmt-pop-text') ui.cmt.popDraft = e.target.value;
   });
   document.addEventListener('scroll', function (e) { if (e.target.closest && e.target.closest('#ab')) placeDotsSoon(); }, true);
   document.addEventListener('keydown', onKey);
@@ -895,6 +1199,8 @@
       sharedDots: !!pref('sharedDots'),
       ignoredMarks: $$('#dots .xbox').length,
       cards: $$('#right .fc').length,
+      commentsOpen: document.body.classList.contains('cmt-on'),
+      commentCount: W.comments.count(),
       unknown: ui.unknown, scale: ui.scale, errors: W.errors.slice()
     };
   };
@@ -905,11 +1211,14 @@
       return;
     }
     finalize();
-    if (pref('noDots')) document.body.classList.add('no-dots');
+    if (ui.proto) document.body.classList.add('no-dots', 'no-r');
+    else if (pref('noDots')) document.body.classList.add('no-dots');
     if (pref('chg') && D.multiRelease()) document.body.classList.add('chg-on');
     document.body.classList.add('no-anim');
     if (innerWidth < 1500 && innerWidth > 1100) document.body.classList.add('no-l');
     renderTop();
+    /* 评审意见抽屉和浮层：和画板、需求面板分开，原型阶段也能用 */
+    document.body.insertAdjacentHTML('beforeend', '<aside class="cmt-panel" id="cmt-panel"></aside><div class="cmt-pop" id="cmt-pop"></div>');
     render();
     syncTools();
     setTimeout(function () { document.body.classList.remove('no-anim'); }, 50);

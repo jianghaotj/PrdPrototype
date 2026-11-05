@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 截图与画面诊断：打开构建好的 HTML，逐个视图截图，并输出圆点、功能点和控制台错误。
 // 用法：node scripts/snap.mjs <原型.html> [--view "#/p/P01/list"]... [--only] [--out 目录] [--width 1600] [--height 1000] [--click "选择器"]
-//   默认截“需求文档”和每个端首页，--view 追加视图；加 --only 只截 --view 指定的视图。
+//   默认截“需求文档”和每个端首页（原型阶段不截需求文档），--view 追加视图；加 --only 只截 --view 指定的视图。
 //   --chg 打开“本版变化”视图后再截图（多版本时）。每次运行会先清掉输出目录里上次生成的截图。
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,7 +22,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (!o.file) o.file = a;
 }
 const USAGE = `用法：node scripts/snap.mjs <原型.html> [选项]
-  默认截“需求文档”和每个端的首页
+  默认截“需求文档”和每个端的首页（原型阶段只截各端首页，圆点默认隐藏时标注“已隐藏”）
   --view "#/p/P02/reject"  追加要截的视图（可重复）；页面状态用 #/p/<页面ID>/<状态ID>
   --only                   只截 --view 指定的视图
   --chg                    打开“本版变化”视图后再截
@@ -45,7 +45,8 @@ try {
     const on = await page.evaluate('(function(){ if (!W.doc.multiRelease()) return "single"; if (!document.body.classList.contains("chg-on")) document.querySelector("[data-tool=chg]").click(); return "on"; })()');
     if (on === 'single') console.log('只有一个版本，没有“本版变化”视图');
   }
-  let views = o.only ? o.views : (await page.evaluate('["#/doc"].concat(W.P.ends.map(function(e){return "#/end/"+e.id}))')).concat(o.views);
+  /* 原型阶段没有需求文档，默认只截各端首页 */
+  let views = o.only ? o.views : (await page.evaluate('(W.P.stage === "prototype" ? [] : ["#/doc"]).concat(W.P.ends.map(function(e){return "#/end/"+e.id}))')).concat(o.views);
   if (!views.length) { console.error('没有要截的视图'); process.exit(2); }
   for (let i = 0; i < views.length; i++) {
     const v = views[i];
@@ -62,7 +63,9 @@ try {
     const file = path.join(out, name);
     await page.screenshot(file);
     console.log(v + ' → ' + file);
-    if (diag.view === 'page') console.log('  页面 ' + diag.page + ' / ' + diag.state + ' · 圆点 ' + diag.dots.length + ' · 当前可见功能点 ' + (diag.visibleFns.length - diag.sharedVisible) + (diag.sharedVisible ? '（另有公共组件 ' + diag.sharedVisible + ' 个，圆点默认隐藏）' : '') + (diag.ignoredMarks ? ' · 不纳入标记 ' + diag.ignoredMarks : '') + (diag.unknown ? ' · 当前画面未登记' : ''));
+    /* 圆点数来自 DOM，圆点层被隐藏时仍会计数，所以这里单独标注“已隐藏” */
+    const dotsHidden = await page.evaluate('(function(){var d=document.getElementById("dots");return !!d&&getComputedStyle(d).display==="none"})()');
+    if (diag.view === 'page') console.log('  页面 ' + diag.page + ' / ' + diag.state + ' · 圆点 ' + diag.dots.length + (dotsHidden ? '（已隐藏）' : '') + ' · 当前可见功能点 ' + (diag.visibleFns.length - diag.sharedVisible) + (diag.sharedVisible ? '（另有公共组件 ' + diag.sharedVisible + ' 个，圆点默认隐藏）' : '') + (diag.ignoredMarks ? ' · 不纳入标记 ' + diag.ignoredMarks + (dotsHidden ? '（已隐藏）' : '') : '') + (diag.unknown ? ' · 当前画面未登记' : ''));
   }
   if (page.errors.length) { failed = true; console.log('\n控制台错误：'); page.errors.forEach((e) => console.log('  - ' + e)); }
 } finally {

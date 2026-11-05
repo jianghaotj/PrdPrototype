@@ -74,6 +74,7 @@
     var out = {};
     var saved = JSON.stringify(W.store);
     var sets = [null].concat(W.presets().map(function (x) { return x.id; }));
+    W.device = ((W.end(p.end) || {}).device === 'mobile') ? 'mobile' : 'pc';
     (p.states.length ? p.states : [{ id: '' }]).forEach(function (s) {
       sets.forEach(function (ps) {
         try {
@@ -146,7 +147,7 @@
       if (!it.length) return '';
       return '<div class="k">' + title + '</div><ul>' + it.map(function (x) { return '<li>' + md.inline(x.text) + badgeHTML(x, o.ver) + '</li>'; }).join('') + '</ul>';
     }
-    s += list('规则', f.rules);
+    s += list('规则', D.items(f.rules).concat(D.items(f.auto)));
     s += list('异常与边界', f.errors);
     if (f.empty) s += '<div class="k">空数据</div><div>' + md.inline(f.empty) + '</div>';
     if (f.perm) s += '<div class="k">权限</div><div>' + md.inline(f.perm) + '</div>';
@@ -195,7 +196,7 @@
     if (HTML && opts.stats) out.push(opts.stats + '\n\n');
     if (!HTML) {
       var sx = D.stats();
-      out.push('页面 ' + sx.pages + ' · 状态 ' + sx.states + ' · 功能点 ' + sx.fns + ' · 字段 ' + sx.fields + ' · 待确认 ' + sx.pending + ' · AI 假设 ' + sx.assumed + (W.audit ? ' · 构建检查' + (W.audit.ok ? '通过' : '未通过') + '（' + D.localTime(W.audit.at).slice(0, 10) + '）' : '') + '\n\n');
+      out.push('页面 ' + sx.pages + ' · 状态 ' + sx.states + ' · 功能点 ' + sx.fns + ' · 字段 ' + sx.fields + ' · 待确认 ' + sx.pending + ' · AI 假设 ' + sx.assumed + (W.audit ? ' · 构建检查' + (W.audit.ok ? '通过' : '未通过') + (W.audit.needOnline ? ' · 需联网' : '') + '（' + D.localTime(W.audit.at).slice(0, 10) + '）' : '') + '\n\n');
     }
 
     var allPages = [];
@@ -311,7 +312,7 @@
               })));
             }
             var sub = [];
-            var rl = D.items(f.rules).filter(function (x) { return !D.removed(x); });
+            var rl = D.items(f.rules).concat(D.items(f.auto)).filter(function (x) { return !D.removed(x); });
             if (rl.length) sub.push('**规则**\n\n' + rl.map(function (x) { return '- ' + T(x.text) + B(x, ver); }).join('\n'));
             var er = D.items(f.errors).filter(function (x) { return !D.removed(x); });
             if (er.length) sub.push('**异常与边界**\n\n' + er.map(function (x) { return '- ' + T(x.text) + B(x, ver); }).join('\n'));
@@ -342,7 +343,7 @@
           out.push('##### ' + D.letter(i) + ' ' + f.name + ' ' + (HTML ? '<span class="fid">' + f.id + '</span>' : '`' + f.id + '`') + B(f, ver) + '\n\n');
           if (f.desc) out.push(T(f.desc) + '\n\n');
           if (f.fields && f.fields.length) out.push(table(['字段', '类型', '必填', '规则与口径'], f.fields.map(function (x) { return [T(x.name || x.key), x.type || '', x.required ? '是' : '否', T(x.rule || '')]; })));
-          var rl = D.items(f.rules);
+          var rl = D.items(f.rules).concat(D.items(f.auto));
           if (rl.length) out.push(rl.map(function (x) { return '- ' + T(x.text) + B(x, ver); }).join('\n') + '\n\n');
           var er = D.items(f.errors);
           if (er.length) out.push('**异常与边界**\n\n' + er.map(function (x) { return '- ' + T(x.text); }).join('\n') + '\n\n');
@@ -352,6 +353,21 @@
     }
 
     if (!only) {
+      /* 验收条件（功能点的 ac，可选）：集中成一章，测试可直接据此写用例 */
+      var acRows = [];
+      function acRow(where, f) { return [T(where), T(f.name), T(f.ac.pre || '—'), T(f.ac.act), T(f.ac.expect)]; }
+      allPages.forEach(function (p) {
+        if (!p) return;
+        p.fns.forEach(function (f) { if (f.ac && !D.removed(f)) acRows.push(acRow(p.id + ' ' + p.title, f)); });
+      });
+      W.sharedGroups.forEach(function (g) {
+        g.fns.forEach(function (f) { if (f.ac && !D.removed(f)) acRows.push(acRow('公共组件「' + g.title + '」', f)); });
+      });
+      if (acRows.length) {
+        chapter('验收条件');
+        out.push('功能点写了验收条件（前置条件、用户操作、预期结果）的集中列在这里。未列出的功能点没有单独写验收条件，以功能点说明和规则为准。\n\n');
+        out.push(table(['位置', '功能点', '前置条件', '用户操作', '预期结果'], acRows));
+      }
       if (P.dict && P.dict.length) {
         chapter('数据字典');
         P.dict.forEach(function (d) {
@@ -381,6 +397,16 @@
         });
         if (gaps.length) out.push('### 需求中有、原型未体现\n\n研发按需求实现，测试按需求验收；原型后续补画。\n\n' + table(['页面', '功能点', '说明'], gaps));
       }
+      /* 范围确认后新增 / 移除：和 prd/scope.json 基线对比。没有基线时不列 */
+      var sd = W.scopeDiff();
+      if (sd) {
+        chapter('范围确认后新增');
+        var when = (sd.confirmedAt ? '于 ' + sd.confirmedAt : '') + (sd.release ? '（' + sd.release + '）' : '');
+        out.push('范围清单' + (when ? when + ' ' : '') + '确认之后，原型里又多出下列页面、状态或功能点。它们没有经过范围确认，评审时请决定是否纳入本期。\n\n');
+        if (sd.added.length) out.push(table(['类别', '位置'], sd.added.map(function (x) { return [x.kind, T(x.label)]; })));
+        else out.push('确认之后没有新增的页面、状态或功能点。\n\n');
+        if (sd.removed.length) out.push('**确认之后已从原型中移除**\n\n' + table(['类别', '位置'], sd.removed.map(function (x) { return [x.kind, T(x.key)]; })));
+      }
       var pend = D.pendingList();
       chapter('待确认与 AI 假设');
       if (pend.length) {
@@ -409,6 +435,66 @@
     }
     D.lastToc = toc;
     return out.join('');
+  };
+
+  /* ---------- CSV：研发与测试导出（功能点、字段、验收条件）。与 Markdown 各自独立，不改 D.markdown ---------- */
+  var FN_COLS = ['pageId', 'pageTitle', 'endId', 'fnId', 'fnName', 'desc', 'perm', 'src', 'status'];
+  var FIELD_COLS = ['pageId', 'fnId', 'fnName', 'key', 'name', 'type', 'required', 'def', 'options', 'rule'];
+  var AC_COLS = ['pageId', 'fnId', 'fnName', 'pre', 'act', 'expect'];
+  /* 合并文本的表头：三张表列的并集，sheet 列标明行属于哪张表；不适用的单元格留空 */
+  var ALL_COLS = ['sheet', 'pageId', 'pageTitle', 'endId', 'fnId', 'fnName', 'desc', 'perm', 'src', 'status', 'key', 'name', 'type', 'required', 'def', 'options', 'rule', 'pre', 'act', 'expect'];
+  function csvCell(v) {
+    var s = v == null ? '' : String(v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function csvLine(cols, row) {
+    return cols.map(function (c) { return csvCell(row[c]); }).join(',');
+  }
+  function csvSheet(cols, rows) {
+    return [cols.join(',')].concat(rows.map(function (r) { return csvLine(cols, r); })).join('\r\n') + '\r\n';
+  }
+  /* 待确认 / AI 假设 标记写进状态列；已确认留空 */
+  function csvStatus(x) {
+    var s = ownStatus(x);
+    return s === 'pending' ? '待确认' : s === 'assumed' ? 'AI 假设' : '';
+  }
+  /* 行对象：fns / fields / ac 三组，已删除（removed）的功能点和字段不导出 */
+  D.csvRows = function () {
+    var out = { fns: [], fields: [], ac: [] };
+    function collect(pageId, pageTitle, endId, fns) {
+      fns.forEach(function (f) {
+        if (D.removed(f)) return;
+        out.fns.push({ sheet: 'fns', pageId: pageId, pageTitle: pageTitle, endId: endId, fnId: f.id, fnName: f.name || '', desc: f.desc || '', perm: f.perm || '', src: joinSrc(f.src) || '', status: csvStatus(f) });
+        (f.fields || []).forEach(function (x) {
+          if (D.removed(x)) return;
+          out.fields.push({ sheet: 'fields', pageId: pageId, fnId: f.id, fnName: f.name || '', key: x.key || '', name: x.name || '', type: x.type || '', required: x.required ? '是' : '否', def: x.def == null ? '' : String(x.def), options: Array.isArray(x.options) ? x.options.join('、') : (x.options || ''), rule: x.rule || '' });
+        });
+        if (f.ac) out.ac.push({ sheet: 'ac', pageId: pageId, fnId: f.id, fnName: f.name || '', pre: f.ac.pre || '', act: f.ac.act || '', expect: f.ac.expect || '' });
+      });
+    }
+    (W.P.ends || []).forEach(function (e) {
+      (W.order[e.id] || []).forEach(function (id) {
+        var p = W.pages[id];
+        if (p) collect(id, p.title || '', e.id, p.fns || []);
+      });
+    });
+    /* 公共组件的 pageId 写作 S:端ID，与评审意见的 target 写法一致 */
+    W.sharedGroups.forEach(function (g) { collect('S:' + g.end, g.title || '', g.end, g.fns || []); });
+    return out;
+  };
+  /* 合并 CSV 文本（不含 BOM；下载时由 viewer 在前面加 \uFEFF） */
+  D.csvText = function () {
+    var r = D.csvRows();
+    return csvSheet(ALL_COLS, r.fns.concat(r.fields, r.ac));
+  };
+  /* 三份独立 CSV 文本（各带表头，不含 sheet 列） */
+  D.csvSheets = function () {
+    var r = D.csvRows();
+    return {
+      fns: csvSheet(FN_COLS, r.fns),
+      fields: csvSheet(FIELD_COLS, r.fields),
+      ac: csvSheet(AC_COLS, r.ac)
+    };
   };
 
   /* ---------- 统计、待确认、变更 ---------- */

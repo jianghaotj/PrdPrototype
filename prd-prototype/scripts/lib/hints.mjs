@@ -34,5 +34,8 @@ export const HINTS = {
   IMG_SRC: '需求文字里的图片改为 data:image/...;base64 内嵌。',
   TEXT: '需求文字里有乱码或占位文字（TODO、待补充等），改成真实内容或标 [待确认]。',
   GAP: '需求里写了“原型未体现”，但原型中找到了该元素。',
-  SINGLE_FILE: '交付文件不能引用外部或相对资源。'
+  AC: '验收条件 ac 写成 { pre, act, expect }：act（用户操作）和 expect（预期结果）各写一句完整的话；不写 ac 可以删掉。',
+  SCOPE_FILE: 'prd/scope.json 格式不对。修正为合法 JSON（pages / states / fns 为字符串数组），或删除该文件后重新确认范围。',
+  SINGLE_FILE: '交付文件不能引用外部或相对资源。',
+  HOST_NET: '网络脚本或样式断网后会失效：改为本地文件。托管原型确需联网的，在该端写 online: true 显式放行。'
 };

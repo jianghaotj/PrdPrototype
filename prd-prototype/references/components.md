@@ -73,6 +73,23 @@ h.pills(['全部', '待处理'], 0, { field })                 // 筛选胶囊
 h.tabs([['基本信息', 'P02', 'info'], ['操作记录', 'P02', 'log']], 0, { fn })   // 页签（每项可跳转到状态）
 ```
 
+### 表单行为（内置校验、提交、筛选）
+
+这些行为由组件自己实现，页面只声明。构建会把它们写进对应功能点的「规则」，不需要另外写。
+
+```js
+h.fld('请假事由', h.inp('', { area: 1, field: 'reason', fn: 'form' }), { req: 1, min: 5, max: 200, fn: 'form', field: 'reason' })  // req 必须与 fields 的 required 一致
+h.form(html, { id: 'leave', fn: 'form' })                       // 表单容器，id 在页面内唯一
+h.submit('提交申请', { form: 'leave', fn: 'submit', ok: { go: 'M01', st: 'list' }, append: 'list.items', appendName: '请假列表' })
+h.search('搜索单号或事由', { fn: 'search', field: 'kw', filter: 'list' })   // 与 h.rows('list', rows, { fn, nomatch, empty }) 配对
+```
+
+- 提交：先校验必填和长度，不通过不发请求。通过后按钮进入“提交中”并禁用，重复点击只提交一次。
+- 提交结果由演示数据顶层的 `submitFail` 决定。为 `true` 时，表单每次渲染后的第一次提交失败，失败保留已填内容，再点即成功。数据场景（`scenarios`）里设 `submitFail=true` 即可在界面上演示。
+- 成功时 `append` 指向的演示数据新增一条（值来自表单字段，表单没有的字段用 `appendDefaults: {...}` 补上），然后跳转到 `ok`。
+- 搜索：按列表行的文字实时筛选，没有匹配时显示 `nomatch` 的“没有匹配的结果”。`h.rows` 的 `items` 为空时直接显示 `empty`。
+- `fields` 中输入字段的 `required` 必须和 `h.fld` 的 `req` 一致，否则构建报错（`FIELD_REQ`）。只检查放在 `h.fld` 里的控件。
+
 ### 列表与表格
 
 ```js
@@ -159,7 +176,7 @@ acts: {
 
 ## 线框阶段的样式约束
 
-- 优先用组件和工具类；不写颜色。
+- 优先用组件和工具类；不写颜色。选用规范包时同样不写色值，颜色和尺寸由规范包的变量给出。
 - 内联样式只用于尺寸、字号和字距（如签到码输入框 `style="font-size:26px;letter-spacing:8px"`），因为表单控件上的字号会被组件样式覆盖。
 - 圆点压住文字时，用功能点的 `dot` 调整，不要为了圆点去改布局。
 
@@ -170,7 +187,19 @@ acts: {
 ## 换成团队设计体系
 
 1. 在 `prd/theme.css` 覆盖 `.ab` 上的设计变量（`--ink --acc --line --fill --r --font` 等）。
-2. 需要时在 `theme.css` 里重写组件类（`.btn .card .tbl .inp .tag` 等）。
+2. 需要时在 `theme.css` 里重写组件类（`.btn .card .tbl .inp .tag` 等）。选择器要带 `.ab` 前缀（如 `.ab .btn`），组件样式只作用于画板内，外壳不受影响。
 3. 组件不够用时在 `kit.js` 里新增 `h.xxx`，页面统一调用；不要在页面里直接写颜色。
 
 页面代码、需求数据和检查规则都不用改。
+
+## 规范包（设计主题）
+
+`new.mjs --theme gaodeng-pc` 会把规范包的 `tokens.css` 和 `theme.css` 合并为 `prd/theme.css`，并复制 `theme-kit.js` 到 `prd/`。规范包的变量和样式只作用于 PC 画板（`.ab[data-device="pc"]`），手机画板保持线框。页面代码不用改，只调用 `h.*`。规范包里的组件变化：
+
+- 按钮三档：默认 40 高；`sz: 'sm'` 为 32（弹窗、表格内自动为 32）；`sz: 'xs'` 为 24。
+- 对话框：`h.modal(标题, 正文, 按钮, { size: 's' | 'm' | 'l' | 'xl', fn })`，宽 480/640/720/960；也可用 `w` 指定。
+- 缺省页：`h.empty(标题, 副标题, 引导按钮, { kind: 'blank' | 'info' | 'system' })`。`h.table` 没有数据时直接用缺省页替代表格。
+- 分页：`h.pager(总行数, { page, fn })`。默认每页 10 行。总行数不足 10 时隐藏页码，保留“共 N 条”；是否连总数一起隐藏待确认（CONFLICTS C25）。翻页按钮只作展示。
+- 标签：2px 圆角；选中的页签、选项、开关用品牌色。
+
+要改规范包本身时，改 `themes/<名称>/` 下的文件；要给某个项目加组件，在该项目的 `prd/` 里新增 `h.xxx`，不要在页面里直接写颜色。完整用例见 `examples/course-mgmt/`。

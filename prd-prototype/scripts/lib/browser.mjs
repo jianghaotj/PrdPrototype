@@ -98,15 +98,29 @@ export async function launch() {
     throw new Error('浏览器启动失败：' + exe + '\n' + e.message + '\n' + stderr.slice(-1500));
   }
 
-  async function newPage({ width = 1600, height = 1000 } = {}) {
+  async function newPage({ width = 1600, height = 1000, offline = false } = {}) {
     const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
     const errors = [];
     const dialogs = [];
+    const requests = [];
+    const byRequestId = new Map();
+    const frameNames = new Map();   /* 子 frame 的 id → name，用来区分托管端的检查 iframe */
     const waiters = [];
     const onEvent = (msg) => {
       if (msg.sessionId !== sessionId) return;
-      if (msg.method === 'Runtime.exceptionThrown') {
+      if (msg.method === 'Page.frameNavigated') {
+        const f = msg.params.frame;
+        if (f && f.parentId) frameNames.set(f.id, f.name || '');
+      } else if (msg.method === 'Network.requestWillBeSent') {
+        const r = { requestId: msg.params.requestId, url: msg.params.request.url, type: msg.params.type || '', frameId: msg.params.frameId || '', frameName: frameNames.get(msg.params.frameId) || '', failed: '' };
+        requests.push(r);
+        byRequestId.set(r.requestId, r);
+      } else if (msg.method === 'Network.loadingFailed') {
+        /* 断网时请求会以 blockedReason 或 errorText 失败：记录下来，证明请求确实被拦下 */
+        const r = byRequestId.get(msg.params.requestId);
+        if (r) r.failed = msg.params.blockedReason || msg.params.errorText || 'failed';
+      } else if (msg.method === 'Runtime.exceptionThrown') {
         const d = msg.params.exceptionDetails || {};
         errors.push('脚本异常：' + ((d.exception && d.exception.description) || d.text || '未知错误').split('\n').slice(0, 3).join(' | '));
       } else if (msg.method === 'Runtime.consoleAPICalled' && msg.params.type === 'error') {
@@ -128,6 +142,9 @@ export async function launch() {
     await s('Page.enable');
     await s('Runtime.enable');
     await s('Log.enable');
+    await s('Network.enable');
+    /* 断网：屏蔽所有网络地址的请求（file:// 本地文件不受影响）；请求记录仍然保留，供检查报告使用 */
+    if (offline) await s('Network.setBlockedURLs', { urls: ['http://*', 'https://*', 'ws://*', 'wss://*'] });
     await s('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
     function waitEvent(method, timeout) {
       let w;
@@ -137,6 +154,7 @@ export async function launch() {
     return {
       errors,
       dialogs,
+      requests,
       send: s,
       async goto(url, timeout = 60000) {
         const loaded = waitEvent('Page.loadEventFired', timeout);
