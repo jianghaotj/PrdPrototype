@@ -4,7 +4,7 @@
   var W = window.W, h = W.h, D = W.doc, HOST = W.host;
   function $(s, r) { return (r || document).querySelector(s); }
   function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
-  var ui = { zoom: 'fit', last: {}, scale: 1, cur: null, sel: null, visible: {}, docKey: '', enterSeq: 0, hostEnd: null, unknown: false };
+  var ui = { zoom: 'fit', last: {}, scale: 1, cur: null, sel: null, visible: {}, docKey: '', enterSeq: 0, hostEnd: null, unknown: false, proto: false };
   var PREF;
   function pref(k, v) {
     try {
@@ -47,7 +47,10 @@
     try { var a = document.getElementById('prd-audit'); W.audit = a && a.textContent.trim() ? JSON.parse(a.textContent) : null; } catch (e) { W.audit = null; }
     W.behaveApply(W.audit);
     PREF = 'prd-viewer:' + (P.id || P.name);
+    /* 原型阶段：打开即原型，没有需求文档栏目、需求面板、需求按钮，圆点默认隐藏且不记住偏好 */
+    ui.proto = P.stage === 'prototype';
   }
+  function protoHome() { return ui.last[W.P.ends[0].id]; }
 
   /* ---------- 路由 ---------- */
   function parse() {
@@ -65,6 +68,8 @@
     if (parts[0] === 'p' && parts[1] && W.pages[parts[1]]) return { view: 'page', id: parts[1], st: parts[2] || '', q: q };
     if (parts[0] === 'flow') return { view: 'flow', q: q };
     if (parts[0] === 'end' && W.end(parts[1])) return { view: 'page', id: ui.last[parts[1]], st: '', q: q };
+    /* 原型阶段没有需求文档，#/doc 和空路由都回到第一个端的首页 */
+    if (ui.proto) return { view: 'page', id: protoHome(), st: '', q: q };
     if (parts[0] === 'doc') return { view: 'doc', anchor: parts[1] || '', q: q };
     return { view: 'doc', anchor: '', q: q };
   }
@@ -133,9 +138,11 @@
   /* ---------- 顶栏 ---------- */
   function renderTop() {
     var P = W.P;
-    var tabs = '<a data-tab="doc">需求文档</a>' + P.ends.map(function (e) { return '<a data-tab="' + h.esc(e.id) + '">' + h.esc(e.name) + '</a>'; }).join('') + ((P.flows || []).length ? '<a data-tab="flow">核心流程</a>' : '');
+    var tabs = (ui.proto ? '' : '<a data-tab="doc">需求文档</a>') + P.ends.map(function (e) { return '<a data-tab="' + h.esc(e.id) + '">' + h.esc(e.name) + '</a>'; }).join('') + ((P.flows || []).length ? '<a data-tab="flow">核心流程</a>' : '');
     var a = W.audit, badge = '';
-    if (a) {
+    if (a && ui.proto) {
+      badge = '<span class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" style="cursor:default" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '原型阶段 · 检查通过' : '原型阶段 · 检查未通过') + '</span>';
+    } else if (a) {
       var st0 = D.stats();
       var parts = [];
       if (st0.pending) parts.push('待确认 ' + st0.pending);
@@ -151,7 +158,7 @@
       (D.multiRelease() ? '<button class="vbtn chg" data-tool="chg" title="只看 ' + h.esc(D.cur()) + ' 新增、修改、移除的功能点">本版变化</button>' : '') +
       '<button class="vbtn" data-tool="zoom" id="zoomBtn"><span class="lb">适应窗口</span></button>' +
       '<button class="vbtn" data-tool="left"><span class="lb">目录</span></button>' +
-      '<button class="vbtn" data-tool="right"><span class="lb">需求</span></button>' +
+      (ui.proto ? '' : '<button class="vbtn" data-tool="right"><span class="lb">需求</span></button>') +
       (W.presets().length || Object.keys(W.P.demo || {}).length || P.ends.some(function (e) { return e.resetKeys; }) ? '<button class="vbtn" data-tool="reset" title="把演示数据恢复为默认"><span class="lb">重置演示数据</span></button>' : '') +
       '</div>';
   }
@@ -196,7 +203,7 @@
     if (!o.keepSel) ui.sel = r.q.fn || null;
     var paintNow = HOST.isHosted(p) ? renderHosted(p, st, o.fromDetect) : (renderNative(p, st, r.q), true);
     renderLeft(p.end, r, flow);
-    renderRight(p, st);
+    if (!ui.proto) renderRight(p, st);
     renderFlowbar(r, flow);
     if (paintNow) afterPaint();
   }
@@ -449,7 +456,7 @@
     if (card) {
       card.classList.remove('fold');
       if (scroll) {
-        if (innerWidth > 1100 && document.body.classList.contains('no-r')) { document.body.classList.remove('no-r'); setTimeout(fit, 220); syncTools(); }
+        if (!ui.proto && innerWidth > 1100 && document.body.classList.contains('no-r')) { document.body.classList.remove('no-r'); setTimeout(fit, 220); syncTools(); }
         card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     }
@@ -597,7 +604,7 @@
     ui.hostEnd = null;
     ui.docKey = '';
     renderLeft('flow', r, null);
-    $('#right').innerHTML = '<div class="np"><h2>核心流程</h2><p class="goal">从左侧选择一条流程。演示中可以直接点击画板里的按钮前进，也可以使用底部的“上一步／下一步”。</p></div>';
+    if (!ui.proto) $('#right').innerHTML = '<div class="np"><h2>核心流程</h2><p class="goal">从左侧选择一条流程。演示中可以直接点击画板里的按钮前进，也可以使用底部的“上一步／下一步”。</p></div>';
     $('#stage-in').innerHTML = '<div class="doc"><h1>核心流程演示</h1><p>共 ' + (W.P.flows || []).length + ' 条流程。</p>' + (W.P.flows || []).map(function (f) {
       return '<h3>' + h.esc(f.name) + '</h3>' + (f.desc ? '<p>' + W.md.inline(f.desc) + '</p>' : '') + '<p><a href="#" data-step="' + h.esc(f.id) + '|0">▶ 开始演示（' + f.steps.length + ' 步）</a></p>';
     }).join('') + '</div>';
@@ -779,7 +786,7 @@
   }
   function toggleDots() {
     document.body.classList.toggle('no-dots');
-    pref('noDots', document.body.classList.contains('no-dots'));
+    if (!ui.proto) pref('noDots', document.body.classList.contains('no-dots'));
     $$('.mini-sw[data-tool="dots"]').forEach(function (x) { x.classList.toggle('on', !document.body.classList.contains('no-dots')); });
     syncTools();
   }
@@ -913,7 +920,8 @@
       return;
     }
     finalize();
-    if (pref('noDots')) document.body.classList.add('no-dots');
+    if (ui.proto) document.body.classList.add('no-dots', 'no-r');
+    else if (pref('noDots')) document.body.classList.add('no-dots');
     if (pref('chg') && D.multiRelease()) document.body.classList.add('chg-on');
     document.body.classList.add('no-anim');
     if (innerWidth < 1500 && innerWidth > 1100) document.body.classList.add('no-l');

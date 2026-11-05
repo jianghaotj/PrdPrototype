@@ -220,7 +220,10 @@ export async function build(input, opts = {}) {
   if (opts.draft && opts.scopeBaseline) throw new Error('--draft 只组装不检查，不能写入范围基线');
   if (opts.confirmedAt != null && !opts.scopeBaseline) throw new Error('--confirmed-at 只能和 --scope-baseline 一起用');
   if (opts.confirmedAt != null && !/^\d{4}-\d{2}-\d{2}$/.test(opts.confirmedAt)) throw new Error('--confirmed-at 的格式应为 YYYY-MM-DD');
-  const outName = opts.out || cfg.out || ((cfg.name || 'prototype') + '-原型需求.html');
+  const proto = cfg.stage === 'prototype';
+  if (proto && opts.md) throw new Error('原型阶段不导出需求文档（--md）。需求定了以后，先去掉 product.stage 再构建');
+  if (proto && (cfg.ends || []).some((e) => e.host)) throw new Error('原型阶段暂不支持“已有 HTML 补需求”（托管模式）。已有 HTML 想直接给人看，发原文件即可');
+  const outName = opts.out || cfg.out || ((cfg.name || 'prototype') + (proto ? '-原型.html' : '-原型需求.html'));
   const outFile = path.resolve(project, outName);
   const tmpDir = path.join(project, '.prd-build');
   fs.mkdirSync(tmpDir, { recursive: true });
@@ -271,7 +274,7 @@ export async function build(input, opts = {}) {
     rt('viewer.js')
   ];
   scripts.forEach((s, i) => { if (/<\/script/i.test(s) && i >= vendor.length) die('运行时脚本中出现 </script'); });
-  const title = (cfg.name || '原型') + ' · ' + release + ' · 原型需求';
+  const title = (cfg.name || '原型') + ' · ' + release + (proto ? ' · 原型' : ' · 原型需求');
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const assemble = (audit) => [
     '<!doctype html>',
@@ -281,6 +284,7 @@ export async function build(input, opts = {}) {
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     '<meta name="generator" content="prd-prototype">',
     '<meta name="prd-release" content="' + esc(release) + '">',
+    proto ? '<meta name="prd-stage" content="prototype">' : '',
     '<title>' + esc(title) + '</title>',
     '<style>\n' + rt('viewer.css') + '\n</style>',
     '<style>\n' + rt('wire.css') + '\n</style>',
@@ -419,7 +423,8 @@ export async function build(input, opts = {}) {
 function printReport(r) {
   const s = r.report.stats;
   const cov = s.interactive ? Math.round((s.covered / s.interactive) * 100) + '%' : '—';
-  console.log('原型需求构建：' + r.name + ' ' + r.release);
+  const proto = r.report.stage === 'prototype';
+  console.log((proto ? '原型构建（原型阶段）：' : '原型需求构建：') + r.name + ' ' + r.release);
   console.log('  页面 ' + s.pages + ' · 状态 ' + s.states + ' · 功能点 ' + s.fns + ' · 字段 ' + s.fields + ' · 渲染 ' + s.renders + ' 次 · 交互元素 ' + s.interactive + '（归属到功能点 ' + cov + (s.ignored ? '；另有 ' + s.ignored + ' 个按 ignore 不纳入' : '') + '）');
   console.log('  待确认 ' + s.pending + ' · AI 假设 ' + s.assumed + (s.gaps ? ' · 原型未体现 ' + s.gaps : '') + (s.changes ? ' · 本版变化 ' + s.changes : ''));
   if (!r.ok) {
@@ -433,9 +438,16 @@ function printReport(r) {
     });
     console.log('\n排查用文件（含右侧检查结果）：' + r.failed);
   }
-  if (r.report.warns.length) {
-    console.log('\n提醒 ' + r.report.warns.length + ' 条（不阻止交付）：');
-    r.report.warns.slice(0, 30).forEach((w) => console.log('  - [' + w.code + '] ' + w.msg));
+  const softWarns = r.report.warns.filter((w) => w.soft);
+  const hardWarns = r.report.warns.filter((w) => !w.soft);
+  if (softWarns.length) {
+    const byCode = {};
+    softWarns.forEach((w) => { byCode[w.code] = (byCode[w.code] || 0) + 1; });
+    console.log('\n原型阶段：以下需求检查降为提醒，补需求时会变回错误：' + Object.keys(byCode).map((c) => c + ' ' + byCode[c] + ' 条').join('、'));
+  }
+  if (hardWarns.length) {
+    console.log('\n提醒 ' + hardWarns.length + ' 条（不阻止交付）：');
+    hardWarns.slice(0, 30).forEach((w) => console.log('  - [' + w.code + '] ' + w.msg));
   }
   if (r.ok) {
     console.log('\n✓ 检查通过，已生成：' + r.file + '（' + Math.round(r.size / 1024) + ' KB）');
@@ -448,6 +460,7 @@ function printReport(r) {
 const USAGE = `用法：node scripts/build.mjs <项目目录> [选项]
   --md        同时导出需求文档 Markdown（<产品名>-需求文档.md）
   --out 文件  指定交付文件名（默认 <产品名>-原型需求.html）
+  product.js 写 stage: 'prototype' 时为原型阶段：默认输出 <产品名>-原型.html，不支持 --md
   --json      以 JSON 输出检查结果
   --draft     只组装、不检查，输出到 .prd-build/（仅供排查画面，不可交付）
   --scope-baseline  检查通过后，把当前页面、状态、功能点记为范围基线（prd/scope.json）。
@@ -461,7 +474,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (!o._[0]) die(USAGE);
   build(o._[0], o).then((r) => {
     if (r.draft) { console.log('草稿（未检查，不可交付）：' + r.file); return; }
-    if (o.json) console.log(JSON.stringify({ ok: r.ok, file: r.file || null, failed: r.failed || null, errors: r.report.errors, warns: r.report.warns, stats: r.report.stats }, null, 1));
+    if (o.json) console.log(JSON.stringify({ ok: r.ok, file: r.file || null, failed: r.failed || null, errors: r.report.errors, warns: r.report.warns, stats: r.report.stats, ...(r.report.stage ? { stage: r.report.stage } : {}) }, null, 1));
     else printReport(r);
     process.exit(r.ok ? 0 : 1);
   }).catch((e) => { console.error('✗ 构建失败：' + (e && e.stack || e)); process.exit(2); });

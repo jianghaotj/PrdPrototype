@@ -78,9 +78,32 @@
 
 自动判断不准时，用 `h.btn('签到', { submit: true, fn: 'checkin' })` 强制视为提交，或 `{ submit: false }` 视为导航。
 
+## 原型阶段（`product.stage: 'prototype'`）
+
+写了 `stage: 'prototype'` 时，下表的代码从错误降为提醒（构建结果里标为 `soft`）。缺了不阻止交付。删掉 `stage` 重新构建后，没补的项会变回错误。命令行把这些条目合并成一行“原型阶段：以下需求检查降为提醒……”，按代码列出条数。
+
+| 代码 | 原型阶段下降为提醒的情况 |
+| --- | --- |
+| `PRODUCT` | `background` 缺失或过短；`scope.out` 没写；`roles` 为空 |
+| `FN_DESC` | 功能点缺交互说明 `desc` |
+| `FN_SRC` | 功能点没有 `src`，且没标 `assumed` / `pending` |
+| `FIELD` | 字段缺 `name` 或 `type`，或 `rule` 和 `options` 都没写；绑定了输入控件却没写 `required` |
+| `FIELD_MISSING` | 有输入控件但 `fields` 缺失，或 `fields` 都没写 `required` |
+| `FIELD_UNDECLARED` | `data-field` 在所属功能点的 `fields` 中找不到 |
+| `LIST_FIELDS`、`LIST_EMPTY` | 列表或表格没写 `fields`、`empty` |
+| `ERRORS` | 有改变数据的操作，但没写 `errors` |
+| `PAGE` | 页面缺 `goal`（缺 `title` 仍报错） |
+| `STATE_WHEN` | 页面状态缺 `when` |
+
+以下仍是错误，原型阶段不放宽：`UNREGISTERED`（原型里的可点元素没登记）、`FN_UNUSED`（登记了功能点但原型里没画）、`TEXT`（含“待补充”“TODO”占位）、`PRODUCT` 的 `name`、`id`、`ends`、`releases`，`stage` 写成其他值、`FIELD_REQ`、`FN_SRC` 的 `status` 取值错误，以及表里其他代码。`SCOPE_ADDED` 和 `SCOPE_REMOVED` 在两种模式下都只是提醒。
+
+原型阶段仍会打印 `AC_MISSING` 提醒，以及待确认与 AI 假设的数量。这些是正常输出，不是隐藏起来的内容。
+
 ## 不要这样“修”
 
 - 为了通过检查删掉真实需求，或把真实功能塞进 `h.demo()` / `ignore`。
 - 用一个大功能点包住整页来消除 `UNREGISTERED`。
 - 把没有依据的内容写上 `src` 冒充已确认。
 - 用 `--draft` 产物交付。
+- 为了通过检查给完整需求项目写 `stage: 'prototype'`。原型阶段不是绕过检查的开关。
+- 原型阶段里用“待补充”占位代替留空。`TEXT` 仍会报错，不写即可。

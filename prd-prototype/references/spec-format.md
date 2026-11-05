@@ -43,8 +43,11 @@
 | `demo` | | 演示数据默认值，页面通过 `c.s` 读取 |
 | `scenarios` | | `{ label: '数据场景', presets: [{ id, label, set }] }`，一键切换演示数据 |
 | `clarify` | | 澄清记录 `[{ no, q, a, by }]` |
-| `out` | | 输出文件名，默认 `<name>-原型需求.html` |
+| `out` | | 输出文件名。默认 `<name>-原型需求.html`；原型阶段默认 `<name>-原型.html`。原型阶段不建议写 `out`，以免和完整版同名 |
+| `stage` | | 写 `'prototype'` 进入原型阶段（见 `SKILL.md` 流程 E）；写其他值报 `PRODUCT`。完整需求阶段不写这一行 |
 | `demoNote` | | 画板下方的数据说明，默认“画面中的数据均为演示数据” |
+
+原型阶段（`stage: 'prototype'`）下，`background`、`scope.out`、`roles` 缺失或过短只给提醒。`name`、`id`、`ends`、`releases` 仍必填。
 
 ### 端 ends
 
@@ -132,6 +135,8 @@ W.page({
 | 输入框、下拉、选项组、开关等控件 | `fields`，至少一个字段写 `required: true / false`；用 `data-field` 绑定在输入控件上的字段都要写 `required`（纯展示字段不用） |
 | 列表或表格（`h.table`、`h.list`） | `fields`（每列/每项的含义、格式、来源）和 `empty` |
 | 提交、保存、删除、通过、驳回、支付、上传等按钮 | `errors`（失败、重复提交、权限不足、并发冲突） |
+
+原型阶段（`stage: 'prototype'`）下，上表里的 `desc`、`src`、`fields`、`empty`、`errors` 缺失只给提醒，见 `audit-codes.md`“原型阶段”。原型里的可点元素仍要登记成功能点。
 
 `ac`（验收条件）可选。核心流程里出现的功能点建议写上，写不写由需求方决定：没写时构建给出 `AC_MISSING` 提醒，不阻止交付。写了的功能点会集中列在需求文档的“验收条件”一章。
 

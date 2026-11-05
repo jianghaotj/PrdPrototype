@@ -928,6 +928,201 @@ console.log('\n11. 高教 PC 样例（课程管理）');
   }
 }
 
+/* ---------- 12. 原型阶段（product.stage: 'prototype'） ---------- */
+console.log('\n12. 原型阶段');
+{
+  const PROTO_EDIT = [PROD, 'W.product({', "W.product({\n  stage: 'prototype',"];
+  const deliverable = (dir, name) => fs.existsSync(path.join(dir, name));
+  const hasDeliverable = (dir) => fs.readdirSync(dir).some((n) => /原型\.html$|原型需求\.html$|需求文档\.md$/.test(n));
+  /* 迷你项目：一个 PC 端、一个页面、两个状态（list 与一个 modal 弹层）。功能点只写 id 和 name。 */
+  const PRODUCT_SRC = `W.product({
+  id: 'mini-proto',
+  name: '迷你原型',
+  releases: [{ id: 'V1.0', date: '2026-11-05', summary: '首版' }],
+  ends: [{ id: 'pc', name: 'PC 端', device: 'pc', home: 'P01' }],
+  stage: 'prototype'
+});
+`;
+  const PAGE_SRC = `W.page({
+  id: 'P01', end: 'pc', title: '列表页',
+  states: [
+    { id: 'list', label: '列表' },
+    { id: 'add', label: '新建弹层', layer: 'modal' }
+  ],
+  fns: [
+    { id: 'filter', name: '筛选' },
+    { id: 'table', name: '列表' },
+    { id: 'del', name: '删除' },
+    { id: 'add', name: '新建' }
+  ],
+  render: function (c) {
+    if (c.st === 'add') {
+      return '<div data-layer="modal" style="padding:24px"><div data-fn="add"><button class="btn" data-go="P01" data-st="list">关闭</button></div></div>';
+    }
+    return '<div style="padding:24px"><h1>列表页</h1>' +
+      '<div data-fn="filter"><input class="inp" placeholder="搜索名称"></div>' +
+      '<div data-fn="table" data-list><div>示例条目 A</div><div>示例条目 B</div></div>' +
+      '<div data-fn="del"><button class="btn">删除</button></div>' +
+      '<div data-fn="add"><button class="btn pri" data-go="P01" data-st="add">新建</button></div>' +
+      '<!--EXTRA-->' +
+      '</div>';
+  }
+});
+`;
+  const MINI = path.join(TMP, 'mini-base');
+  fs.mkdirSync(path.join(MINI, 'prd', 'pages'), { recursive: true });
+  fs.writeFileSync(path.join(MINI, 'prd', 'product.js'), PRODUCT_SRC);
+  fs.writeFileSync(path.join(MINI, 'prd', 'pages', 'P01-list.js'), PAGE_SRC);
+  const PAGE = 'prd/pages/P01-list.js';
+  const SOFT_NEED = ['FN_DESC', 'FN_SRC', 'STATE_WHEN', 'PAGE', 'PRODUCT', 'FIELD_MISSING', 'LIST_FIELDS', 'LIST_EMPTY', 'ERRORS'];
+
+  /* T1：stage 登记为合法字段；写错值报 PRODUCT */
+  const t1a = await build(variant(EXAMPLE, [PROTO_EDIT]), {});
+  ok(t1a.ok && !t1a.report.warns.some((w) => w.code === 'UNKNOWN_KEY' && /stage/.test(w.msg)), 'T1 product.stage: "prototype" 不报 UNKNOWN_KEY，请假审批加上后检查通过', t1a.ok ? '' : JSON.stringify(t1a.report.errors.slice(0, 3)));
+  const t1b = await build(variant(MINI, [[PROD, "stage: 'prototype'", "stage: 'proto'"]]), {});
+  ok(!t1b.ok && t1b.report.errors.some((e) => e.code === 'PRODUCT' && /stage/.test(e.msg)), 'T1 product.stage 写成 "proto" 报 PRODUCT 并阻止交付');
+
+  /* T2、T3：只写编号和名称的迷你项目通过；缺的需求说明以 soft 提醒输出 */
+  const t2 = await build(variant(MINI, []), {});
+  ok(t2.ok, 'T2 功能点只有 id 和 name 的迷你项目，原型阶段检查通过', t2.ok ? '' : JSON.stringify(t2.report.errors.slice(0, 4)));
+  const t2soft = new Set((t2.report.warns || []).filter((w) => w.soft).map((w) => w.code));
+  ok(SOFT_NEED.every((c) => t2soft.has(c)), 'T3 缺失的需求说明以 soft 提醒输出，覆盖 ' + SOFT_NEED.join(' '), [...t2soft].join(','));
+
+  /* T4：同一项目去掉 stage，上述缺项变回错误 */
+  const t4 = await build(variant(MINI, [[PROD, "stage: 'prototype'", '/* 无 stage */']]), {});
+  ok(!t4.ok && SOFT_NEED.every((c) => codes(t4).includes(c)), 'T4 去掉 stage 后构建失败，上述缺项全部变回错误', JSON.stringify(codes(t4)));
+
+  /* T5：原型里有没登记的可点元素，仍报错且不出交付文件 */
+  const t5dir = variant(MINI, [[PAGE, '<!--EXTRA-->', '<button class="btn">导出</button>']]);
+  const t5 = await build(t5dir, {});
+  ok(!t5.ok && hasCode(t5, 'UNREGISTERED') && !deliverable(t5dir, '迷你原型-原型.html'), 'T5 原型多出没登记的按钮：报 UNREGISTERED，不出交付文件');
+
+  /* T6：登记了但原型里没画的功能点，仍报错 */
+  const t6 = await build(variant(MINI, [[PAGE, "{ id: 'add', name: '新建' }", "{ id: 'add', name: '新建' },\n    { id: 'ghost', name: '幽灵功能' }"]]), {});
+  ok(!t6.ok && t6.report.errors.some((e) => e.code === 'FN_UNUSED' && /幽灵功能/.test(e.msg)), 'T6 登记了没画的功能点：报 FN_UNUSED');
+
+  /* T7：写错的值仍报错（status 非法、required 非布尔、跳转目标不存在） */
+  const t7 = await build(variant(MINI, [
+    [PAGE, "{ id: 'filter', name: '筛选' }", "{ id: 'filter', name: '筛选', status: 'foo', fields: [{ key: 'kw', name: '关键词', type: '文本', rule: '模糊匹配', required: 'yes' }] }"],
+    [PAGE, 'data-go="P01" data-st="add">新建', 'data-go="P99" data-st="add">新建']
+  ]), {});
+  ok(!t7.ok && hasCode(t7, 'FN_SRC') && hasCode(t7, 'FIELD') && hasCode(t7, 'GO_TARGET'), 'T7 写错仍报错：status 非法报 FN_SRC，required 非布尔报 FIELD，跳到不存在的页面报 GO_TARGET', JSON.stringify(codes(t7)));
+
+  /* T8：交付文件名、标题、标记 */
+  const t8dir = variant(MINI, []);
+  const t8 = await build(t8dir, {});
+  const t8html = t8.ok && deliverable(t8dir, '迷你原型-原型.html') ? fs.readFileSync(path.join(t8dir, '迷你原型-原型.html'), 'utf8') : '';
+  ok(t8.ok && deliverable(t8dir, '迷你原型-原型.html') && outputs(t8dir).length === 0 && /<title>[^<]*· 原型<\/title>/.test(t8html) && t8html.includes('<meta name="prd-stage" content="prototype">'), 'T8 输出 迷你原型-原型.html，不生成 -原型需求.html；标题以“· 原型”结尾；带 prd-stage 标记');
+
+  /* T9：原型阶段不导出 Markdown，直接报错且不写任何文件 */
+  const t9dir = variant(MINI, []);
+  let t9err = null;
+  try { await build(t9dir, { md: true }); } catch (e) { t9err = e; }
+  ok(t9err && /--md/.test(t9err.message) && !hasDeliverable(t9dir), 'T9 原型阶段带 --md：构建抛错，目录中没有新的 HTML 或需求文档 Markdown', t9err ? t9err.message : '没有抛错');
+
+  /* T10：原型阶段遇到托管端，直接报错 */
+  const t10dir = variant(HOSTFX, [PROTO_EDIT]);
+  let t10err = null;
+  try { await build(t10dir, {}); } catch (e) { t10err = e; }
+  ok(t10err && /暂不支持/.test(t10err.message) && !hasDeliverable(t10dir), 'T10 原型阶段遇到托管端：构建抛错，提示暂不支持托管模式，不生成文件', t10err ? t10err.message : '没有抛错');
+
+  /* T16：版本升级时归档上一版；已有的完整需求交付文件保持不变 */
+  const vdir = variant(EXAMPLE, [PROTO_EDIT], { withOutput: true });
+  const vb1 = await build(vdir, {});
+  const keepBefore = crypto.createHash('sha1').update(fs.readFileSync(path.join(vdir, '请假审批-原型需求.html'))).digest('hex');
+  const vProd = path.join(vdir, PROD);
+  fs.writeFileSync(vProd, fs.readFileSync(vProd, 'utf8').replace("summary: '首版：员工手机端发起与查看请假，主管 PC 端审批，HR 查看月度统计' }", "summary: '首版：员工手机端发起与查看请假，主管 PC 端审批，HR 查看月度统计' },\n    { id: 'V1.1', date: '2026-11-05', summary: '原型迭代' }"));
+  const vb2 = await build(vdir, {});
+  const keepAfter = crypto.createHash('sha1').update(fs.readFileSync(path.join(vdir, '请假审批-原型需求.html'))).digest('hex');
+  ok(vb1.ok && vb2.ok && deliverable(vdir, path.join('归档', '请假审批-原型-V1.0.html')) && keepBefore === keepAfter, 'T16 原型阶段升到 V1.1：上一版归档为 归档/请假审批-原型-V1.0.html；已有的 请假审批-原型需求.html 原样保留', JSON.stringify({ vb1: vb1.ok, vb2: vb2.ok }));
+
+  /* T17：范围基线在原型阶段写入；去掉 stage 后范围对比不出现增删。
+     注意：这里只去掉 stage，没有补其他需求，构建会因需求缺项失败；这里只检查范围对比结果。 */
+  const sdir = variant(MINI, []);
+  const sb = await build(sdir, { scopeBaseline: true, confirmedAt: '2026-11-05' });
+  ok(sb.ok && deliverable(sdir, path.join('prd', 'scope.json')), 'T17 前置：原型阶段 --scope-baseline 写入 prd/scope.json');
+  const sProd = path.join(sdir, PROD);
+  fs.writeFileSync(sProd, fs.readFileSync(sProd, 'utf8').replace("stage: 'prototype'", '/* 无 stage */'));
+  const sb2 = await build(sdir, {});
+  const scopeMoves = (sb2.report.warns || []).filter((w) => w.code === 'SCOPE_ADDED' || w.code === 'SCOPE_REMOVED').length;
+  ok(!!sb2.report.scope && scopeMoves === 0, 'T17 去掉 stage 后：SCOPE_ADDED / SCOPE_REMOVED 都为 0（构建仍因需求缺项失败，此处只看范围对比）', JSON.stringify(sb2.report.scope));
+
+  /* T18、T11–T15、T19、T20：需要浏览器的部分。测前清空 localStorage，避免偏好互相污染 */
+  const pf = t1a.ok ? t1a.file : null;     /* 请假审批加 stage 后的交付文件 */
+  const exFile = ex.file;                  /* 默认模式的请假审批 */
+  const snapDir = path.join(TMP, 'snap-proto');
+  let snapOut = '', snapCode = 0;
+  if (pf) {
+    try { snapOut = execFileSync(process.execPath, [path.join(SKILL, 'scripts', 'snap.mjs'), pf, '--out', snapDir], { encoding: 'utf8', timeout: 240000 }); }
+    catch (e) { snapOut = String(e.stdout || ''); snapCode = e.status; }
+  }
+  const shotLines = snapOut.split('\n').filter((l) => / → /.test(l));
+  ok(!!pf && snapCode === 0 && !/#\/doc/.test(snapOut) && shotLines.length === 2 && /圆点 \d+（已隐藏）/.test(snapOut), 'T18 原型阶段 snap.mjs：默认只截各端首页（不含 #/doc），圆点标注“已隐藏”', 'exit=' + snapCode + ' ' + snapOut.slice(0, 300));
+
+  const bc = await launch();
+  try {
+    const pg = await bc.newPage({ width: 1520, height: 1000 });
+    const open = async (file, hash) => { await pg.goto('about:blank'); await pg.goto(fileUrl(file) + (hash || '')); await pg.waitFor('window.__PRD_READY === true', 20000); await sleep(400); };
+    const fresh = async (file, hash) => { await open(file, ''); await pg.evaluate('localStorage.clear()'); await open(file, hash); };
+    const diag = async () => JSON.parse(await pg.evaluate('JSON.stringify(W.viewerDiag())'));
+    const pressN = async () => { await pg.evaluate('document.dispatchEvent(new KeyboardEvent("keydown", { key: "n" }))'); await sleep(250); };
+    if (pf) {
+      await fresh(pf, '');
+      const homeId = await pg.evaluate('W.P.ends[0].home');
+      /* T11 */
+      const d1 = await diag();
+      await open(pf, '#/doc');
+      const d2 = await diag();
+      ok(d1.view === 'page' && d1.page === homeId && d2.view === 'page' && d2.page === homeId, 'T11 原型阶段：无 hash 或 #/doc 都进入第一个端的首页（' + homeId + '）', JSON.stringify([d1.view, d1.page, d2.view, d2.page]));
+      /* T12 */
+      await fresh(pf, '');
+      const d12 = JSON.parse(await pg.evaluate(`JSON.stringify({ docTab: document.querySelectorAll('#top .vtabs a[data-tab="doc"]').length, needBtn: document.querySelectorAll('[data-tool="right"]').length, rightHTML: document.getElementById('right').innerHTML.length, noR: document.body.classList.contains('no-r') })`));
+      ok(d12.docTab === 0 && d12.needBtn === 0 && d12.rightHTML === 0 && d12.noR, 'T12 顶栏无“需求文档”标签和“需求”按钮；右栏为空；body 带 no-r', JSON.stringify(d12));
+      /* T13 */
+      const badge = await pg.evaluate(`(document.querySelector('.audit-badge') || {}).textContent || ''`);
+      ok(badge === '原型阶段 · 检查通过' && !/待确认|AI 假设/.test(badge), 'T13 检查标识为“原型阶段 · 检查通过”，不含待确认和 AI 假设（构建统计：AI 假设 ' + (t1a.report.stats.assumed || 0) + '，待确认 ' + (t1a.report.stats.pending || 0) + '）', badge);
+      /* T14 */
+      await fresh(pf, '');
+      const hid1 = await pg.evaluate(`document.body.classList.contains('no-dots')`);
+      await pressN();
+      const shown = !(await pg.evaluate(`document.body.classList.contains('no-dots')`));
+      await open(pf, '#/p/' + homeId);
+      const hid2 = await pg.evaluate(`document.body.classList.contains('no-dots')`);
+      const stored = await pg.evaluate(`localStorage.getItem('prd-viewer:leave-approval') || ''`);
+      ok(hid1 && shown && hid2 && !/noDots/.test(stored), 'T14 原型阶段圆点默认隐藏；按 N 显示；重新加载后又隐藏；localStorage 没有写入 noDots', JSON.stringify({ hid1, shown, hid2, stored }));
+      /* T15 */
+      await fresh(pf, '');
+      await pressN();
+      const dotN = await pg.evaluate(`document.querySelectorAll('#dots .fdot').length`);
+      if (dotN) await pg.evaluate(`document.querySelector('#dots .fdot').click()`);
+      await sleep(400);
+      const afterDot = JSON.parse(await pg.evaluate(`JSON.stringify({ noR: document.body.classList.contains('no-r'), right: document.getElementById('right').innerHTML.length })`));
+      const fnMeta = JSON.parse(await pg.evaluate(`JSON.stringify({ st: W.pages[W.P.ends[0].home].states[0].id, fn: W.pages[W.P.ends[0].home].fns[0].id })`));
+      await open(pf, '#/p/' + homeId + '/' + fnMeta.st + '?fn=' + encodeURIComponent(fnMeta.fn));
+      const afterQ = JSON.parse(await pg.evaluate(`JSON.stringify({ noR: document.body.classList.contains('no-r'), right: document.getElementById('right').innerHTML.length })`));
+      ok(dotN > 0 && afterDot.noR && afterDot.right === 0 && afterQ.noR && afterQ.right === 0, 'T15 点圆点、带 ?fn= 打开：需求面板不展开（no-r 保留，#right 为空）', JSON.stringify({ dotN, afterDot, afterQ }));
+      /* T20 */
+      await fresh(pf, '');
+      const flowTabs = await pg.evaluate(`document.querySelectorAll('#top .vtabs a[data-tab="flow"]').length`);
+      await pg.evaluate(`document.querySelector('#top .vtabs a[data-tab="flow"]').click()`);
+      await sleep(400);
+      await pg.evaluate(`document.querySelector('[data-step="f1|0"]').click()`);
+      await sleep(500);
+      const t20 = JSON.parse(await pg.evaluate(`JSON.stringify({ flowOn: document.body.classList.contains('flow-on'), page: W.viewerDiag().page, first: W.P.flows[0].steps[0].p })`));
+      ok(flowTabs === 1 && t20.flowOn && t20.page === t20.first, 'T20 原型阶段：“核心流程”标签保留，流程演示能进入第一步（' + t20.first + '）', JSON.stringify({ flowTabs, t20 }));
+    }
+    /* T19：默认模式回归（不写 stage）：圆点偏好照旧记住，无 hash 仍进需求文档 */
+    await fresh(exFile, '');
+    const g1 = JSON.parse(await pg.evaluate(`JSON.stringify({ view: W.viewerDiag().view, hidden: document.body.classList.contains('no-dots'), docTab: document.querySelectorAll('#top .vtabs a[data-tab="doc"]').length })`));
+    await pressN();
+    await open(exFile, '');
+    const g2 = JSON.parse(await pg.evaluate(`JSON.stringify({ view: W.viewerDiag().view, hidden: document.body.classList.contains('no-dots') })`));
+    ok(g1.view === 'doc' && !g1.hidden && g1.docTab === 1 && g2.view === 'doc' && g2.hidden, 'T19 默认模式不变：无 hash 进需求文档、圆点默认显示；按 N 隐藏后重新加载仍隐藏（偏好照旧记住）', JSON.stringify({ g1, g2 }));
+  } finally {
+    await bc.close();
+  }
+}
+
 console.log('\n结果：' + pass + ' 通过，' + failN + ' 失败');
 if (failN) console.log('失败项：\n  - ' + fails.join('\n  - '));
 if (!KEEP && !failN) fs.rmSync(TMP, { recursive: true, force: true });
