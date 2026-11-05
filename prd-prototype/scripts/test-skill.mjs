@@ -888,9 +888,10 @@ console.log('\n11. 高教 PC 样例（课程管理）');
   const cmMd = cm.mdFile ? fs.readFileSync(cm.mdFile, 'utf8') : '';
   ok(cm.ok && /【AI 假设】/.test(cmMd) && cm.report.stats.assumed > 0 && cm.report.stats.pending === 0, '课程管理需求文档标出 AI 假设且没有待确认项（AI 假设 ' + (cm.report.stats ? cm.report.stats.assumed : 0) + ' 条）');
   ok(cm.ok && cmMd.includes('课程名称为必填项，为空时不能提交') && cmMd.includes('课程代码长度为 6–12 个字，不在此范围内时不能提交'), '课程管理需求文档由 h.fld 的 req / min / max 生成必填与长度规则');
-  /* 仓库里提交的需求文档与当前源码重新构建的结果一致（产物没有过期） */
+  /* 仓库里提交的需求文档与当前源码重新构建的结果一致（产物没有过期）；忽略“构建检查通过（日期）”这一天然随日历变化的戳 */
   const cmCommitted = fs.readFileSync(path.join(COURSE, '课程管理-需求文档.md'), 'utf8');
-  ok(cm.ok && cmMd === cmCommitted, '课程管理需求文档与仓库已提交的版本一致（产物未过期）');
+  const stripBuildDate = (s) => s.replace(/构建检查通过（\d{4}-\d{2}-\d{2}）/g, '构建检查通过（日期忽略）');
+  ok(cm.ok && stripBuildDate(cmMd) === stripBuildDate(cmCommitted), '课程管理需求文档与仓库已提交的版本一致（产物未过期，已忽略构建日期戳）');
   /* 分页说明：每页 10 条，少于 10 条写“不足”；搜索计数是原型限制，单独成句 */
   ok(cm.ok && cmMd.includes('课程不足 10 条时只显示“共 N 条”') && !cmMd.includes('不超过 10 条') && cmMd.includes('原型只展示第 1 页，搜索时计数不变'), '课程管理分页说明写作“不足 10 条”，原型限制单独成句');
   /* 浏览器：列表按 gaodeng-pc 表格取值渲染；超过 10 条时只渲染第 1 页的 10 行，与分页文字一致 */
