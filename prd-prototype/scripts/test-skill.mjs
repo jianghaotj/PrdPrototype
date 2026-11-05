@@ -1055,6 +1055,14 @@ console.log('\n12. 原型阶段');
   const scopeMoves = (sb2.report.warns || []).filter((w) => w.code === 'SCOPE_ADDED' || w.code === 'SCOPE_REMOVED').length;
   ok(!!sb2.report.scope && scopeMoves === 0, 'T17 去掉 stage 后：SCOPE_ADDED / SCOPE_REMOVED 都为 0（构建仍因需求缺项失败，此处只看范围对比）', JSON.stringify(sb2.report.scope));
 
+  /* T28a：原型阶段托管引用 CDN 脚本但未写 online → HOST_NET，不出交付 */
+  {
+    const CDN_JS_NEG = '<script src="https://cdn.example.com/lib.js"></script>\n</head>';
+    const noOnDirP = variant(HOSTFX, [['existing/crm.html', '</head>', CDN_JS_NEG], PROTO_EDIT]);
+    const noOnP = await build(noOnDirP, {});
+    ok(!noOnP.ok && hasCode(noOnP, 'HOST_NET') && !deliverable(noOnDirP, '客户管理-原型.html'), 'T28a 原型阶段托管引用 CDN 未写 online：报 HOST_NET，不出交付', noOnP.ok ? '构建竟然通过了' : JSON.stringify(codes(noOnP).slice(0, 3)));
+  }
+
   /* T28：托管原型阶段放行网络（与 2b 节 dirOn 相同的两处替换）：构建通过，标记需联网 */
   const CDN_JS_P = '<script src="https://cdn.example.com/lib.js"></script>\n</head>';
   const CDN_CSS_P = '<link rel="stylesheet" href="https://cdn.example.com/x.css">\n</head>';
@@ -1161,6 +1169,12 @@ console.log('\n12. 原型阶段');
         const badge29 = await pg.evaluate(`(document.querySelector('.audit-badge') || {}).textContent || ''`);
         ok(badge29 === '原型阶段 · 检查通过 · 需联网', 'T29 托管原型阶段放行网络：检查标识为“原型阶段 · 检查通过 · 需联网”', badge29);
       } else ok(false, 'T29 托管原型阶段放行网络：构建失败，无法检查徽标');
+    } else {
+      ok(false, 'T23 托管原型阶段：构建失败，无法测打开首页与隐藏圆点');
+      ok(false, 'T24 托管原型阶段未放行网络：构建失败，无法检查徽标');
+      ok(false, 'T25 托管原型阶段：构建失败，无法测虚线框');
+      ok(false, 'T26 托管原型阶段：构建失败，无法测按 N 显示虚线框');
+      ok(false, 'T27 托管原型阶段：构建失败，无法测重新加载不记住偏好');
     }
   } finally {
     await bc.close();
@@ -1422,6 +1436,271 @@ console.log('\n14. 导出给开发测试');
   try { await build(variant(EXAMPLE, []), { draft: true, csv: true }); } catch (e) { draftErr = e; }
   ok(draftErr && /--draft/.test(draftErr.message), '--draft 与 --csv 同用时报错，不静默忽略');
 }
+
+/* ---------- 15. 按角色看原型 ---------- */
+console.log('\n15. 按角色看原型');
+{
+  const COURSE = path.join(SKILL, 'examples', 'course-mgmt');
+  const PROTO_15 = [PROD, 'W.product({', "W.product({\n  stage: 'prototype',"];
+  ok(/roles:\s*\[\s*'admin'\s*\]/.test(fs.readFileSync(path.join(COURSE, 'prd', 'pages', 'P01-courses.js'), 'utf8')),
+    '15-1 课程管理 create-entry 功能点有 roles: ["admin"]');
+
+  const roleDir = path.join(TMP, 'role-test');
+  fs.mkdirSync(path.join(roleDir, 'prd', 'pages'), { recursive: true });
+  const roleProd = path.join(roleDir, 'prd', 'product.js');
+  const rolePage = path.join(roleDir, 'prd', 'pages', 'P01.js');
+  const writeRole = (prodBody, rolesLiteral) => {
+    fs.writeFileSync(roleProd, prodBody);
+    fs.writeFileSync(rolePage, `W.page({
+  id: 'P01', end: 'pc', title: '测试', goal: '验证功能点按角色过滤',
+  states: [{ id: 's1', label: '默认', when: '打开本页时显示列表区域' }],
+  fns: [
+    { id: 'f1', name: '功能点 1', desc: '仅管理员可见：点击后打开管理操作区，系统按管理员权限展示入口。', src: '测试', roles: ${rolesLiteral} },
+    { id: 'f2', name: '功能点 2', desc: '所有人可见：点击后查看公开信息，系统展示不限角色的内容。', src: '测试' }
+  ],
+  render: function (c) {
+    return '<div style="padding:24px"><div data-fn="f1"><button class="btn">管理员</button></div><div data-fn="f2"><button class="btn">所有人</button></div></div>';
+  }
+});
+`);
+  };
+
+  writeRole(`W.product({
+  id: 'test-role', name: '角色测试', date: '2026-11-05',
+  releases: [{ id: 'V1.0', date: '2026-11-05', summary: '首版' }],
+  background: '用来验证功能点 roles 引用必须落在 product.roles 里，否则构建失败。',
+  scope: { out: ['不做其他端'] },
+  roles: [{ id: 'admin', name: '管理员' }],
+  ends: [{ id: 'pc', name: 'PC', device: 'pc', home: 'P01' }]
+});
+`, "['non-existent-role']");
+  const badBuild = await build(roleDir, {});
+  ok(!badBuild.ok && hasCode(badBuild, 'ROLE_ID'), '15-2 功能点 roles 引用不存在的角色：构建报 ROLE_ID 错误',
+    badBuild.ok ? '构建意外成功' : JSON.stringify(codes(badBuild).slice(0, 3)));
+
+  writeRole(`W.product({
+  id: 'test-role', name: '角色测试', date: '2026-11-05',
+  releases: [{ id: 'V1.0', date: '2026-11-05', summary: '首版' }],
+  background: '用来验证 product.roles 为空时功能点不能写 roles。',
+  scope: { out: ['不做其他端'] },
+  roles: [],
+  ends: [{ id: 'pc', name: 'PC', device: 'pc', home: 'P01' }]
+});
+`, "['admin']");
+  const noRolesRes = await build(roleDir, {});
+  ok(!noRolesRes.ok && hasCode(noRolesRes, 'ROLE_ID'), '15-3 product.roles 为空时功能点写 roles：报 ROLE_ID',
+    noRolesRes.ok ? '构建意外成功' : JSON.stringify(codes(noRolesRes).slice(0, 3)));
+
+  writeRole(`W.product({
+  id: 'test-role', name: '角色测试', date: '2026-11-05',
+  releases: [{ id: 'V1.0', date: '2026-11-05', summary: '首版' }],
+  background: '用来验证合法的功能点 roles 能通过构建检查。',
+  scope: { out: ['不做其他端'] },
+  roles: [{ id: 'admin', name: '管理员' }, { id: 'secretary', name: '秘书' }],
+  ends: [{ id: 'pc', name: 'PC', device: 'pc', home: 'P01' }]
+});
+`, "['admin']");
+  const goodBuild = await build(roleDir, {});
+  ok(goodBuild.ok, '15-4 合法的 roles（包含在 product.roles 中）：构建通过',
+    goodBuild.ok ? '' : JSON.stringify(goodBuild.report.errors.slice(0, 3)));
+
+  const cmDir = variant(COURSE, []);
+  const courseBuild = await build(cmDir, {});
+  ok(courseBuild.ok, '课程管理构建通过（角色交互前置）', courseBuild.ok ? '' : JSON.stringify((courseBuild.report.errors || []).slice(0, 2)));
+
+  if (courseBuild.ok && courseBuild.file) {
+    const bc = await launch();
+    try {
+      const pg = await bc.newPage({ width: 1600, height: 1000 });
+      const open = async (file, hash) => {
+        await pg.goto('about:blank');
+        await pg.goto(fileUrl(file) + (hash || ''));
+        await pg.waitFor('window.__PRD_READY === true', 20000);
+        await sleep(400);
+      };
+      const visibleCreate = `Array.from(document.querySelectorAll('[data-fn="create-entry"]')).some(function (el) { var st = window.getComputedStyle(el); return st.display !== 'none' && el.offsetHeight > 0; })`;
+      const hiddenCreate = `Array.from(document.querySelectorAll('[data-fn="create-entry"]')).every(function (el) { return window.getComputedStyle(el).display === 'none' || el.offsetHeight === 0; })`;
+
+      await open(courseBuild.file, '#/p/P01/list');
+      ok(await pg.evaluate(`document.getElementById('role-sel') !== null`), '15-5 顶栏有角色下拉');
+      ok(await pg.evaluate(visibleCreate), '15-5 默认（全部角色）create-entry 可见');
+
+      await pg.evaluate(`W.setRole('secretary')`);
+      await sleep(400);
+      ok(await pg.evaluate(`(document.getElementById('role-sel') || {}).value === 'secretary'`), '15-5 秘书角色下角色下拉显示秘书');
+      ok(await pg.evaluate(hiddenCreate), '15-5 秘书角色下 create-entry 隐藏');
+      ok(await pg.evaluate(`(function () { var c = document.querySelector('#right .fc[data-fn="create-entry"]'); return !c || window.getComputedStyle(c).display === 'none'; })()`),
+        '15-5 秘书角色下 create-entry 需求卡片隐藏');
+      ok(await pg.evaluate(`!Array.from(document.querySelectorAll('#dots .fdot')).some(function (d) { return d.title === '新建课程入口'; })`),
+        '15-5 秘书角色下 create-entry 圆点不显示');
+
+      await pg.evaluate(`W.setRole('all')`);
+      await sleep(400);
+      ok(await pg.evaluate(visibleCreate), '15-5 切回全部角色 create-entry 恢复可见');
+      await pg.evaluate(`W.setRole('admin')`);
+      await sleep(400);
+      ok(await pg.evaluate(visibleCreate), '15-5 管理员角色下 create-entry 可见');
+
+      /* 真实下拉：只派发 change，不点 click */
+      await pg.evaluate(`W.setRole('all')`);
+      await sleep(200);
+      await pg.evaluate(`(function () {
+        var sel = document.getElementById('role-sel');
+        sel.value = 'secretary';
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      })()`);
+      await sleep(400);
+      ok(await pg.evaluate(`(document.getElementById('role-sel') || {}).value === 'secretary'`), '15-5b change 后下拉显示秘书');
+      ok(await pg.evaluate(hiddenCreate), '15-5b change 后 create-entry 隐藏');
+      ok(await pg.evaluate(`(function () { var c = document.querySelector('#right .fc[data-fn="create-entry"]'); return !c || window.getComputedStyle(c).display === 'none'; })()`),
+        '15-5b change 后 create-entry 需求卡片隐藏');
+
+      const protoBuild = await build(variant(COURSE, [PROTO_15]), {});
+      if (protoBuild.ok && protoBuild.file) {
+        await open(protoBuild.file, '#/p/P01/list');
+        ok(await pg.evaluate(`document.getElementById('role-sel') !== null`), '15-6 原型阶段也有角色下拉');
+        await pg.evaluate(`W.setRole('secretary')`);
+        await sleep(400);
+        ok(await pg.evaluate(hiddenCreate), '15-6 原型阶段秘书角色下 create-entry 隐藏');
+        ok(await pg.evaluate(`!Array.from(document.querySelectorAll('#dots .fdot')).some(function (d) { return d.title === '新建课程入口'; })`),
+          '15-6 原型阶段秘书角色下 create-entry 圆点不显示');
+        await pg.evaluate(`W.setRole('all')`);
+        await sleep(400);
+        ok(await pg.evaluate(visibleCreate), '15-6 原型阶段切回全部角色 create-entry 恢复可见');
+      } else {
+        ok(false, '15-6 原型阶段版本构建失败', JSON.stringify((protoBuild.report && protoBuild.report.errors || []).slice(0, 2)));
+        ok(false, '15-6 原型阶段秘书角色下 create-entry 圆点不显示');
+        ok(false, '15-6 原型阶段切回全部角色 create-entry 恢复可见');
+      }
+
+      await open(courseBuild.file, '#/p/P01/list');
+      await pg.evaluate(`W.setRole('secretary')`);
+      await sleep(200);
+      await open(courseBuild.file, '#/p/P01/list');
+      const selectedRoleAfterReload = await pg.evaluate(`(document.getElementById('role-sel') || {}).value || ''`);
+      ok(selectedRoleAfterReload === 'secretary', '15-7 刷新后选中的角色记住（localStorage）',
+        selectedRoleAfterReload === 'secretary' ? '' : '期望 secretary，实际 ' + selectedRoleAfterReload);
+      ok(await pg.evaluate(hiddenCreate), '15-7 刷新后 create-entry 仍然隐藏');
+      ok(await pg.evaluate(`(function () { var c = document.querySelector('#right .fc[data-fn="create-entry"]'); return !c || window.getComputedStyle(c).display === 'none'; })()`),
+        '15-7 刷新后 create-entry 需求卡片仍然隐藏');
+
+      /* 托管：create 仅 leader 可见；切到 sales 后按 sel 隐藏 #btn-new */
+      const hostDir = variant(HOSTFX, [
+        ['prd/pages/C01-customers.js', "id: 'create', name: '新建客户入口', sel: '#btn-new',", "id: 'create', name: '新建客户入口', sel: '#btn-new', roles: ['leader'],"]
+      ]);
+      const hostBuild = await build(hostDir, {});
+      if (hostBuild.ok && hostBuild.file) {
+        await open(hostBuild.file, '#/p/C01/list');
+        ok(await pg.evaluate(`document.getElementById('role-sel') !== null`), '15-8 托管模式顶栏有角色下拉');
+        await pg.evaluate(`W.setRole('all')`);
+        await sleep(300);
+        const hostVisible = await pg.evaluate(`(function () { var f = document.getElementById('hostf'); var d = f && f.contentDocument; var el = d && d.querySelector('#btn-new'); if (!el) return false; var st = d.defaultView.getComputedStyle(el); return st.display !== 'none' && el.offsetHeight > 0; })()`);
+        ok(hostVisible, '15-8 托管全部角色下 #btn-new 可见');
+        await pg.evaluate(`W.setRole('sales')`);
+        await sleep(400);
+        const hostHidden = await pg.evaluate(`(function () { var f = document.getElementById('hostf'); var d = f && f.contentDocument; var el = d && d.querySelector('#btn-new'); if (!el) return false; var st = d.defaultView.getComputedStyle(el); return st.display === 'none' || el.offsetHeight === 0; })()`);
+        ok(hostHidden, '15-8 托管销售角色下 #btn-new（sel）隐藏');
+      } else {
+        ok(false, '15-8 托管模式构建失败', JSON.stringify((hostBuild.report && hostBuild.report.errors || []).slice(0, 2)));
+        ok(false, '15-8 托管全部角色下 #btn-new 可见');
+        ok(false, '15-8 托管销售角色下 #btn-new（sel）隐藏');
+      }
+
+      /* 15-9：全部角色下不得清掉作者写的内联 display（托管弹窗 / 原生 data-fn） */
+      const hostInlineDir = variant(HOSTFX, [
+        ['prd/pages/C01-customers.js', "id: 'create', name: '新建客户入口', sel: '#btn-new',", "id: 'create', name: '新建客户入口', sel: '#btn-new', roles: ['leader'],"],
+        ['prd/pages/C01-customers.js', "sel: '#modal-new .modal',", "sel: '#modal-new',"],
+        ['existing/app.js',
+          "function openModal() { document.getElementById('modal-new').classList.add('show'); }",
+          "function openModal() { document.getElementById('modal-new').style.display = 'flex'; }"],
+        ['existing/app.js',
+          "function closeModal() { document.getElementById('modal-new').classList.remove('show'); }",
+          "function closeModal() { document.getElementById('modal-new').style.display = ''; }"]
+      ]);
+      const hostInlineBuild = await build(hostInlineDir, {});
+      if (hostInlineBuild.ok && hostInlineBuild.file) {
+        await open(hostInlineBuild.file, '#/p/C01/list');
+        await pg.evaluate(`W.setRole('all')`);
+        await sleep(300);
+        await pg.evaluate(`document.getElementById('hostf').contentDocument.getElementById('btn-new').click()`);
+        await sleep(1000);
+        const modalDisp = await pg.evaluate(`(function () {
+          var d = document.getElementById('hostf').contentDocument;
+          var e = d.getElementById('modal-new');
+          return { inline: e.style.display, computed: d.defaultView.getComputedStyle(e).display, hash: location.hash };
+        })()`);
+        ok(modalDisp.inline === 'flex' && modalDisp.computed === 'flex',
+          '15-9 托管全部角色下内联 display:flex 弹窗保持打开', JSON.stringify(modalDisp));
+      } else {
+        ok(false, '15-9 托管内联 display 夹具构建失败', JSON.stringify((hostInlineBuild.report && hostInlineBuild.report.errors || []).slice(0, 2)));
+      }
+
+      /* 原生探针：带内联 display:flex 的 data-fn，验证全部角色不清除、隐藏时备份 */
+      const probeDir = path.join(TMP, 'role-inline-probe');
+      fs.mkdirSync(path.join(probeDir, 'prd', 'pages'), { recursive: true });
+      fs.writeFileSync(path.join(probeDir, 'prd', 'product.js'), `W.product({
+  id: 'role-inline', name: '内联显示探针', date: '2026-11-05',
+  releases: [{ id: 'V1.0', date: '2026-11-05', summary: '首版' }],
+  background: '验证全部角色下 applyRoleFilter 不清除作者写的内联 display。',
+  scope: { out: ['不做其他端'] },
+  roles: [{ id: 'admin', name: '管理员' }, { id: 'secretary', name: '秘书' }],
+  ends: [{ id: 'pc', name: 'PC', device: 'pc', home: 'P01' }]
+});
+`);
+      fs.writeFileSync(path.join(probeDir, 'prd', 'pages', 'P01.js'), `W.page({
+  id: 'P01', end: 'pc', title: '探针', goal: '内联 display 不被清空',
+  states: [{ id: 's1', label: '默认', when: '打开本页时显示探针区域' }],
+  fns: [
+    { id: 'box', name: '探针块', desc: '作者写了 display:flex 的区域，全部角色下应保持 flex。', src: '测试', roles: ['admin'] }
+  ],
+  render: function (c) {
+    return '<div style="padding:24px"><div data-fn="box" style="display:flex;gap:8px"><button class="btn">管理员区</button></div></div>';
+  }
+});
+`);
+      const probeBuild = await build(probeDir, {});
+      if (probeBuild.ok && probeBuild.file) {
+        await open(probeBuild.file, '#/p/P01/s1');
+        await pg.evaluate(`W.setRole('all')`);
+        await sleep(400);
+        const probeAll = await pg.evaluate(`(function () {
+          var el = document.querySelector('#ab [data-fn="box"]');
+          if (!el) return { ok: false };
+          return { ok: true, inline: el.style.display, computed: getComputedStyle(el).display };
+        })()`);
+        ok(probeAll.ok && probeAll.inline === 'flex' && probeAll.computed === 'flex',
+          '15-9 原生全部角色下内联 display:flex 保持原样', JSON.stringify(probeAll));
+        await pg.evaluate(`W.setRole('secretary')`);
+        await sleep(400);
+        const probeSec = await pg.evaluate(`(function () {
+          var el = document.querySelector('#ab [data-fn="box"]');
+          if (!el) return { ok: false };
+          return { ok: true, inline: el.style.display, computed: getComputedStyle(el).display, backup: el.getAttribute('data-display-backup') };
+        })()`);
+        ok(probeSec.ok && probeSec.computed === 'none' && probeSec.backup === 'flex',
+          '15-9 原生秘书角色下隐藏并备份原 display', JSON.stringify(probeSec));
+        await pg.evaluate(`W.setRole('all')`);
+        await sleep(400);
+        const probeBack = await pg.evaluate(`(function () {
+          var el = document.querySelector('#ab [data-fn="box"]');
+          if (!el) return { ok: false };
+          return { ok: true, inline: el.style.display, computed: getComputedStyle(el).display, backup: el.getAttribute('data-display-backup') };
+        })()`);
+        ok(probeBack.ok && probeBack.inline === 'flex' && probeBack.computed === 'flex' && !probeBack.backup,
+          '15-9 原生切回全部角色后恢复备份的 flex', JSON.stringify(probeBack));
+      } else {
+        ok(false, '15-9 原生内联 display 探针构建失败', JSON.stringify((probeBuild.report && probeBuild.report.errors || []).slice(0, 2)));
+        ok(false, '15-9 原生秘书角色下隐藏并备份原 display');
+        ok(false, '15-9 原生切回全部角色后恢复备份的 flex');
+      }
+    } finally {
+      await bc.close();
+    }
+  } else {
+    ok(false, '15-5~15-9 课程管理构建失败，无法测试浏览器交互', JSON.stringify((courseBuild.report && courseBuild.report.errors || []).slice(0, 2)));
+  }
+}
+
 
 console.log('\n结果：' + pass + ' 通过，' + failN + ' 失败');
 if (failN) console.log('失败项：\n  - ' + fails.join('\n  - '));

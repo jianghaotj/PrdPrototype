@@ -26,6 +26,8 @@ body.no-l.no-r #app{grid-template-columns:0 minmax(0,1fr) 0}
 .vbtn.chg.on{border-color:var(--v-chg);color:var(--v-chg);background:var(--v-chgw)}
 kbd{font:11px/1 ui-monospace,Menlo,monospace;border:1px solid var(--v-line);border-bottom-width:2px;border-radius:3px;padding:2px 4px;color:var(--v-ink3);background:#fff}
 .vbtn.on kbd{border-color:#b9c8f5;color:var(--v-acc)}
+.role-sel{height:30px;padding:0 8px;border:1px solid var(--v-line);background:#fff;border-radius:6px;font:13px/1 inherit;font-family:inherit;color:var(--v-ink2);cursor:pointer}
+.role-sel:hover{border-color:#c5cad1;color:var(--v-ink)}
 .audit-badge{font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--v-line);color:var(--v-ink2);cursor:pointer;white-space:nowrap;text-decoration:none}
 .audit-badge.ok{border-color:#bfe3cf;color:var(--v-ok);background:var(--v-okw)}
 .audit-badge.bad{border-color:#f3c3be;color:var(--v-err);background:var(--v-errw)}

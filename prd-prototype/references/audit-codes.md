@@ -39,13 +39,14 @@
 | `JS` | 浏览器运行时报错 | 打开 failed 文件看控制台 |
 | `BOOT` | 注册阶段出错：页面 ID 重复、end 未声明 | 按提示修改 |
 | `HOST` | 托管配置错误：找不到原型、`ignore` 没写原因 | 按提示修改 |
-| `HOST_SEL` | 托管页面的功能点没有 `sel` | 补 `sel`，或在原型副本上加 `data-fn` |
+| `HOST_SEL` | 托管页面的功能点没有 `sel` | 给功能点补上 `sel`（CSS 选择器），绑定到原型里的对应元素 |
 | `HOST_ENTER` | 进入步骤执行失败，或执行后 `match` 不成立 | 用 `probe-host.mjs --steps` 复现并修正 |
 | `IMG_SRC` | 需求文字里的图片引用了本地路径或网址 | 改成 `data:image/...;base64,` 内嵌 |
 | `TEXT` | 需求文字里有乱码，或 TODO、待补充、此处填写等占位 | 写真实内容；确实未定的写“… [待确认]” |
 | `SINGLE_FILE` | 交付文件引用了外部或相对资源 | 把图片改成 data URI，去掉外链 |
 | `HOST_NET` | 托管原型引用了网络脚本或样式（静态扫描到，或断网检查时运行发出）。断网后原型会失效 | 改为本地文件；托管原型确需联网，在该端写 `online: true` 显式放行（只对托管端生效，原生端无效） |
 | `AC` | 功能点的 `ac` 格式不对：不是对象，或 `act` / `expect` 缺失或太短，或 `pre` 不是文字 | 写成 `ac: { pre: '…', act: '…', expect: '…' }`；`pre` 可省略 |
+| `ROLE_ID` | 功能点的 `roles` 引用了未声明的角色 ID；或 `product.roles` 为空却写了 `fn.roles` | 检查角色 ID 拼写，或在 `product.roles` 补上该角色定义 |
 | `SCOPE_FILE` | `prd/scope.json`（范围基线）不是合法 JSON，或 `pages` / `states` / `fns` 不是字符串数组 | 修正文件；不需要基线时删掉它 |
 
 ## 提醒

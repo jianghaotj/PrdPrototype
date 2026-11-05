@@ -105,6 +105,7 @@
         id: 'create-entry', name: '新建课程入口',
         desc: '点“新建课程”，在列表上方弹出新建弹窗，列表保持在背后，不离开页面。',
         status: 'assumed', statusNote: '按钮位置和文字是 AI 补充的',
+        roles: ['admin'],
         ac: { pre: '列表页已打开', act: '点击“新建课程”', expect: '弹出“新建课程”弹窗，四个必填项为空，列表仍在弹窗后面' }
       },
       {

@@ -114,7 +114,7 @@
     var KNOWN = {
       page: 'id end group title goal entry perm scenarios states fns rules todo render after acts changes match enter host',
       state: 'id label when layer set enter match changes',
-      fn: 'id name desc fields rules errors empty perm src status statusNote ui gap dot sel text changes ac',
+      fn: 'id name desc fields rules errors empty perm src status statusNote ui gap dot sel text changes ac roles',
       field: 'key name type required def options rule status statusNote changes',
       product: 'id name date fidelity version current releases background goals scope roles ends groups rules nfr dict flows sections todo demo scenarios clarify out demoNote outOfScope stage'
     };
@@ -169,6 +169,16 @@
         if (x.required != null && typeof x.required !== 'boolean') E('FIELD', fw + ' 的 required 只能写 true 或 false');
         checkChanges(x, fw);
       });
+      /* 角色权限：roles 如果有值，每个 ID 必须在 product.roles 中存在 */
+      if (f.roles) {
+        if (!Array.isArray(f.roles)) E('ROLE_ID', w + ' 的 roles 要写成数组，例如 ["admin"]');
+        else {
+          if (!P.roles || !P.roles.length) E('ROLE_ID', w + ' 写了 roles，但 product.roles 为空或未声明');
+          var roleIds = {};
+          (P.roles || []).forEach(function (r) { roleIds[r.id] = 1; });
+          f.roles.forEach(function (rid) { if (!roleIds[rid]) E('ROLE_ID', w + ' 的 roles 引用了不存在的角色 ID「' + rid + '」（已声明的角色：' + (P.roles || []).map(function (r) { return r.id; }).join(' / ') + '）'); });
+        }
+      }
       checkChanges(f, w);
       D.items(f.rules).forEach(function (r, i) { checkChanges(r, w + ' 规则 ' + (i + 1)); });
       D.items(f.errors).forEach(function (r, i) { checkChanges(r, w + ' 异常 ' + (i + 1)); });
@@ -203,7 +213,7 @@
       D.items(p.rules).forEach(function (r, i) { checkChanges(r, where + ' 页面规则 ' + (i + 1)); });
       checkChanges(p, where);
       if (W.host.isHosted(p)) {
-        p.fns.forEach(function (f) { if (!f.sel && f.ui !== false && !f.gap && !D.removed(f)) E('HOST_SEL', where + ' · 功能点「' + f.name + '」是托管页面，需要 sel（CSS 选择器）绑定原型元素，或在原型副本上加 data-fn="' + f.id + '"', where); });
+        p.fns.forEach(function (f) { if (!f.sel && f.ui !== false && !f.gap && !D.removed(f)) E('HOST_SEL', where + ' · 功能点「' + f.name + '」是托管页面，需要 sel（CSS 选择器）绑定原型元素', where); });
         if (!p.match && !p.states.some(function (s) { return s.match; })) Wn('HOST_MATCH', where + ' 没有 match，在原型里点击跳转到此页时，右侧需求面板无法自动切换');
       }
     });

@@ -4,7 +4,7 @@
   var W = window.W, h = W.h, D = W.doc, HOST = W.host;
   function $(s, r) { return (r || document).querySelector(s); }
   function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
-  var ui = { zoom: 'fit', last: {}, scale: 1, cur: null, sel: null, visible: {}, docKey: '', enterSeq: 0, hostEnd: null, unknown: false, proto: false, cmt: { scope: 'page', sel: null, page: null, draft: '', popDraft: '', pop: null } };
+  var ui = { zoom: 'fit', last: {}, scale: 1, cur: null, sel: null, visible: {}, docKey: '', enterSeq: 0, hostEnd: null, unknown: false, proto: false, cmt: { scope: 'page', sel: null, page: null, draft: '', popDraft: '', pop: null }, role: 'all' };
   var PREF;
   function pref(k, v) {
     try {
@@ -14,6 +14,14 @@
       localStorage.setItem(PREF, JSON.stringify(o));
     } catch (e) { return undefined; }
   }
+
+  /* 判断功能点是否属于角色 R：「全部角色」或未选时全可见；没有 roles / 空数组 / 含 R 时可见 */
+  function fnVisibleForRole(fn, role) {
+    if (!role || role === 'all') return true;
+    if (!fn.roles || !fn.roles.length) return true;
+    return fn.roles.indexOf(role) >= 0;
+  }
+  W.fnVisibleForRole = fnVisibleForRole;
 
   /* ---------- 启动整理 ---------- */
   function finalize() {
@@ -49,6 +57,11 @@
     PREF = 'prd-viewer:' + (P.id || P.name);
     /* 原型阶段：打开即原型，没有需求文档栏目、需求面板、需求按钮，圆点默认隐藏且不记住偏好 */
     ui.proto = P.stage === 'prototype';
+    /* 初始化角色偏好：记住上次选择的角色，没有则默认"全部角色" */
+    if (P.roles && P.roles.length) {
+      ui.role = pref('role') || 'all';
+      if (ui.role !== 'all' && !P.roles.some(function (r) { return r.id === ui.role; })) ui.role = 'all';
+    }
   }
   function protoHome() { return ui.last[W.P.ends[0].id]; }
 
@@ -153,6 +166,7 @@
     $('#top').innerHTML = '<a class="brand" data-tab="doc"><span class="brand-m">' + h.esc((P.name || '原')[0]) + '</span><span class="t">' + h.esc(P.name || '') + '</span><small>' + h.esc([D.cur(), P.date, P.fidelity || '低保真'].filter(Boolean).join(' · ')) + '</small></a>' +
       '<nav class="vtabs">' + tabs + '</nav>' +
       '<div class="vtools">' + badge +
+      (P.roles && P.roles.length ? '<select id="role-sel" class="role-sel"><option value="all">全部角色</option>' + P.roles.map(function (r) { return '<option value="' + h.esc(r.id) + '">' + h.esc(r.name) + '</option>'; }).join('') + '</select>' : '') +
       '<button class="vbtn" data-tool="hot" title="显示画板中所有可点击区域">热区 <kbd>H</kbd></button>' +
       '<button class="vbtn" data-tool="dots" title="显示或隐藏功能点标注圆点">标注 <kbd>N</kbd></button>' +
       '<button class="vbtn" data-tool="comments" title="查看、添加和导出评审意见">意见<span class="cmt-badge">' + cmtBadgeText() + '</span></button>' +
@@ -163,6 +177,10 @@
       (ui.proto ? '' : '<button class="vbtn" data-tool="right"><span class="lb">需求</span></button>') +
       (W.presets().length || Object.keys(W.P.demo || {}).length || P.ends.some(function (e) { return e.resetKeys; }) ? '<button class="vbtn" data-tool="reset" title="把演示数据恢复为默认"><span class="lb">重置演示数据</span></button>' : '') +
       '</div>';
+    if (P.roles && P.roles.length) {
+      var roleSel = $('#role-sel');
+      if (roleSel) roleSel.value = ui.role;
+    }
   }
   function setTab(tab) { $$('.vtabs a').forEach(function (a) { a.classList.toggle('on', a.dataset.tab === tab); }); }
   function syncTools() {
@@ -385,6 +403,7 @@
     var only = chgOn(), showShared = pref('sharedDots');
     res.list.forEach(function (x) {
       if (x.shared && !showShared) return;
+      if (!fnVisibleForRole(x.f, ui.role)) return;
       var c = D.chg(x.f);
       if (only && !c) return;
       var el = x.els[0];
@@ -432,8 +451,55 @@
   }
   var pdT;
   function placeDotsSoon() { clearTimeout(pdT); pdT = setTimeout(placeDots, 40); }
+  function applyRoleFilter() {
+    /* 只在产品声明了角色时按角色隐藏画板元素；恢复时只碰我们自己藏过的（有 data-display-backup） */
+    if (!ui.cur || !ui.cur.p) return;
+    var P = W.P;
+    if (!P.roles || !P.roles.length) return;
+    var p = ui.cur.p;
+    var isHosted = W.host.isHosted(p);
+    (p.fns || []).forEach(function (f) {
+      var visible = fnVisibleForRole(f, ui.role);
+      if (isHosted) {
+        if (!f.sel) return;
+        var frame = $('#hostf');
+        if (!frame || !frame.contentDocument) return;
+        Array.prototype.forEach.call(frame.contentDocument.querySelectorAll(f.sel), function (el) {
+          if (visible) {
+            if (el.hasAttribute('data-display-backup')) {
+              el.style.display = el.getAttribute('data-display-backup');
+              el.removeAttribute('data-display-backup');
+            }
+          } else {
+            if (!el.hasAttribute('data-display-backup')) {
+              el.setAttribute('data-display-backup', el.style.display);
+            }
+            el.style.display = 'none';
+          }
+        });
+      } else {
+        /* 原生：只动画板 #ab，不动需求卡片 */
+        var ab = $('#ab');
+        if (!ab) return;
+        $$('[data-fn="' + String(f.id).replace(/"/g, '') + '"]', ab).forEach(function (el) {
+          if (visible) {
+            if (el.hasAttribute('data-display-backup')) {
+              el.style.display = el.getAttribute('data-display-backup');
+              el.removeAttribute('data-display-backup');
+            }
+          } else {
+            if (!el.hasAttribute('data-display-backup')) {
+              el.setAttribute('data-display-backup', el.style.display);
+            }
+            el.style.display = 'none';
+          }
+        });
+      }
+    });
+  }
   function afterPaint() {
     placeDots();
+    applyRoleFilter();
     setTimeout(placeDots, 260);
     setTimeout(placeDots, 900);
     if (ui.sel) setTimeout(function () { selectFn(ui.sel, true); }, 60);
@@ -681,8 +747,9 @@
     var key = (shared ? 'S:' : '') + f.id;
     var st = D.status(f);
     var removed = D.removed(f);
+    var visible = fnVisibleForRole(f, ui.role);
     var n = shared ? D.letter(i) : i + 1;
-    return '<div class="fc' + (removed ? ' removed fold' : '') + '" data-fid="' + h.esc(key) + '"><div class="fc-h" data-fc="' + h.esc(key) + '"><span class="n' + (shared ? ' sh' : st !== 'confirmed' ? ' st-' + st : '') + '">' + n + '</span><b>' + h.esc(f.name) + '<span class="fid">' + h.esc(f.id) + '</span> ' + D.badgeHTML(f, D.multiRelease() ? D.cur() : '__none__') + (f.ui === false ? '<span class="bdg ui">无界面</span>' : '') + '</b>' + cmtBtnHTML(key) + '</div>' +
+    return '<div class="fc' + (removed ? ' removed fold' : !visible ? ' hidden-role' : '') + '" data-fid="' + h.esc(key) + '" data-fn="' + h.esc(f.id) + '" style="' + (!visible ? 'display:none' : '') + '"><div class="fc-h" data-fc="' + h.esc(key) + '"><span class="n' + (shared ? ' sh' : st !== 'confirmed' ? ' st-' + st : '') + '">' + n + '</span><b>' + h.esc(f.name) + '<span class="fid">' + h.esc(f.id) + '</span> ' + D.badgeHTML(f, D.multiRelease() ? D.cur() : '__none__') + (f.ui === false ? '<span class="bdg ui">无界面</span>' : '') + '</b>' + cmtBtnHTML(key) + '</div>' +
       '<div class="fc-b">' + D.fnBodyHTML(f, p, { states: states, ver: D.multiRelease() ? D.cur() : '__none__', showRemoved: chgOn() }) + '</div></div>';
   }
   function renderRight(p, st) {
@@ -960,6 +1027,14 @@
   }
 
   /* ---------- 事件 ---------- */
+  function setRole(roleId) {
+    ui.role = roleId;
+    pref('role', roleId);
+    var roleSel = $('#role-sel');
+    if (roleSel) roleSel.value = roleId;
+    render({ keepSel: true });
+  }
+  W.setRole = setRole;
   function onKey(e) {
     if (e.key === 'Escape' && (ui.cmt.pop || document.body.classList.contains('cmt-on'))) {
       if (ui.cmt.pop) cmtClosePop();
@@ -1100,6 +1175,7 @@
     var sl = e.target;
     if (sl.matches && sl.matches('select[data-pick]')) sl.classList.toggle('e', !sl.value);
     if (sl.id === 'cmt-author') W.comments.setAuthor(sl.value);
+    if (sl.id === 'role-sel') setRole(sl.value);
   });
   /* 意见草稿实时保存在内存里，面板重绘时不丢字 */
   document.addEventListener('input', function (e) {
