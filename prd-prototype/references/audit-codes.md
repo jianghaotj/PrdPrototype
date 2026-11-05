@@ -95,7 +95,7 @@
 | `PAGE` | 页面缺 `goal`（缺 `title` 仍报错） |
 | `STATE_WHEN` | 页面状态缺 `when` |
 
-以下仍是错误，原型阶段不放宽：`UNREGISTERED`（原型里的可点元素没登记）、`FN_UNUSED`（登记了功能点但原型里没画）、`TEXT`（含“待补充”“TODO”占位）、`PRODUCT` 的 `name`、`id`、`ends`、`releases`，`stage` 写成其他值、`FIELD_REQ`、`FN_SRC` 的 `status` 取值错误，以及表里其他代码。`SCOPE_ADDED` 和 `SCOPE_REMOVED` 在两种模式下都只是提醒。
+以下仍是错误，原型阶段不放宽：`UNREGISTERED`（原型里的可点元素没登记）、`FN_UNUSED`（登记了功能点但原型里没画）、`HOST_SEL`（托管页面的功能点没有 `sel`）、`HOST`（托管配置错误，包括 `ignore` 没写原因）、`TEXT`（含“待补充”“TODO”占位）、`PRODUCT` 的 `name`、`id`、`ends`、`releases`，`stage` 写成其他值、`FIELD_REQ`、`FN_SRC` 的 `status` 取值错误，以及表里其他代码。`SCOPE_ADDED` 和 `SCOPE_REMOVED` 在两种模式下都只是提醒。
 
 原型阶段仍会打印 `AC_MISSING` 提醒，以及待确认与 AI 假设的数量。这些是正常输出，不是隐藏起来的内容。
 

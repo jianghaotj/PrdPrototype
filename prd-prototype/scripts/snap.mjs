@@ -65,7 +65,7 @@ try {
     console.log(v + ' → ' + file);
     /* 圆点数来自 DOM，圆点层被隐藏时仍会计数，所以这里单独标注“已隐藏” */
     const dotsHidden = await page.evaluate('(function(){var d=document.getElementById("dots");return !!d&&getComputedStyle(d).display==="none"})()');
-    if (diag.view === 'page') console.log('  页面 ' + diag.page + ' / ' + diag.state + ' · 圆点 ' + diag.dots.length + (dotsHidden ? '（已隐藏）' : '') + ' · 当前可见功能点 ' + (diag.visibleFns.length - diag.sharedVisible) + (diag.sharedVisible ? '（另有公共组件 ' + diag.sharedVisible + ' 个，圆点默认隐藏）' : '') + (diag.ignoredMarks ? ' · 不纳入标记 ' + diag.ignoredMarks : '') + (diag.unknown ? ' · 当前画面未登记' : ''));
+    if (diag.view === 'page') console.log('  页面 ' + diag.page + ' / ' + diag.state + ' · 圆点 ' + diag.dots.length + (dotsHidden ? '（已隐藏）' : '') + ' · 当前可见功能点 ' + (diag.visibleFns.length - diag.sharedVisible) + (diag.sharedVisible ? '（另有公共组件 ' + diag.sharedVisible + ' 个，圆点默认隐藏）' : '') + (diag.ignoredMarks ? ' · 不纳入标记 ' + diag.ignoredMarks + (dotsHidden ? '（已隐藏）' : '') : '') + (diag.unknown ? ' · 当前画面未登记' : ''));
   }
   if (page.errors.length) { failed = true; console.log('\n控制台错误：'); page.errors.forEach((e) => console.log('  - ' + e)); }
 } finally {

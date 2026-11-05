@@ -222,7 +222,6 @@ export async function build(input, opts = {}) {
   if (opts.confirmedAt != null && !/^\d{4}-\d{2}-\d{2}$/.test(opts.confirmedAt)) throw new Error('--confirmed-at 的格式应为 YYYY-MM-DD');
   const proto = cfg.stage === 'prototype';
   if (proto && opts.md) throw new Error('原型阶段不导出需求文档（--md）。需求定了以后，先去掉 product.stage 再构建');
-  if (proto && (cfg.ends || []).some((e) => e.host)) throw new Error('原型阶段暂不支持“已有 HTML 补需求”（托管模式）。已有 HTML 想直接给人看，发原文件即可');
   const outName = opts.out || cfg.out || ((cfg.name || 'prototype') + (proto ? '-原型.html' : '-原型需求.html'));
   const outFile = path.resolve(project, outName);
   const tmpDir = path.join(project, '.prd-build');
@@ -353,7 +352,8 @@ export async function build(input, opts = {}) {
     if (!isNet(q)) return;
     if (q.type === 'Script' || q.type === 'Stylesheet') {
       const what = q.type === 'Script' ? '脚本 ' : '样式 ';
-      const hosted = /^prd-host-audit-(.+)$/.exec(q.frameName || '');
+      /* 检查 iframe（prd-host-audit-<端>）和查看器里的托管 iframe（prd-host-view-<端>）都能归到对应端 */
+      const hosted = /^prd-host-(?:audit|view)-(.+)$/.exec(q.frameName || '');
       const allowed = !!hosted && endOnline[hosted[1]] === true;
       const code = allowed ? 'ONLINE' : 'HOST_NET';
       if (netSeen.has(code + '|' + q.url)) return;

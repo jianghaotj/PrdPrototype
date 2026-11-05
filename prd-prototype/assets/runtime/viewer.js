@@ -141,7 +141,7 @@
     var tabs = (ui.proto ? '' : '<a data-tab="doc">需求文档</a>') + P.ends.map(function (e) { return '<a data-tab="' + h.esc(e.id) + '">' + h.esc(e.name) + '</a>'; }).join('') + ((P.flows || []).length ? '<a data-tab="flow">核心流程</a>' : '');
     var a = W.audit, badge = '';
     if (a && ui.proto) {
-      badge = '<span class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" style="cursor:default" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '原型阶段 · 检查通过' : '原型阶段 · 检查未通过') + '</span>';
+      badge = '<span class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" style="cursor:default" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '原型阶段 · 检查通过' : '原型阶段 · 检查未通过') + (a.needOnline ? ' · 需联网' : '') + '</span>';
     } else if (a) {
       var st0 = D.stats();
       var parts = [];
@@ -244,7 +244,7 @@
     var e = W.end(p.end);
     var frame = $('#hostf');
     if (!frame || ui.hostEnd !== e.id) {
-      $('#stage-in').innerHTML = '<div id="devwrap">' + devHTML(e, '<iframe id="hostf" sandbox="' + HOST.SANDBOX + '" title="' + h.esc(e.name) + '原型"></iframe>') + '</div><div class="cap">' + capHTML(p, st) + '</div>';
+      $('#stage-in').innerHTML = '<div id="devwrap">' + devHTML(e, '<iframe id="hostf" name="prd-host-view-' + h.esc(e.id) + '" sandbox="' + HOST.SANDBOX + '" title="' + h.esc(e.name) + '原型"></iframe>') + '</div><div class="cap">' + capHTML(p, st) + '</div>';
       ui.hostEnd = e.id;
       frame = $('#hostf');
       fit();

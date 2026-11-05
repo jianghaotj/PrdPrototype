@@ -1020,11 +1020,19 @@ console.log('\n12. 原型阶段');
   try { await build(t9dir, { md: true }); } catch (e) { t9err = e; }
   ok(t9err && /--md/.test(t9err.message) && !hasDeliverable(t9dir), 'T9 原型阶段带 --md：构建抛错，目录中没有新的 HTML 或需求文档 Markdown', t9err ? t9err.message : '没有抛错');
 
-  /* T10：原型阶段遇到托管端，直接报错 */
+  /* T10：托管端也能出原型阶段交付：构建通过，输出 客户管理-原型.html，不生成需求交付文件，带 prd-stage 标记 */
   const t10dir = variant(HOSTFX, [PROTO_EDIT]);
-  let t10err = null;
-  try { await build(t10dir, {}); } catch (e) { t10err = e; }
-  ok(t10err && /暂不支持/.test(t10err.message) && !hasDeliverable(t10dir), 'T10 原型阶段遇到托管端：构建抛错，提示暂不支持托管模式，不生成文件', t10err ? t10err.message : '没有抛错');
+  const t10 = await build(t10dir, {});
+  const t10html = t10.ok && deliverable(t10dir, '客户管理-原型.html') ? fs.readFileSync(path.join(t10dir, '客户管理-原型.html'), 'utf8') : '';
+  ok(t10.ok && deliverable(t10dir, '客户管理-原型.html') && !deliverable(t10dir, '客户管理-原型需求.html') && t10html.includes('<meta name="prd-stage" content="prototype">'), 'T10 原型阶段托管端：构建通过，输出 客户管理-原型.html，没有 客户管理-原型需求.html，带 prd-stage 标记', t10.ok ? '' : JSON.stringify(t10.report.errors.slice(0, 3)));
+
+  /* T21、T22：托管原型阶段的绑定仍然严格，不因原型阶段放宽 */
+  const t21dir = variant(HOSTFX, [PROTO_EDIT, ['prd/pages/C01-customers.js', "sel: '#btn-new',", '']]);
+  const t21 = await build(t21dir, {});
+  ok(!t21.ok && hasCode(t21, 'HOST_SEL') && !deliverable(t21dir, '客户管理-原型.html'), 'T21 原型阶段：功能点去掉 sel 后报 HOST_SEL，不出交付文件', JSON.stringify(codes(t21)));
+  const t22dir = variant(HOSTFX, [PROTO_EDIT, ['prd/product.js', "{ sel: '#btn-export', why: '原型多出的“导出 Excel”，本期不做' },\n        { sel: '.ai-fab', why: '原型多出的 AI 助手入口，本期不做' }", "{ sel: '#btn-export', why: '原型多出的“导出 Excel”，本期不做' }"]]);
+  const t22 = await build(t22dir, {});
+  ok(!t22.ok && hasCode(t22, 'UNREGISTERED') && !deliverable(t22dir, '客户管理-原型.html'), 'T22 原型阶段：ignore 里去掉 .ai-fab 后报 UNREGISTERED，不出交付文件', JSON.stringify(codes(t22)));
 
   /* T16：版本升级时归档上一版；已有的完整需求交付文件保持不变 */
   const vdir = variant(EXAMPLE, [PROTO_EDIT], { withOutput: true });
@@ -1046,6 +1054,19 @@ console.log('\n12. 原型阶段');
   const sb2 = await build(sdir, {});
   const scopeMoves = (sb2.report.warns || []).filter((w) => w.code === 'SCOPE_ADDED' || w.code === 'SCOPE_REMOVED').length;
   ok(!!sb2.report.scope && scopeMoves === 0, 'T17 去掉 stage 后：SCOPE_ADDED / SCOPE_REMOVED 都为 0（构建仍因需求缺项失败，此处只看范围对比）', JSON.stringify(sb2.report.scope));
+
+  /* T28：托管原型阶段放行网络（与 2b 节 dirOn 相同的两处替换）：构建通过，标记需联网 */
+  const CDN_JS_P = '<script src="https://cdn.example.com/lib.js"></script>\n</head>';
+  const CDN_CSS_P = '<link rel="stylesheet" href="https://cdn.example.com/x.css">\n</head>';
+  const onDirP = variant(HOSTFX, [
+    ['existing/crm.html', '</head>', CDN_JS_P.replace('</head>', CDN_CSS_P)],
+    ['prd/product.js', "host: '../existing/crm.html', width", "host: '../existing/crm.html', online: true, width"],
+    PROTO_EDIT
+  ]);
+  const onP = await build(onDirP, {});
+  ok(onP.ok && onP.report.needOnline === true && deliverable(onDirP, '客户管理-原型.html') && onP.report.warns.some((w) => w.code === 'ONLINE' && /lib\.js/.test(w.msg)), 'T28 原型阶段托管端写 online: true：构建通过，标记需联网，并列出网络脚本', onP.ok ? '' : JSON.stringify(onP.report.errors.slice(0, 2)));
+  const onFileP = onP.ok ? onP.file : null;
+  const hostPf = t10.ok ? t10.file : null;   /* 托管原型阶段的交付文件（没有网络放行） */
 
   /* T18、T11–T15、T19、T20：需要浏览器的部分。测前清空 localStorage，避免偏好互相污染 */
   const pf = t1a.ok ? t1a.file : null;     /* 请假审批加 stage 后的交付文件 */
@@ -1118,6 +1139,29 @@ console.log('\n12. 原型阶段');
     await open(exFile, '');
     const g2 = JSON.parse(await pg.evaluate(`JSON.stringify({ view: W.viewerDiag().view, hidden: document.body.classList.contains('no-dots') })`));
     ok(g1.view === 'doc' && !g1.hidden && g1.docTab === 1 && g2.view === 'doc' && g2.hidden, 'T19 默认模式不变：无 hash 进需求文档、圆点默认显示；按 N 隐藏后重新加载仍隐藏（偏好照旧记住）', JSON.stringify({ g1, g2 }));
+
+    /* T23–T27：托管原型阶段的浏览器表现。虚线框随圆点一起隐藏，按 N 显示，重新打开又隐藏且不记住 */
+    if (hostPf) {
+      await fresh(hostPf, '');
+      await pg.waitFor('document.querySelectorAll("#dots .xbox").length > 0', 8000).catch(() => {});
+      const h23 = JSON.parse(await pg.evaluate(`JSON.stringify({ view: W.viewerDiag().view, page: W.viewerDiag().page, home: W.P.ends[0].home, noDots: document.body.classList.contains('no-dots'), noR: document.body.classList.contains('no-r'), rightLen: document.getElementById('right').innerHTML.length, docTab: document.querySelectorAll('#top .vtabs a[data-tab="doc"]').length })`));
+      ok(h23.view === 'page' && h23.page === h23.home && h23.noDots && h23.noR && h23.rightLen === 0 && h23.docTab === 0, 'T23 托管原型阶段：打开即第一个端的首页（' + h23.home + '），圆点和虚线框隐藏，没有需求栏和需求文档标签', JSON.stringify(h23));
+      const badge24 = await pg.evaluate(`(document.querySelector('.audit-badge') || {}).textContent || ''`);
+      ok(badge24 === '原型阶段 · 检查通过', 'T24 托管原型阶段未放行网络：检查标识为“原型阶段 · 检查通过”，不带需联网', badge24);
+      const h25 = JSON.parse(await pg.evaluate(`JSON.stringify({ ignored: W.viewerDiag().ignoredMarks, hidden: getComputedStyle(document.getElementById('dots')).display === 'none' })`));
+      ok(h25.ignored >= 1 && h25.hidden, 'T25 托管原型阶段：“本期不做”虚线框已在 DOM 中（' + h25.ignored + ' 个），#dots 的 display 为 none', JSON.stringify(h25));
+      await pressN();
+      const h26 = JSON.parse(await pg.evaluate(`JSON.stringify({ disp: getComputedStyle(document.getElementById('dots')).display, visible: Array.from(document.querySelectorAll('#dots .xbox')).filter(function (x) { return x.offsetWidth > 0; }).length })`));
+      ok(h26.disp === 'block' && h26.visible >= 1, 'T26 托管原型阶段：按 N 后 #dots 显示为 block，至少 1 个虚线框可见（' + h26.visible + ' 个）', JSON.stringify(h26));
+      await open(hostPf, '');
+      const h27 = JSON.parse(await pg.evaluate(`JSON.stringify({ noDots: document.body.classList.contains('no-dots'), stored: Object.keys(localStorage).some(function (k) { return /noDots/.test(k + localStorage.getItem(k)); }) })`));
+      ok(h27.noDots && !h27.stored, 'T27 托管原型阶段：按 N 后重新加载又隐藏，localStorage 没有 noDots 偏好', JSON.stringify(h27));
+      if (onFileP) {
+        await fresh(onFileP, '');
+        const badge29 = await pg.evaluate(`(document.querySelector('.audit-badge') || {}).textContent || ''`);
+        ok(badge29 === '原型阶段 · 检查通过 · 需联网', 'T29 托管原型阶段放行网络：检查标识为“原型阶段 · 检查通过 · 需联网”', badge29);
+      } else ok(false, 'T29 托管原型阶段放行网络：构建失败，无法检查徽标');
+    }
   } finally {
     await bc.close();
   }

@@ -101,7 +101,7 @@ description: "一站式产出“交互原型 + 需求文档”的单 HTML：从�
 - 托管模式下不修改用户的原 HTML 文件。
 - 原型阶段（`stage: 'prototype'`）不是绕过检查的开关。完整需求项目不要写这一行。原型阶段只放宽需求说明类的提醒，原型本身的错误照样阻止交付。
 - 原型阶段不写的内容留空，不写“待补充”“TODO”（`TEXT` 会报错）。
-- 原型阶段暂不支持托管模式（已有 HTML 补需求）。`--md` 也不能用于原型阶段；两者都会直接报错，不生成文件。
+- 原型阶段也能用于托管模式（已有 HTML 补需求）。托管端仍要写 `sel` 绑定和 `ignore` 原因（`HOST_SEL`、`HOST`、`UNREGISTERED` 不放宽）；虚线框和圆点一起默认隐藏，按 `N` 显示，不记住；该端写 `online: true` 时，顶部标为“原型阶段 · 检查通过 · 需联网”。`--md` 不能用于原型阶段，会直接报错，不生成文件。
 
 ## 交付汇报
 
@@ -124,7 +124,7 @@ node scripts/new.mjs <项目目录> --name "产品名" --end pc:管理后台 --e
 node scripts/new.mjs <项目目录> --name "产品名" --end pc:管理后台 --theme gaodeng-pc   # 选用高教 PC 规范包
 node scripts/new.mjs <项目目录> --name "产品名" --host <已有原型.html>        # 托管模式
 node scripts/probe-host.mjs <已有原型.html> [--steps '[{"js":"showPage(\"x\")"}]'] [--boot '[...]'] [--shot a.png]
-# product.js 写 stage: 'prototype' 时为原型阶段：默认输出 <产品名>-原型.html，--md 和托管端都会报错
+# product.js 写 stage: 'prototype' 时为原型阶段：默认输出 <产品名>-原型.html（托管端也可用），--md 会报错
 node scripts/build.mjs <项目目录> [--md] [--out 文件名.html]                  # --md 同时导出需求文档 Markdown
 node scripts/build.mjs <项目目录> --scope-baseline [--confirmed-at 2026-11-04]  # 用户确认增删后：检查通过则刷新 prd/scope.json（新建时手写，见 spec-format.md）
 node scripts/snap.mjs <产物.html> [--view "#/p/P01/list"]... [--only] [--out 截图目录]   # 默认含需求文档和各端首页；原型阶段只含各端首页
