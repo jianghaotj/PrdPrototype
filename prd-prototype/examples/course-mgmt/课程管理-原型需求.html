@@ -35,6 +35,8 @@ body.no-l.no-r #app{grid-template-columns:0 minmax(0,1fr) 0}
 .vbtn.chg.on{border-color:var(--v-chg);color:var(--v-chg);background:var(--v-chgw)}
 kbd{font:11px/1 ui-monospace,Menlo,monospace;border:1px solid var(--v-line);border-bottom-width:2px;border-radius:3px;padding:2px 4px;color:var(--v-ink3);background:#fff}
 .vbtn.on kbd{border-color:#b9c8f5;color:var(--v-acc)}
+.role-sel{height:30px;padding:0 8px;border:1px solid var(--v-line);background:#fff;border-radius:6px;font:13px/1 inherit;font-family:inherit;color:var(--v-ink2);cursor:pointer}
+.role-sel:hover{border-color:#c5cad1;color:var(--v-ink)}
 .audit-badge{font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--v-line);color:var(--v-ink2);cursor:pointer;white-space:nowrap;text-decoration:none}
 .audit-badge.ok{border-color:#bfe3cf;color:var(--v-ok);background:var(--v-okw)}
 .audit-badge.bad{border-color:#f3c3be;color:var(--v-err);background:var(--v-errw)}
@@ -244,6 +246,48 @@ body.flow-on #flowbar{display:flex}
 .boot-err h2{margin:0 0 8px;font-size:18px}
 .boot-err li{margin:4px 0}
 
+/* 评审意见：顶栏角标、卡片按钮、右侧抽屉与功能点浮层 */
+.cmt-badge{display:inline-block;min-width:16px;height:16px;line-height:16px;margin-left:5px;padding:0 4px;border-radius:8px;background:var(--v-chg);color:#fff;font-size:11px;text-align:center}
+.cmt-badge:empty{display:none}
+.cmt-btn{margin-left:auto;flex:none;height:22px;padding:0 7px;border:1px solid var(--v-line);border-radius:5px;background:#fff;color:var(--v-ink3);font-family:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
+.cmt-btn:hover,.cmt-btn.has{border-color:var(--v-chg);color:var(--v-chg)}
+.cmt-panel,.cmt-pop{position:fixed;display:none;flex-direction:column;background:#fff;color:var(--v-ink);font-size:13px;border:1px solid var(--v-line);box-shadow:0 10px 36px rgba(0,0,0,.16)}
+.cmt-panel{top:52px;right:0;bottom:0;width:360px;max-width:100vw;z-index:40;border-width:0 0 0 1px}
+body.cmt-on .cmt-panel{display:flex}
+.cmt-pop{width:332px;max-height:70vh;z-index:41;border-radius:10px}
+.cmt-pop.open{display:flex}
+.cmt-h{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--v-line)}
+.cmt-h b{font-size:14px;font-weight:600}
+.cmt-h>span{font-size:12px;color:var(--v-ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmt-x{margin-left:auto;border:0;background:none;font-size:18px;line-height:1;color:var(--v-ink3);cursor:pointer}
+.cmt-tools{display:flex;gap:8px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--v-line);font-size:12px;color:var(--v-ink3)}
+.cmt-inp{width:110px;height:26px;border:1px solid var(--v-line);border-radius:5px;padding:0 6px;font-family:inherit;font-size:12.5px}
+.cmt-compose{padding:10px 14px;border-bottom:1px solid var(--v-line)}
+.cmt-to{font-size:12px;color:var(--v-ink3);margin-bottom:6px}
+.cmt-to b{color:var(--v-ink2);font-weight:600}
+.cmt-to a{margin-left:6px;color:var(--v-acc);cursor:pointer}
+.cmt-ta{display:block;width:100%;box-sizing:border-box;border:1px solid var(--v-line);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:13px;resize:vertical}
+.cmt-row{display:flex;align-items:center;gap:8px;margin-top:6px}
+.cmt-err{margin-right:auto;font-size:12px;color:var(--v-err)}
+.cmt-act{height:28px;padding:0 10px;border:1px solid var(--v-line);border-radius:6px;background:#fff;color:var(--v-ink2);font-family:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap}
+.cmt-act:hover{border-color:#c5cad1;color:var(--v-ink)}
+.cmt-act.pri{background:var(--v-acc);border-color:var(--v-acc);color:#fff}
+.cmt-act.on{border-color:var(--v-acc);color:var(--v-acc);background:var(--v-accw)}
+.cmt-act.sm{height:22px;padding:0 6px;font-size:12px}
+.cmt-body{flex:1;min-height:60px;overflow:auto;padding:10px 14px}
+.cmt-g{margin-bottom:12px}
+.cmt-g h4{margin:0 0 4px;font-size:12px;font-weight:500;color:var(--v-ink3);line-height:1.5}
+.cmt-g.on h4{color:var(--v-acc)}
+.cmt-item{border:1px solid var(--v-line);border-radius:8px;padding:7px 10px;margin-bottom:6px;line-height:1.6}
+.cmt-m{display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--v-ink3)}
+.cmt-m b{font-weight:600;color:var(--v-ink2)}
+.cmt-m .cmt-act{margin-left:auto}
+.cmt-t{white-space:pre-line;color:var(--v-ink)}
+.cmt-empty{margin:6px 0;font-size:12.5px;color:var(--v-ink3)}
+.cmt-foot{display:flex;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--v-line);font-size:11.5px;color:var(--v-ink3)}
+.cmt-foot .cmt-act{margin-left:auto}
+.cmt-pop .cmt-body{max-height:40vh}
+
 /* 窄屏 */
 @media (max-width:1100px){
   #app{grid-template-columns:0 minmax(0,1fr) 0!important}
@@ -270,7 +314,7 @@ body.flow-on #flowbar{display:flex}
 @media print{
   body{overflow:visible;background:#fff}
   #app{display:block;height:auto}
-  #top,#left,#right,#flowbar,.doc-bar{display:none!important}
+  #top,#left,#right,#flowbar,.doc-bar,.cmt-panel,.cmt-pop{display:none!important}
   #stage{position:static;overflow:visible}
   #stage-in{padding:0}
   .doc{border:0;width:100%;padding:0;margin:0}
@@ -975,7 +1019,7 @@ body.flow-on #flowbar{display:flex}
 </head>
 <body>
 <div id="app"><header id="top"></header><aside id="left"></aside><main id="stagewrap"><div id="stage"><div id="stage-in"></div></div><div id="flowbar"></div></main><aside id="right"></aside></div>
-<script type="application/json" id="prd-audit">{"behave":{"P01":{"filter":["列表内容随输入实时筛选（匹配列表行中的文字），无匹配项时显示“没有匹配的结果”"],"create-form":["课程代码为必填项，为空时不能提交","课程代码长度为 6–12 个字，不在此范围内时不能提交","课程名称为必填项，为空时不能提交","课程名称长度为 2–30 个字，不在此范围内时不能提交","开课学院为必填项，为空时不能提交","学分为必填项，为空时不能提交","备注最多 200 个字，超出时不能提交"],"submit":["提交前先校验必填项和长度，不通过时在字段下方提示，不发出请求","提交中按钮禁用，重复点击只提交一次","提交失败时保留已填内容并提示，可直接重试（可在数据场景中切换，演示首次提交失败）","提交成功后在「开课课程列表」中新增一条，进入「课程管理」"]}},"ok":true,"at":"2026-11-04T17:18:36.207Z","release":"V1.0","errors":[],"warns":[],"stats":{"pages":1,"states":3,"fns":8,"fields":19,"pending":0,"assumed":31,"changes":0,"gaps":0,"release":"V1.0","interactive":14,"covered":14,"ignored":0,"renders":9,"errors":0,"warns":0,"netRequests":0,"netBlocked":0},"fnStates":{"P01":{"filter":["list"],"create-entry":["list"],"table":["list"],"pager":["list"],"create-form":["create"],"submit":["create"],"detail":["detail"]}},"links":{"P01":[]},"inventory":{"pages":[{"k":"P01","l":"P01 课程管理"}],"states":[{"k":"P01/list","l":"P01 课程管理 · 状态「课程列表」"},{"k":"P01/create","l":"P01 课程管理 · 状态「新建课程弹窗」"},{"k":"P01/detail","l":"P01 课程管理 · 状态「课程详情抽屉」"}],"fns":[{"k":"P01/filter","l":"P01 课程管理 · 功能点「课程搜索」"},{"k":"P01/table","l":"P01 课程管理 · 功能点「开课课程列表」"},{"k":"P01/pager","l":"P01 课程管理 · 功能点「分页计数」"},{"k":"P01/create-entry","l":"P01 课程管理 · 功能点「新建课程入口」"},{"k":"P01/create-form","l":"P01 课程管理 · 功能点「新建课程表单」"},{"k":"P01/submit","l":"P01 课程管理 · 功能点「提交新建课程」"},{"k":"P01/detail","l":"P01 课程管理 · 功能点「课程详情抽屉」"},{"k":"公共/pc-shell/pc-nav","l":"公共组件「教务管理台 顶部导航」 · 功能点「顶部导航与账号菜单」"}]},"scope":null,"needOnline":false}</script>
+<script type="application/json" id="prd-audit">{"behave":{"P01":{"filter":["列表内容随输入实时筛选（匹配列表行中的文字），无匹配项时显示“没有匹配的结果”"],"create-form":["课程代码为必填项，为空时不能提交","课程代码长度为 6–12 个字，不在此范围内时不能提交","课程名称为必填项，为空时不能提交","课程名称长度为 2–30 个字，不在此范围内时不能提交","开课学院为必填项，为空时不能提交","学分为必填项，为空时不能提交","备注最多 200 个字，超出时不能提交"],"submit":["提交前先校验必填项和长度，不通过时在字段下方提示，不发出请求","提交中按钮禁用，重复点击只提交一次","提交失败时保留已填内容并提示，可直接重试（可在数据场景中切换，演示首次提交失败）","提交成功后在「开课课程列表」中新增一条，进入「课程管理」"]}},"ok":true,"at":"2026-11-05T08:54:52.826Z","release":"V1.0","errors":[],"warns":[],"stats":{"pages":1,"states":3,"fns":8,"fields":19,"pending":0,"assumed":31,"changes":0,"gaps":0,"release":"V1.0","interactive":14,"covered":14,"ignored":0,"renders":9,"errors":0,"warns":0,"netRequests":0,"netBlocked":0},"fnStates":{"P01":{"filter":["list"],"create-entry":["list"],"table":["list"],"pager":["list"],"create-form":["create"],"submit":["create"],"detail":["detail"]}},"links":{"P01":[]},"inventory":{"pages":[{"k":"P01","l":"P01 课程管理"}],"states":[{"k":"P01/list","l":"P01 课程管理 · 状态「课程列表」"},{"k":"P01/create","l":"P01 课程管理 · 状态「新建课程弹窗」"},{"k":"P01/detail","l":"P01 课程管理 · 状态「课程详情抽屉」"}],"fns":[{"k":"P01/filter","l":"P01 课程管理 · 功能点「课程搜索」"},{"k":"P01/table","l":"P01 课程管理 · 功能点「开课课程列表」"},{"k":"P01/pager","l":"P01 课程管理 · 功能点「分页计数」"},{"k":"P01/create-entry","l":"P01 课程管理 · 功能点「新建课程入口」"},{"k":"P01/create-form","l":"P01 课程管理 · 功能点「新建课程表单」"},{"k":"P01/submit","l":"P01 课程管理 · 功能点「提交新建课程」"},{"k":"P01/detail","l":"P01 课程管理 · 功能点「课程详情抽屉」"},{"k":"公共/pc-shell/pc-nav","l":"公共组件「教务管理台 顶部导航」 · 功能点「顶部导航与账号菜单」"}]},"scope":null,"needOnline":false}</script>
 <script type="application/json" id="prd-scope"></script>
 <script>
 /*! @license DOMPurify 3.2.7 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.2.7/LICENSE */
@@ -2237,6 +2281,66 @@ if(__exports != exports)module.exports = exports;return module.exports}));
     return out.join('');
   };
 
+  /* ---------- CSV：研发与测试导出（功能点、字段、验收条件）。与 Markdown 各自独立，不改 D.markdown ---------- */
+  var FN_COLS = ['pageId', 'pageTitle', 'endId', 'fnId', 'fnName', 'desc', 'perm', 'src', 'status'];
+  var FIELD_COLS = ['pageId', 'fnId', 'fnName', 'key', 'name', 'type', 'required', 'def', 'options', 'rule'];
+  var AC_COLS = ['pageId', 'fnId', 'fnName', 'pre', 'act', 'expect'];
+  /* 合并文本的表头：三张表列的并集，sheet 列标明行属于哪张表；不适用的单元格留空 */
+  var ALL_COLS = ['sheet', 'pageId', 'pageTitle', 'endId', 'fnId', 'fnName', 'desc', 'perm', 'src', 'status', 'key', 'name', 'type', 'required', 'def', 'options', 'rule', 'pre', 'act', 'expect'];
+  function csvCell(v) {
+    var s = v == null ? '' : String(v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function csvLine(cols, row) {
+    return cols.map(function (c) { return csvCell(row[c]); }).join(',');
+  }
+  function csvSheet(cols, rows) {
+    return [cols.join(',')].concat(rows.map(function (r) { return csvLine(cols, r); })).join('\r\n') + '\r\n';
+  }
+  /* 待确认 / AI 假设 标记写进状态列；已确认留空 */
+  function csvStatus(x) {
+    var s = ownStatus(x);
+    return s === 'pending' ? '待确认' : s === 'assumed' ? 'AI 假设' : '';
+  }
+  /* 行对象：fns / fields / ac 三组，已删除（removed）的功能点和字段不导出 */
+  D.csvRows = function () {
+    var out = { fns: [], fields: [], ac: [] };
+    function collect(pageId, pageTitle, endId, fns) {
+      fns.forEach(function (f) {
+        if (D.removed(f)) return;
+        out.fns.push({ sheet: 'fns', pageId: pageId, pageTitle: pageTitle, endId: endId, fnId: f.id, fnName: f.name || '', desc: f.desc || '', perm: f.perm || '', src: joinSrc(f.src) || '', status: csvStatus(f) });
+        (f.fields || []).forEach(function (x) {
+          if (D.removed(x)) return;
+          out.fields.push({ sheet: 'fields', pageId: pageId, fnId: f.id, fnName: f.name || '', key: x.key || '', name: x.name || '', type: x.type || '', required: x.required ? '是' : '否', def: x.def == null ? '' : String(x.def), options: Array.isArray(x.options) ? x.options.join('、') : (x.options || ''), rule: x.rule || '' });
+        });
+        if (f.ac) out.ac.push({ sheet: 'ac', pageId: pageId, fnId: f.id, fnName: f.name || '', pre: f.ac.pre || '', act: f.ac.act || '', expect: f.ac.expect || '' });
+      });
+    }
+    (W.P.ends || []).forEach(function (e) {
+      (W.order[e.id] || []).forEach(function (id) {
+        var p = W.pages[id];
+        if (p) collect(id, p.title || '', e.id, p.fns || []);
+      });
+    });
+    /* 公共组件的 pageId 写作 S:端ID，与评审意见的 target 写法一致 */
+    W.sharedGroups.forEach(function (g) { collect('S:' + g.end, g.title || '', g.end, g.fns || []); });
+    return out;
+  };
+  /* 合并 CSV 文本（不含 BOM；下载时由 viewer 在前面加 \uFEFF） */
+  D.csvText = function () {
+    var r = D.csvRows();
+    return csvSheet(ALL_COLS, r.fns.concat(r.fields, r.ac));
+  };
+  /* 三份独立 CSV 文本（各带表头，不含 sheet 列） */
+  D.csvSheets = function () {
+    var r = D.csvRows();
+    return {
+      fns: csvSheet(FN_COLS, r.fns),
+      fields: csvSheet(FIELD_COLS, r.fields),
+      ac: csvSheet(AC_COLS, r.ac)
+    };
+  };
+
   /* ---------- 统计、待确认、变更 ---------- */
   /* 待确认与 AI 假设清单：收集所有需求文字里的 [待确认] / [AI 假设] 标记，以及标了 status 的条目 */
   var MARK = /\[待确认\]|\[(?:AI\s*假设|AI)\]/g;
@@ -2676,16 +2780,24 @@ if(__exports != exports)module.exports = exports;return module.exports}));
     function E(code, msg, where) { var k = code + msg; if (seenErr[k]) return; seenErr[k] = 1; R.errors.push({ code: code, msg: msg, where: where || '' }); }
     function Wn(code, msg, where) { var k = 'w' + code + msg; if (seenErr[k]) return; seenErr[k] = 1; R.warns.push({ code: code, msg: msg, where: where || '' }); }
     var P = W.P;
+    var PROTO = !!(P && P.stage === 'prototype');
+    /* 原型阶段：没写需求说明只提醒（soft: true）；其他情况等同 E */
+    function M(code, msg, where) {
+      if (!PROTO) return E(code, msg, where);
+      var k = 'w' + code + msg; if (seenErr[k]) return; seenErr[k] = 1;
+      R.warns.push({ code: code, msg: msg, where: where || '', soft: true });
+    }
     W.errors.forEach(function (m) { E('BOOT', m); });
     if (!P) { E('BOOT', '缺少 W.product(...)'); return finish(R); }
 
     /* ---------- 一、需求完整性（静态） ---------- */
     if (!P.name) E('PRODUCT', 'product.name 未填写产品名称');
     if (!P.id) E('PRODUCT', 'product.id 未填写（用于本地存储，建议英文短名）');
-    if (!P.background || String(P.background).length < 20) E('PRODUCT', 'product.background 业务背景缺失或过短（至少说明谁、在什么场景、要解决什么问题）');
-    if (!P.scope || !Array.isArray(P.scope.out)) E('PRODUCT', 'product.scope.out 未声明“本期不做”的内容；没有边界会导致原型自由发挥');
+    if (P.stage != null && P.stage !== 'prototype') E('PRODUCT', 'product.stage 只能写 "prototype"（原型阶段），完整需求阶段不要写这个字段');
+    if (!P.background || String(P.background).length < 20) M('PRODUCT', 'product.background 业务背景缺失或过短（至少说明谁、在什么场景、要解决什么问题）');
+    if (!P.scope || !Array.isArray(P.scope.out)) M('PRODUCT', 'product.scope.out 未声明“本期不做”的内容；没有边界会导致原型自由发挥');
     else if (!P.scope.out.length) Wn('SCOPE', '“本期不做”为空，请确认是否真的没有排除项');
-    if (!P.roles || !P.roles.length) E('PRODUCT', 'product.roles 未声明角色');
+    if (!P.roles || !P.roles.length) M('PRODUCT', 'product.roles 未声明角色');
     if (!P.ends || !P.ends.length) E('PRODUCT', 'product.ends 未声明任何端');
     var rels = (P.releases || []).map(function (r) { return r.id; });
     if (!rels.length) E('PRODUCT', 'product.releases 至少需要一个版本，例如 [{ id: "V1.0", date: "2026-11-03", summary: "首版" }]');
@@ -2709,9 +2821,9 @@ if(__exports != exports)module.exports = exports;return module.exports}));
     var KNOWN = {
       page: 'id end group title goal entry perm scenarios states fns rules todo render after acts changes match enter host',
       state: 'id label when layer set enter match changes',
-      fn: 'id name desc fields rules errors empty perm src status statusNote ui gap dot sel text changes ac',
+      fn: 'id name desc fields rules errors empty perm src status statusNote ui gap dot sel text changes ac roles',
       field: 'key name type required def options rule status statusNote changes',
-      product: 'id name date fidelity version current releases background goals scope roles ends groups rules nfr dict flows sections todo demo scenarios clarify out demoNote outOfScope'
+      product: 'id name date fidelity version current releases background goals scope roles ends groups rules nfr dict flows sections todo demo scenarios clarify out demoNote outOfScope stage'
     };
     function unknown(obj, kind, where) {
       if (!obj || typeof obj !== 'object') return;
@@ -2742,10 +2854,10 @@ if(__exports != exports)module.exports = exports;return module.exports}));
       if (!f.name) E('FN', w + ' 缺少 name');
       if (D.removed(f)) { checkChanges(f, w); return; }
       if (f.gap != null && (typeof f.gap !== 'string' || f.gap.length < 4)) E('FN', w + ' 的 gap 要写成一句话：原型里缺了什么、以哪份需求为准');
-      if (!f.desc || String(f.desc).replace(/\s/g, '').length < 8) E('FN_DESC', w + ' 缺少交互说明 desc（写清用户怎么操作、系统怎么响应，至少一句完整的话）');
+      if (!f.desc || String(f.desc).replace(/\s/g, '').length < 8) M('FN_DESC', w + ' 缺少交互说明 desc（写清用户怎么操作、系统怎么响应，至少一句完整的话）');
       var st = f.status;
       if (st && ['pending', 'assumed', 'confirmed'].indexOf(st) < 0) E('FN_SRC', w + ' 的 status 只能是 confirmed / pending / assumed');
-      if (!f.src && st !== 'pending' && st !== 'assumed') E('FN_SRC', w + ' 没有来源 src；有依据就写来源（如“需求材料 §2”“澄清 Q3”），没有依据就标 status: "assumed"（AI 假设）或 "pending"（待确认）');
+      if (!f.src && st !== 'pending' && st !== 'assumed') M('FN_SRC', w + ' 没有来源 src；有依据就写来源（如“需求材料 §2”“澄清 Q3”），没有依据就标 status: "assumed"（AI 假设）或 "pending"（待确认）');
       /* 验收条件 ac（可选）：写了就必须有用户操作和预期结果 */
       if (f.ac != null) {
         if (typeof f.ac !== 'object' || Array.isArray(f.ac)) E('AC', w + ' 的 ac 要写成对象 { pre, act, expect }（前置条件、用户操作、预期结果）');
@@ -2758,12 +2870,22 @@ if(__exports != exports)module.exports = exports;return module.exports}));
       }
       (f.fields || []).forEach(function (x) {
         var fw = w + ' 的字段「' + (x.name || x.key || '?') + '」';
-        if (!x.name) E('FIELD', fw + ' 缺少 name');
-        if (!x.type) E('FIELD', fw + ' 缺少 type（如 文本 / 数字 / 枚举 / 日期 / 金额 / 文件）');
-        if (!x.rule && !x.options) E('FIELD', fw + ' 缺少 rule（校验、格式、口径或来源）或 options（可选值）');
+        if (!x.name) M('FIELD', fw + ' 缺少 name');
+        if (!x.type) M('FIELD', fw + ' 缺少 type（如 文本 / 数字 / 枚举 / 日期 / 金额 / 文件）');
+        if (!x.rule && !x.options) M('FIELD', fw + ' 缺少 rule（校验、格式、口径或来源）或 options（可选值）');
         if (x.required != null && typeof x.required !== 'boolean') E('FIELD', fw + ' 的 required 只能写 true 或 false');
         checkChanges(x, fw);
       });
+      /* 角色权限：roles 如果有值，每个 ID 必须在 product.roles 中存在 */
+      if (f.roles) {
+        if (!Array.isArray(f.roles)) E('ROLE_ID', w + ' 的 roles 要写成数组，例如 ["admin"]');
+        else {
+          if (!P.roles || !P.roles.length) E('ROLE_ID', w + ' 写了 roles，但 product.roles 为空或未声明');
+          var roleIds = {};
+          (P.roles || []).forEach(function (r) { roleIds[r.id] = 1; });
+          f.roles.forEach(function (rid) { if (!roleIds[rid]) E('ROLE_ID', w + ' 的 roles 引用了不存在的角色 ID「' + rid + '」（已声明的角色：' + (P.roles || []).map(function (r) { return r.id; }).join(' / ') + '）'); });
+        }
+      }
       checkChanges(f, w);
       D.items(f.rules).forEach(function (r, i) { checkChanges(r, w + ' 规则 ' + (i + 1)); });
       D.items(f.errors).forEach(function (r, i) { checkChanges(r, w + ' 异常 ' + (i + 1)); });
@@ -2778,14 +2900,14 @@ if(__exports != exports)module.exports = exports;return module.exports}));
       p.states.forEach(function (s) { unknown(s, 'state', where + ' 状态「' + (s.label || s.id) + '」'); checkChanges(s, where + ' 状态「' + (s.label || s.id) + '」'); });
       p.fns.forEach(function (f) { unknown(f, 'fn', where + ' 功能点「' + (f.name || f.id) + '」'); (f.fields || []).forEach(function (x) { unknown(x, 'field', where + ' 功能点「' + (f.name || f.id) + '」的字段「' + (x.name || x.key) + '」'); }); });
       if (!p.title) E('PAGE', p.id + ' 缺少 title');
-      if (!p.goal) E('PAGE', where + ' 缺少页面目标 goal（谁在什么情况下用这个页面完成什么）');
+      if (!p.goal) M('PAGE', where + ' 缺少页面目标 goal（谁在什么情况下用这个页面完成什么）');
       if (!p.states.length) E('STATE', where + ' 没有声明页面状态 states（至少一个默认状态）');
       var sids = {};
       p.states.forEach(function (s) {
         if (!s.id || !s.label) E('STATE', where + '：状态需要 id 和 label');
         if (sids[s.id]) E('STATE', where + '：状态 ID 重复「' + s.id + '」');
         sids[s.id] = 1;
-        if (!s.when || String(s.when).length < 4) E('STATE_WHEN', where + ' 的状态「' + (s.label || s.id) + '」缺少出现条件 when（什么数据或操作下会看到这个状态）');
+        if (!s.when || String(s.when).length < 4) M('STATE_WHEN', where + ' 的状态「' + (s.label || s.id) + '」缺少出现条件 when（什么数据或操作下会看到这个状态）');
         if (s.layer && ['modal', 'drawer', 'sheet', 'alert', 'popover'].indexOf(s.layer) < 0) E('STATE', where + ' 的状态「' + s.label + '」layer 只能是 modal / drawer / sheet / alert / popover');
         if (s.set) checkSet(s.set, where + ' 状态「' + s.label + '」');
       });
@@ -2798,7 +2920,7 @@ if(__exports != exports)module.exports = exports;return module.exports}));
       D.items(p.rules).forEach(function (r, i) { checkChanges(r, where + ' 页面规则 ' + (i + 1)); });
       checkChanges(p, where);
       if (W.host.isHosted(p)) {
-        p.fns.forEach(function (f) { if (!f.sel && f.ui !== false && !f.gap && !D.removed(f)) E('HOST_SEL', where + ' · 功能点「' + f.name + '」是托管页面，需要 sel（CSS 选择器）绑定原型元素，或在原型副本上加 data-fn="' + f.id + '"', where); });
+        p.fns.forEach(function (f) { if (!f.sel && f.ui !== false && !f.gap && !D.removed(f)) E('HOST_SEL', where + ' · 功能点「' + f.name + '」是托管页面，需要 sel（CSS 选择器）绑定原型元素', where); });
         if (!p.match && !p.states.some(function (s) { return s.match; })) Wn('HOST_MATCH', where + ' 没有 match，在原型里点击跳转到此页时，右侧需求面板无法自动切换');
       }
     });
@@ -2954,7 +3076,7 @@ if(__exports != exports)module.exports = exports;return module.exports}));
         var ref = o && W.findFn(p, o.getAttribute('data-fn'));
         var key = el.getAttribute('data-field');
         if (!ref) return;
-        if (fieldKeys(ref.fn).indexOf(key) < 0) E('FIELD_UNDECLARED', where + '：元素 data-field="' + key + '" 没有在功能点「' + ref.fn.name + '」的 fields 中定义');
+        if (fieldKeys(ref.fn).indexOf(key) < 0) M('FIELD_UNDECLARED', where + '：元素 data-field="' + key + '" 没有在功能点「' + ref.fn.name + '」的 fields 中定义');
         var dec = (ref.fn.fields || []).find(function (x) { return x.key === key; });
         /* 必填一致性以 h.fld 为准（只有它带组件级校验）。data-field 可以写在 h.fld 上，也可以只写在控件上。
            写在 h.fld 上时由这里检查；只写在控件上时由所在的 h.fld 检查，避免同一个字段报两次。 */
@@ -3113,16 +3235,16 @@ if(__exports != exports)module.exports = exports;return module.exports}));
     /* 字段、列表、提交类操作的说明是否完整 */
     Object.keys(fnBox).forEach(function (k) {
       var b = fnBox[k], f = b.fn, nm = '功能点「' + f.name + '」（' + b.where.split(' · ')[0] + '）';
-      if (b.ctl.length && !(f.fields || []).length) E('FIELD_MISSING', nm + ' 包含 ' + b.ctl.slice(0, 3).join('、') + (b.ctl.length > 3 ? ' 等 ' + b.ctl.length + ' 个控件' : '') + '，但没有定义 fields（类型、必填、校验、默认值）');
+      if (b.ctl.length && !(f.fields || []).length) M('FIELD_MISSING', nm + ' 包含 ' + b.ctl.slice(0, 3).join('、') + (b.ctl.length > 3 ? ' 等 ' + b.ctl.length + ' 个控件' : '') + '，但没有定义 fields（类型、必填、校验、默认值）');
       var noneReq = b.ctl.length && (f.fields || []).length && !(f.fields || []).some(function (x) { return typeof x.required === 'boolean'; });
-      if (noneReq) E('FIELD_MISSING', nm + ' 有输入控件，但 fields 都没有写 required: true / false');
+      if (noneReq) M('FIELD_MISSING', nm + ' 有输入控件，但 fields 都没有写 required: true / false');
       if (!noneReq) Object.keys(b.fieldsBound).forEach(function (key) {
         var x = (f.fields || []).find(function (y) { return y.key === key; });
-        if (x && typeof x.required !== 'boolean') E('FIELD', nm + ' 的字段「' + (x.name || key) + '」绑定了输入控件，需要写 required: true / false');
+        if (x && typeof x.required !== 'boolean') M('FIELD', nm + ' 的字段「' + (x.name || key) + '」绑定了输入控件，需要写 required: true / false');
       });
-      if (b.list && !(f.fields || []).length) E('LIST_FIELDS', nm + ' 是列表或表格，需要用 fields 定义每一列/每一项的含义、格式和来源');
-      if (b.list && !f.empty) E('LIST_EMPTY', nm + ' 是列表或表格，需要写 empty：没有数据时显示什么、能做什么');
-      if (b.submit.length && !D.items(f.errors).length) E('ERRORS', nm + ' 包含 ' + b.submit.slice(0, 3).join('、') + '，需要写 errors：失败、重复提交、权限不足或网络异常时怎么处理');
+      if (b.list && !(f.fields || []).length) M('LIST_FIELDS', nm + ' 是列表或表格，需要用 fields 定义每一列/每一项的含义、格式和来源');
+      if (b.list && !f.empty) M('LIST_EMPTY', nm + ' 是列表或表格，需要写 empty：没有数据时显示什么、能做什么');
+      if (b.submit.length && !D.items(f.errors).length) M('ERRORS', nm + ' 包含 ' + b.submit.slice(0, 3).join('、') + '，需要写 errors：失败、重复提交、权限不足或网络异常时怎么处理');
     });
     /* 可达性 */
     pageList.forEach(function (p) {
@@ -3179,7 +3301,8 @@ if(__exports != exports)module.exports = exports;return module.exports}));
   function finish(R) {
     var st = D.stats();
     W.behaveApply({ behave: R.behave });
-    return {
+    var isProto = !!(W.P && W.P.stage === 'prototype');
+    return Object.assign({
       behave: R.behave,
       ok: R.errors.length === 0,
       at: new Date().toISOString(),
@@ -3191,7 +3314,7 @@ if(__exports != exports)module.exports = exports;return module.exports}));
       links: R.links,
       inventory: W.scopeInventory(),
       scope: W.scopeDiff()
-    };
+    }, isProto ? { stage: 'prototype' } : {});
   }
 })();
 
@@ -3515,6 +3638,7 @@ W.product({
         id: 'create-entry', name: '新建课程入口',
         desc: '点“新建课程”，在列表上方弹出新建弹窗，列表保持在背后，不离开页面。',
         status: 'assumed', statusNote: '按钮位置和文字是 AI 补充的',
+        roles: ['admin'],
         ac: { pre: '列表页已打开', act: '点击“新建课程”', expect: '弹出“新建课程”弹窗，四个必填项为空，列表仍在弹窗后面' }
       },
       {
@@ -3582,13 +3706,152 @@ W.product({
 
 </script>
 <script>
+/* 评审意见：评审者在功能点上留意见，存在本机浏览器（localStorage）里，可导出 JSON，再由 scripts/merge-comments.mjs 合并。
+   target 格式：功能点 `页面ID/功能点ID`；公共组件 `S:端ID/功能点ID`；页面级 `页面ID`。 */
+(function () {
+  'use strict';
+  var W = window.W;
+  var C = (W.comments = {});
+  var AUTHOR_KEY = 'prd-comments-author';
+
+  function product() { return W.P || {}; }
+  function storeKey() { return 'prd-comments:' + (product().id || product().name || ''); }
+  function read() {
+    try {
+      var a = JSON.parse(localStorage.getItem(storeKey()) || '[]');
+      return Array.isArray(a) ? a : [];
+    } catch (e) { return []; }
+  }
+  function write(list) { localStorage.setItem(storeKey(), JSON.stringify(list)); }
+  function parseTarget(target) {
+    var s = String(target || '');
+    if (s.indexOf('S:') === 0) {
+      var a = s.slice(2).split('/');
+      return { pageId: null, fnId: a.slice(1).join('/') || null };
+    }
+    var i = s.indexOf('/');
+    if (i < 0) return { pageId: s || null, fnId: null };
+    return { pageId: s.slice(0, i), fnId: s.slice(i + 1) || null };
+  }
+  function localDate() {
+    var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+
+  C.author = function () {
+    try { return localStorage.getItem(AUTHOR_KEY) || ''; } catch (e) { return ''; }
+  };
+  C.setAuthor = function (name) {
+    localStorage.setItem(AUTHOR_KEY, String(name || '').trim());
+  };
+
+  C.list = function (target) {
+    var all = read();
+    if (target === undefined || target === null) return all;
+    return all.filter(function (c) { return c.target === target; });
+  };
+
+  C.add = function (o) {
+    o = o || {};
+    var text = String(o.text == null ? '' : o.text).trim();
+    if (!text) throw new Error('意见不能为空');
+    var target = o.target || (o.pageId ? o.pageId + (o.fnId ? '/' + o.fnId : '') : '');
+    var t = parseTarget(target);
+    if (!t.pageId && !/^S:/.test(target)) throw new Error('意见缺少对象（target）');
+    var item = {
+      id: 'c_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+      target: target,
+      pageId: t.pageId,
+      fnId: t.fnId,
+      text: text,
+      author: o.author !== undefined ? String(o.author).trim() : C.author(),
+      at: new Date().toISOString(),
+      resolved: false
+    };
+    var list = read();
+    list.push(item);
+    write(list);
+    return item;
+  };
+
+  /* 只允许改正文和是否已处理，其余字段（对象、时间、作者）保持不变 */
+  C.update = function (id, patch) {
+    var list = read(), item = null;
+    list.some(function (c) { if (c.id === id) { item = c; return true; } return false; });
+    if (!item) return null;
+    patch = patch || {};
+    if ('text' in patch) {
+      var text = String(patch.text == null ? '' : patch.text).trim();
+      if (!text) throw new Error('意见不能为空');
+      item.text = text;
+    }
+    if ('resolved' in patch) item.resolved = !!patch.resolved;
+    write(list);
+    return item;
+  };
+
+  C.remove = function (id) {
+    var list = read();
+    var next = list.filter(function (c) { return c.id !== id; });
+    if (next.length === list.length) return false;
+    write(next);
+    return true;
+  };
+
+  C.count = function (target) {
+    var all = read();
+    if (target === undefined || target === null) return all.length;
+    return all.filter(function (c) { return c.target === target; }).length;
+  };
+  C.countByPage = function (pageId) {
+    return read().filter(function (c) { return c.pageId === pageId; }).length;
+  };
+
+  C.exportJSON = function (author) {
+    var p = product();
+    var who = author !== undefined ? String(author).trim() : C.author();
+    return {
+      v: 1,
+      productId: p.id || p.name || '',
+      productName: p.name || '',
+      release: W.doc && W.doc.cur ? W.doc.cur() : '',
+      exportedAt: new Date().toISOString(),
+      author: who,
+      /* 条目作者空时用本次导出作者兜底，便于流程 C 写 src */
+      comments: read().map(function (c) {
+        var a = String(c.author || '').trim();
+        if (a) return c;
+        var copy = {};
+        for (var k in c) if (Object.prototype.hasOwnProperty.call(c, k)) copy[k] = c[k];
+        copy.author = who;
+        return copy;
+      })
+    };
+  };
+
+  C.download = function (author) {
+    var obj = C.exportJSON(author);
+    var blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json;charset=utf-8' });
+    var name = (obj.productName || '原型') + '-评审意见-' + (obj.release || 'V1.0') + '-' + localDate() + '.json';
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    return name;
+  };
+})();
+
+</script>
+<script>
 /* 原型需求浏览器：路由、画板缩放、热区、标注圆点、需求面板、需求文档、流程演示、托管原型。 */
 (function () {
   'use strict';
   var W = window.W, h = W.h, D = W.doc, HOST = W.host;
   function $(s, r) { return (r || document).querySelector(s); }
   function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
-  var ui = { zoom: 'fit', last: {}, scale: 1, cur: null, sel: null, visible: {}, docKey: '', enterSeq: 0, hostEnd: null, unknown: false };
+  var ui = { zoom: 'fit', last: {}, scale: 1, cur: null, sel: null, visible: {}, docKey: '', enterSeq: 0, hostEnd: null, unknown: false, proto: false, cmt: { scope: 'page', sel: null, page: null, draft: '', popDraft: '', pop: null }, role: 'all' };
   var PREF;
   function pref(k, v) {
     try {
@@ -3598,6 +3861,14 @@ W.product({
       localStorage.setItem(PREF, JSON.stringify(o));
     } catch (e) { return undefined; }
   }
+
+  /* 判断功能点是否属于角色 R：「全部角色」或未选时全可见；没有 roles / 空数组 / 含 R 时可见 */
+  function fnVisibleForRole(fn, role) {
+    if (!role || role === 'all') return true;
+    if (!fn.roles || !fn.roles.length) return true;
+    return fn.roles.indexOf(role) >= 0;
+  }
+  W.fnVisibleForRole = fnVisibleForRole;
 
   /* ---------- 启动整理 ---------- */
   function finalize() {
@@ -3631,7 +3902,15 @@ W.product({
     try { var a = document.getElementById('prd-audit'); W.audit = a && a.textContent.trim() ? JSON.parse(a.textContent) : null; } catch (e) { W.audit = null; }
     W.behaveApply(W.audit);
     PREF = 'prd-viewer:' + (P.id || P.name);
+    /* 原型阶段：打开即原型，没有需求文档栏目、需求面板、需求按钮，圆点默认隐藏且不记住偏好 */
+    ui.proto = P.stage === 'prototype';
+    /* 初始化角色偏好：记住上次选择的角色，没有则默认"全部角色" */
+    if (P.roles && P.roles.length) {
+      ui.role = pref('role') || 'all';
+      if (ui.role !== 'all' && !P.roles.some(function (r) { return r.id === ui.role; })) ui.role = 'all';
+    }
   }
+  function protoHome() { return ui.last[W.P.ends[0].id]; }
 
   /* ---------- 路由 ---------- */
   function parse() {
@@ -3649,6 +3928,8 @@ W.product({
     if (parts[0] === 'p' && parts[1] && W.pages[parts[1]]) return { view: 'page', id: parts[1], st: parts[2] || '', q: q };
     if (parts[0] === 'flow') return { view: 'flow', q: q };
     if (parts[0] === 'end' && W.end(parts[1])) return { view: 'page', id: ui.last[parts[1]], st: '', q: q };
+    /* 原型阶段没有需求文档，#/doc 和空路由都回到第一个端的首页 */
+    if (ui.proto) return { view: 'page', id: protoHome(), st: '', q: q };
     if (parts[0] === 'doc') return { view: 'doc', anchor: parts[1] || '', q: q };
     return { view: 'doc', anchor: '', q: q };
   }
@@ -3717,9 +3998,11 @@ W.product({
   /* ---------- 顶栏 ---------- */
   function renderTop() {
     var P = W.P;
-    var tabs = '<a data-tab="doc">需求文档</a>' + P.ends.map(function (e) { return '<a data-tab="' + h.esc(e.id) + '">' + h.esc(e.name) + '</a>'; }).join('') + ((P.flows || []).length ? '<a data-tab="flow">核心流程</a>' : '');
+    var tabs = (ui.proto ? '' : '<a data-tab="doc">需求文档</a>') + P.ends.map(function (e) { return '<a data-tab="' + h.esc(e.id) + '">' + h.esc(e.name) + '</a>'; }).join('') + ((P.flows || []).length ? '<a data-tab="flow">核心流程</a>' : '');
     var a = W.audit, badge = '';
-    if (a) {
+    if (a && ui.proto) {
+      badge = '<span class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" style="cursor:default" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '原型阶段 · 检查通过' : '原型阶段 · 检查未通过') + (a.needOnline ? ' · 需联网' : '') + '</span>';
+    } else if (a) {
       var st0 = D.stats();
       var parts = [];
       if (st0.pending) parts.push('待确认 ' + st0.pending);
@@ -3730,14 +4013,21 @@ W.product({
     $('#top').innerHTML = '<a class="brand" data-tab="doc"><span class="brand-m">' + h.esc((P.name || '原')[0]) + '</span><span class="t">' + h.esc(P.name || '') + '</span><small>' + h.esc([D.cur(), P.date, P.fidelity || '低保真'].filter(Boolean).join(' · ')) + '</small></a>' +
       '<nav class="vtabs">' + tabs + '</nav>' +
       '<div class="vtools">' + badge +
+      (P.roles && P.roles.length ? '<select id="role-sel" class="role-sel"><option value="all">全部角色</option>' + P.roles.map(function (r) { return '<option value="' + h.esc(r.id) + '">' + h.esc(r.name) + '</option>'; }).join('') + '</select>' : '') +
       '<button class="vbtn" data-tool="hot" title="显示画板中所有可点击区域">热区 <kbd>H</kbd></button>' +
       '<button class="vbtn" data-tool="dots" title="显示或隐藏功能点标注圆点">标注 <kbd>N</kbd></button>' +
+      '<button class="vbtn" data-tool="comments" title="查看、添加和导出评审意见">意见<span class="cmt-badge">' + cmtBadgeText() + '</span></button>' +
+      (ui.proto ? '<button class="vbtn" data-tool="csv" title="导出功能点、字段、验收条件（CSV），给开发和测试用">清单</button>' : '') +
       (D.multiRelease() ? '<button class="vbtn chg" data-tool="chg" title="只看 ' + h.esc(D.cur()) + ' 新增、修改、移除的功能点">本版变化</button>' : '') +
       '<button class="vbtn" data-tool="zoom" id="zoomBtn"><span class="lb">适应窗口</span></button>' +
       '<button class="vbtn" data-tool="left"><span class="lb">目录</span></button>' +
-      '<button class="vbtn" data-tool="right"><span class="lb">需求</span></button>' +
+      (ui.proto ? '' : '<button class="vbtn" data-tool="right"><span class="lb">需求</span></button>') +
       (W.presets().length || Object.keys(W.P.demo || {}).length || P.ends.some(function (e) { return e.resetKeys; }) ? '<button class="vbtn" data-tool="reset" title="把演示数据恢复为默认"><span class="lb">重置演示数据</span></button>' : '') +
       '</div>';
+    if (P.roles && P.roles.length) {
+      var roleSel = $('#role-sel');
+      if (roleSel) roleSel.value = ui.role;
+    }
   }
   function setTab(tab) { $$('.vtabs a').forEach(function (a) { a.classList.toggle('on', a.dataset.tab === tab); }); }
   function syncTools() {
@@ -3751,6 +4041,8 @@ W.product({
     if (c) c.classList.toggle('on', B.contains('chg-on'));
     var hot = $('[data-tool="hot"]');
     if (hot) hot.classList.toggle('on', B.contains('hot'));
+    var cm = $('[data-tool="comments"]');
+    if (cm) cm.classList.toggle('on', B.contains('cmt-on'));
   }
 
   /* ---------- 主渲染 ---------- */
@@ -3758,8 +4050,8 @@ W.product({
     o = o || {};
     var r = parse();
     document.body.classList.remove('m-l', 'm-r');
-    if (r.view === 'doc') return renderDoc(r);
-    if (r.view === 'flow') return renderFlowIndex(r);
+    if (r.view === 'doc') { renderDoc(r); return cmtSync(); }
+    if (r.view === 'flow') { renderFlowIndex(r); return cmtSync(); }
     var p = W.pages[r.id];
     var st = stOf(r.id, r.st);
     var flow = r.q.f ? flowById(r.q.f) : null;
@@ -3775,14 +4067,16 @@ W.product({
     setTab(flow ? 'flow' : p.end);
     ui.last[p.end] = p.id;
     ui.cur = { p: p, st: st, flow: flow, q: r.q };
+    if (ui.cmt.page !== p.id) { ui.cmt.page = p.id; ui.cmt.sel = null; }
     ui.docKey = '';
     ui.unknown = false;
     if (!o.keepSel) ui.sel = r.q.fn || null;
     var paintNow = HOST.isHosted(p) ? renderHosted(p, st, o.fromDetect) : (renderNative(p, st, r.q), true);
     renderLeft(p.end, r, flow);
-    renderRight(p, st);
+    if (!ui.proto) renderRight(p, st);
     renderFlowbar(r, flow);
     if (paintNow) afterPaint();
+    cmtSync();
   }
   W.render = render;
 
@@ -3821,7 +4115,7 @@ W.product({
     var e = W.end(p.end);
     var frame = $('#hostf');
     if (!frame || ui.hostEnd !== e.id) {
-      $('#stage-in').innerHTML = '<div id="devwrap">' + devHTML(e, '<iframe id="hostf" sandbox="' + HOST.SANDBOX + '" title="' + h.esc(e.name) + '原型"></iframe>') + '</div><div class="cap">' + capHTML(p, st) + '</div>';
+      $('#stage-in').innerHTML = '<div id="devwrap">' + devHTML(e, '<iframe id="hostf" name="prd-host-view-' + h.esc(e.id) + '" sandbox="' + HOST.SANDBOX + '" title="' + h.esc(e.name) + '原型"></iframe>') + '</div><div class="cap">' + capHTML(p, st) + '</div>';
       ui.hostEnd = e.id;
       frame = $('#hostf');
       fit();
@@ -3956,6 +4250,7 @@ W.product({
     var only = chgOn(), showShared = pref('sharedDots');
     res.list.forEach(function (x) {
       if (x.shared && !showShared) return;
+      if (!fnVisibleForRole(x.f, ui.role)) return;
       var c = D.chg(x.f);
       if (only && !c) return;
       var el = x.els[0];
@@ -4003,8 +4298,55 @@ W.product({
   }
   var pdT;
   function placeDotsSoon() { clearTimeout(pdT); pdT = setTimeout(placeDots, 40); }
+  function applyRoleFilter() {
+    /* 只在产品声明了角色时按角色隐藏画板元素；恢复时只碰我们自己藏过的（有 data-display-backup） */
+    if (!ui.cur || !ui.cur.p) return;
+    var P = W.P;
+    if (!P.roles || !P.roles.length) return;
+    var p = ui.cur.p;
+    var isHosted = W.host.isHosted(p);
+    (p.fns || []).forEach(function (f) {
+      var visible = fnVisibleForRole(f, ui.role);
+      if (isHosted) {
+        if (!f.sel) return;
+        var frame = $('#hostf');
+        if (!frame || !frame.contentDocument) return;
+        Array.prototype.forEach.call(frame.contentDocument.querySelectorAll(f.sel), function (el) {
+          if (visible) {
+            if (el.hasAttribute('data-display-backup')) {
+              el.style.display = el.getAttribute('data-display-backup');
+              el.removeAttribute('data-display-backup');
+            }
+          } else {
+            if (!el.hasAttribute('data-display-backup')) {
+              el.setAttribute('data-display-backup', el.style.display);
+            }
+            el.style.display = 'none';
+          }
+        });
+      } else {
+        /* 原生：只动画板 #ab，不动需求卡片 */
+        var ab = $('#ab');
+        if (!ab) return;
+        $$('[data-fn="' + String(f.id).replace(/"/g, '') + '"]', ab).forEach(function (el) {
+          if (visible) {
+            if (el.hasAttribute('data-display-backup')) {
+              el.style.display = el.getAttribute('data-display-backup');
+              el.removeAttribute('data-display-backup');
+            }
+          } else {
+            if (!el.hasAttribute('data-display-backup')) {
+              el.setAttribute('data-display-backup', el.style.display);
+            }
+            el.style.display = 'none';
+          }
+        });
+      }
+    });
+  }
   function afterPaint() {
     placeDots();
+    applyRoleFilter();
     setTimeout(placeDots, 260);
     setTimeout(placeDots, 900);
     if (ui.sel) setTimeout(function () { selectFn(ui.sel, true); }, 60);
@@ -4033,7 +4375,7 @@ W.product({
     if (card) {
       card.classList.remove('fold');
       if (scroll) {
-        if (innerWidth > 1100 && document.body.classList.contains('no-r')) { document.body.classList.remove('no-r'); setTimeout(fit, 220); syncTools(); }
+        if (!ui.proto && innerWidth > 1100 && document.body.classList.contains('no-r')) { document.body.classList.remove('no-r'); setTimeout(fit, 220); syncTools(); }
         card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     }
@@ -4041,6 +4383,182 @@ W.product({
     drawBoxes(key);
     clearTimeout(ui.hlT);
     ui.hlT = setTimeout(function () { ui.hl = null; drawBoxes(null); }, 1600);
+  }
+
+  /* ---------- 评审意见 ---------- */
+  /* 对象：功能点 `页面/功能点`，公共组件 `S:端/功能点`，页面级 `页面`。卡片 key 与之对应 */
+  function cmtTarget(key) {
+    var p = ui.cur && ui.cur.p;
+    if (!p || !key) return '';
+    return /^S:/.test(key) ? 'S:' + p.end + '/' + key.slice(2) : p.id + '/' + key;
+  }
+  function cmtLabel(target) {
+    var s = String(target), sh = /^S:/.test(s), parts = (sh ? s.slice(2) : s).split('/');
+    var a = parts[0], fid = parts.slice(1).join('/');
+    if (sh) {
+      var sf = W.sharedFns(a).find(function (x) { return x.fn.id === fid; });
+      return sf ? '公共 · ' + sf.fn.name : s;
+    }
+    var p = W.pages[a];
+    if (!p) return s;
+    if (!fid) return p.title;
+    var f = p.fns.find(function (x) { return x.id === fid; });
+    return f ? f.name : s;
+  }
+  function cmtBadgeText() {
+    var n = W.comments.count();
+    return n ? String(n) : '';
+  }
+  function cmtBtnHTML(key) {
+    var c = W.comments.count(cmtTarget(key));
+    return '<button class="cmt-btn' + (c ? ' has' : '') + '" data-cmt="' + h.esc(key) + '" title="对这个功能点留意见">意见 (<span class="cmt-n">' + c + '</span>)</button>';
+  }
+  /* 当前要挂的对象：圆点选中的功能点；没有选中时挂到本页 */
+  function cmtOwn() {
+    if (ui.cmt.sel) return ui.cmt.sel;
+    return ui.cur ? ui.cur.p.id : '';
+  }
+  /* 当前页范围：本页的页面级意见、本页功能点的意见，以及本端公共组件的意见 */
+  function cmtShown(list) {
+    if (ui.cmt.scope !== 'page' || !ui.cur) return list;
+    var p = ui.cur.p;
+    return list.filter(function (c) {
+      if (c.pageId === p.id) return true;
+      return c.target.indexOf('S:' + p.end + '/') === 0;
+    });
+  }
+  function cmtItemHTML(c) {
+    return '<div class="cmt-item"><div class="cmt-m"><b>' + h.esc(c.author || '未署名') + '</b><span>' + h.esc(D.localTime(c.at)) + '</span>' +
+      '<button class="cmt-act sm" data-cmt-act="del" data-cid="' + h.esc(c.id) + '">删除</button></div><div class="cmt-t">' + h.esc(c.text) + '</div></div>';
+  }
+  function cmtGroupsHTML(list) {
+    var order = [], map = {};
+    list.forEach(function (c) {
+      if (!map[c.target]) { map[c.target] = []; order.push(c.target); }
+      map[c.target].push(c);
+    });
+    return order.map(function (t) {
+      return '<div class="cmt-g' + (t === ui.cmt.sel ? ' on' : '') + '"><h4><code>' + h.esc(t) + '</code> ' + h.esc(cmtLabel(t)) + ' · ' + map[t].length + ' 条</h4>' +
+        map[t].map(cmtItemHTML).join('') + '</div>';
+    }).join('');
+  }
+  function cmtPanelHTML() {
+    var all = W.comments.list(), shown = cmtShown(all), own = cmtOwn();
+    var sc = ui.cmt.scope === 'page';
+    return '<div class="cmt-h"><b>评审意见</b><span>共 ' + all.length + ' 条</span><button class="cmt-x" data-cmt-act="close" title="关闭">×</button></div>' +
+      '<div class="cmt-tools"><label>作者 <input class="cmt-inp" id="cmt-author" value="' + h.esc(W.comments.author()) + '" placeholder="可不填"></label>' +
+      '<button class="cmt-act sm' + (sc ? ' on' : '') + '" data-cmt-act="scope" data-v="page">本页</button><button class="cmt-act sm' + (sc ? '' : ' on') + '" data-cmt-act="scope" data-v="all">全部</button></div>' +
+      '<div class="cmt-compose"><div class="cmt-to">挂到：<b>' + h.esc(own ? cmtLabel(own) : '请先打开一个页面') + '</b>' + (ui.cmt.sel ? '<a data-cmt-act="page">改为本页</a>' : '') + '</div>' +
+      '<textarea class="cmt-ta" id="cmt-text" rows="3" placeholder="写下修改意见，例如：驳回时要填写原因">' + h.esc(ui.cmt.draft) + '</textarea>' +
+      '<div class="cmt-row"><span class="cmt-err" id="cmt-err"></span><button class="cmt-act pri" data-cmt-act="submit">提交意见</button></div></div>' +
+      '<div class="cmt-body">' + (shown.length ? cmtGroupsHTML(shown) : '<p class="cmt-empty">' + (sc && ui.cur ? '本页还没有意见。' : '还没有意见。') + '</p>') + '</div>' +
+      '<div class="cmt-foot"><span>意见保存在本机浏览器，导出后交给负责修改的人。</span><button class="cmt-act" data-cmt-act="export">导出意见 JSON</button></div>';
+  }
+  function cmtRenderPanel() {
+    var box = $('#cmt-panel');
+    if (!box) return;
+    var body = box.querySelector('.cmt-body'), top = body ? body.scrollTop : 0;
+    box.innerHTML = cmtPanelHTML();
+    body = box.querySelector('.cmt-body');
+    if (body) body.scrollTop = top;
+  }
+  function cmtPopHTML(target) {
+    var list = W.comments.list(target);
+    return '<div class="cmt-h"><b>' + h.esc(cmtLabel(target)) + '</b><span>' + h.esc(target) + '</span><button class="cmt-x" data-cmt-act="popclose" title="关闭">×</button></div>' +
+      '<div class="cmt-body">' + (list.length ? list.map(cmtItemHTML).join('') : '<p class="cmt-empty">还没有意见。</p>') + '</div>' +
+      '<div class="cmt-compose"><textarea class="cmt-ta" id="cmt-pop-text" rows="3" placeholder="对这个功能点写意见">' + h.esc(ui.cmt.popDraft) + '</textarea>' +
+      '<div class="cmt-row"><span class="cmt-err" id="cmt-pop-err"></span><button class="cmt-act pri" data-cmt-act="popsubmit">提交</button></div></div>';
+  }
+  function cmtRenderPop() {
+    var box = $('#cmt-pop');
+    if (!box || !ui.cmt.pop) return;
+    box.innerHTML = cmtPopHTML(ui.cmt.pop);
+  }
+  function cmtOpenPop(target, anchor) {
+    var box = $('#cmt-pop');
+    if (!box) return;
+    ui.cmt.pop = target;
+    cmtRenderPop();
+    box.classList.add('open');
+    var r = anchor.getBoundingClientRect();
+    var left = r.left - 340;
+    if (left < 8) left = Math.min(r.right + 8, innerWidth - 340);
+    box.style.left = Math.max(8, left) + 'px';
+    box.style.top = Math.max(60, Math.min(r.top, innerHeight - 260)) + 'px';
+  }
+  function cmtClosePop() {
+    var box = $('#cmt-pop');
+    ui.cmt.pop = null;
+    if (box) { box.classList.remove('open'); box.innerHTML = ''; }
+  }
+  function cmtToggle(on) {
+    var B = document.body.classList;
+    B.toggle('cmt-on', on === undefined ? !B.contains('cmt-on') : !!on);
+    if (!B.contains('cmt-on')) cmtClosePop();
+    cmtSync();
+  }
+  /* 数据变化或画面切换后同步：顶栏角标、卡片按钮计数、打开中的面板 */
+  function cmtSync() {
+    if (!W.comments) return;
+    var badge = cmtBadgeText();
+    $$('.cmt-badge').forEach(function (b) { b.textContent = badge; });
+    $$('[data-cmt]').forEach(function (b) {
+      var c = W.comments.count(cmtTarget(b.dataset.cmt));
+      b.classList.toggle('has', c > 0);
+      var n = b.querySelector('.cmt-n');
+      if (n) n.textContent = c;
+    });
+    if (document.body.classList.contains('cmt-on')) cmtRenderPanel();
+    if (ui.cmt.pop) cmtRenderPop();
+    syncTools();
+  }
+  /* 点圆点时，若意见面板开着，把意见挂到这个功能点 */
+  function cmtFollow(key) {
+    if (!document.body.classList.contains('cmt-on')) return;
+    var t = cmtTarget(key);
+    if (!t) return;
+    ui.cmt.sel = t;
+    cmtSync();
+    var g = $('#cmt-panel .cmt-g.on');
+    if (g) g.scrollIntoView({ block: 'nearest' });
+  }
+  function cmtSave(target, text, errId) {
+    try {
+      W.comments.add({ target: target, text: text });
+      return true;
+    } catch (e) {
+      var el = $('#' + errId);
+      if (el) el.textContent = e.message;
+      return false;
+    }
+  }
+  function cmtAct(el) {
+    var k = el.dataset.cmtAct;
+    if (k === 'close') return cmtToggle(false);
+    if (k === 'scope') { ui.cmt.scope = el.dataset.v; return cmtSync(); }
+    if (k === 'page') { ui.cmt.sel = null; return cmtSync(); }
+    if (k === 'submit') {
+      var t = cmtOwn();
+      if (!t) { $('#cmt-err').textContent = '先打开一个页面，再留意见。'; return; }
+      if (!cmtSave(t, ($('#cmt-text') || {}).value || '', 'cmt-err')) return;
+      ui.cmt.draft = '';
+      return cmtSync();
+    }
+    if (k === 'popsubmit') {
+      if (!cmtSave(ui.cmt.pop, ($('#cmt-pop-text') || {}).value || '', 'cmt-pop-err')) return;
+      ui.cmt.popDraft = '';
+      return cmtSync();
+    }
+    if (k === 'del') { W.comments.remove(el.dataset.cid); return cmtSync(); }
+    if (k === 'export') { W.comments.download(W.comments.author()); return; }
+    if (k === 'popclose') { cmtClosePop(); return; }
+  }
+  /* 卡片上的“意见”按钮：打开或关闭该功能点的浮层 */
+  function cmtCardBtn(btn) {
+    var t = cmtTarget(btn.dataset.cmt);
+    if (!t) return;
+    if (ui.cmt.pop === t) return cmtClosePop();
+    cmtOpenPop(t, btn);
   }
 
   /* ---------- 左侧目录 ---------- */
@@ -4076,8 +4594,9 @@ W.product({
     var key = (shared ? 'S:' : '') + f.id;
     var st = D.status(f);
     var removed = D.removed(f);
+    var visible = fnVisibleForRole(f, ui.role);
     var n = shared ? D.letter(i) : i + 1;
-    return '<div class="fc' + (removed ? ' removed fold' : '') + '" data-fid="' + h.esc(key) + '"><div class="fc-h" data-fc="' + h.esc(key) + '"><span class="n' + (shared ? ' sh' : st !== 'confirmed' ? ' st-' + st : '') + '">' + n + '</span><b>' + h.esc(f.name) + '<span class="fid">' + h.esc(f.id) + '</span> ' + D.badgeHTML(f, D.multiRelease() ? D.cur() : '__none__') + (f.ui === false ? '<span class="bdg ui">无界面</span>' : '') + '</b></div>' +
+    return '<div class="fc' + (removed ? ' removed fold' : !visible ? ' hidden-role' : '') + '" data-fid="' + h.esc(key) + '" data-fn="' + h.esc(f.id) + '" style="' + (!visible ? 'display:none' : '') + '"><div class="fc-h" data-fc="' + h.esc(key) + '"><span class="n' + (shared ? ' sh' : st !== 'confirmed' ? ' st-' + st : '') + '">' + n + '</span><b>' + h.esc(f.name) + '<span class="fid">' + h.esc(f.id) + '</span> ' + D.badgeHTML(f, D.multiRelease() ? D.cur() : '__none__') + (f.ui === false ? '<span class="bdg ui">无界面</span>' : '') + '</b>' + cmtBtnHTML(key) + '</div>' +
       '<div class="fc-b">' + D.fnBodyHTML(f, p, { states: states, ver: D.multiRelease() ? D.cur() : '__none__', showRemoved: chgOn() }) + '</div></div>';
   }
   function renderRight(p, st) {
@@ -4181,7 +4700,7 @@ W.product({
     ui.hostEnd = null;
     ui.docKey = '';
     renderLeft('flow', r, null);
-    $('#right').innerHTML = '<div class="np"><h2>核心流程</h2><p class="goal">从左侧选择一条流程。演示中可以直接点击画板里的按钮前进，也可以使用底部的“上一步／下一步”。</p></div>';
+    if (!ui.proto) $('#right').innerHTML = '<div class="np"><h2>核心流程</h2><p class="goal">从左侧选择一条流程。演示中可以直接点击画板里的按钮前进，也可以使用底部的“上一步／下一步”。</p></div>';
     $('#stage-in').innerHTML = '<div class="doc"><h1>核心流程演示</h1><p>共 ' + (W.P.flows || []).length + ' 条流程。</p>' + (W.P.flows || []).map(function (f) {
       return '<h3>' + h.esc(f.name) + '</h3>' + (f.desc ? '<p>' + W.md.inline(f.desc) + '</p>' : '') + '<p><a href="#" data-step="' + h.esc(f.id) + '|0">▶ 开始演示（' + f.steps.length + ' 步）</a></p>';
     }).join('') + '</div>';
@@ -4213,7 +4732,7 @@ W.product({
       var md = D.markdown({ html: true, changesOnly: only, stats: statsHTML(only) });
       $('#stage-in').innerHTML = '<div class="doc" id="doc"><div class="doc-bar"><span class="l">需求文档与原型同源；改需求请改源文件后重新构建</span>' +
         (D.multiRelease() ? '<button class="vbtn chg' + (only ? ' on' : '') + '" data-tool="chg">只看 ' + h.esc(D.cur()) + ' 变化</button>' : '') +
-        '<button class="vbtn" data-act-doc="print">打印 / 存为 PDF</button><button class="vbtn" data-act-doc="md">导出 Markdown</button></div><div id="docbody"></div></div>';
+        '<button class="vbtn" data-act-doc="print">打印 / 存为 PDF</button><button class="vbtn" data-act-doc="md">导出 Markdown</button><button class="vbtn" data-act-doc="csv" title="功能点、字段、验收条件，CSV，Excel 可直接打开">导出 CSV</button></div><div id="docbody"></div></div>';
       W.md.into($('#docbody'), md);
       ui.docKey = key;
       renderDocLeft();
@@ -4265,6 +4784,17 @@ W.product({
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = (W.P.name || '需求') + '-需求文档-' + D.cur() + (chgOn() && D.multiRelease() ? '-本版变化' : '') + '.md';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+
+  /* 导出 CSV：文件带 UTF-8 BOM，Excel 双击即可正确显示中文 */
+  function exportCsv() {
+    var blob = new Blob(['\uFEFF' + D.csvText()], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (W.P.name || '需求') + '-研发测试清单-' + D.cur() + '.csv';
     document.body.appendChild(a);
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
@@ -4344,7 +4874,20 @@ W.product({
   }
 
   /* ---------- 事件 ---------- */
+  function setRole(roleId) {
+    ui.role = roleId;
+    pref('role', roleId);
+    var roleSel = $('#role-sel');
+    if (roleSel) roleSel.value = roleId;
+    render({ keepSel: true });
+  }
+  W.setRole = setRole;
   function onKey(e) {
+    if (e.key === 'Escape' && (ui.cmt.pop || document.body.classList.contains('cmt-on'))) {
+      if (ui.cmt.pop) cmtClosePop();
+      else cmtToggle(false);
+      return;
+    }
     if (e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'h' || e.key === 'H') toggleHot();
@@ -4363,12 +4906,18 @@ W.product({
   }
   function toggleDots() {
     document.body.classList.toggle('no-dots');
-    pref('noDots', document.body.classList.contains('no-dots'));
+    if (!ui.proto) pref('noDots', document.body.classList.contains('no-dots'));
     $$('.mini-sw[data-tool="dots"]').forEach(function (x) { x.classList.toggle('on', !document.body.classList.contains('no-dots')); });
     syncTools();
   }
   document.addEventListener('click', function (e) {
     var t = e.target;
+    var cb = t.closest('[data-cmt]');
+    if (cb) { cmtCardBtn(cb); return; }
+    var ca = t.closest('[data-cmt-act]');
+    if (ca) { cmtAct(ca); return; }
+    if (ui.cmt.pop && !t.closest('#cmt-pop')) cmtClosePop();
+    if (t.closest('#cmt-panel,#cmt-pop')) return;
     var tb = t.closest('[data-tab]');
     if (tb) {
       e.preventDefault();
@@ -4379,7 +4928,7 @@ W.product({
       return;
     }
     var fdot = t.closest('[data-fdot]');
-    if (fdot) { selectFn(fdot.dataset.fdot, true); return; }
+    if (fdot) { cmtFollow(fdot.dataset.fdot); selectFn(fdot.dataset.fdot, true); return; }
     var fch = t.closest('[data-fc]');
     if (fch) {
       var card = fch.parentNode;
@@ -4416,6 +4965,7 @@ W.product({
     var ad = t.closest('[data-act-doc]');
     if (ad) {
       if (ad.dataset.actDoc === 'md') exportMd();
+      if (ad.dataset.actDoc === 'csv') exportCsv();
       if (ad.dataset.actDoc === 'print') window.print();
       return;
     }
@@ -4424,6 +4974,8 @@ W.product({
       var k2 = tool.dataset.tool, B = document.body.classList;
       if (k2 === 'hot') toggleHot();
       if (k2 === 'dots') toggleDots();
+      if (k2 === 'comments') cmtToggle();
+      if (k2 === 'csv') exportCsv();
       if (k2 === 'sdots') { pref('sharedDots', !pref('sharedDots')); tool.classList.toggle('on', !!pref('sharedDots')); placeDots(); }
       if (k2 === 'chg') { B.toggle('chg-on'); pref('chg', B.contains('chg-on')); ui.docKey = ''; render({ keepSel: true }); }
       if (k2 === 'zoom') { ui.zoom = ui.zoom === 'fit' ? '100' : 'fit'; fit(); }
@@ -4469,6 +5021,13 @@ W.product({
   document.addEventListener('change', function (e) {
     var sl = e.target;
     if (sl.matches && sl.matches('select[data-pick]')) sl.classList.toggle('e', !sl.value);
+    if (sl.id === 'cmt-author') W.comments.setAuthor(sl.value);
+    if (sl.id === 'role-sel') setRole(sl.value);
+  });
+  /* 意见草稿实时保存在内存里，面板重绘时不丢字 */
+  document.addEventListener('input', function (e) {
+    if (e.target.id === 'cmt-text') ui.cmt.draft = e.target.value;
+    if (e.target.id === 'cmt-pop-text') ui.cmt.popDraft = e.target.value;
   });
   document.addEventListener('scroll', function (e) { if (e.target.closest && e.target.closest('#ab')) placeDotsSoon(); }, true);
   document.addEventListener('keydown', onKey);
@@ -4487,6 +5046,8 @@ W.product({
       sharedDots: !!pref('sharedDots'),
       ignoredMarks: $$('#dots .xbox').length,
       cards: $$('#right .fc').length,
+      commentsOpen: document.body.classList.contains('cmt-on'),
+      commentCount: W.comments.count(),
       unknown: ui.unknown, scale: ui.scale, errors: W.errors.slice()
     };
   };
@@ -4497,11 +5058,14 @@ W.product({
       return;
     }
     finalize();
-    if (pref('noDots')) document.body.classList.add('no-dots');
+    if (ui.proto) document.body.classList.add('no-dots', 'no-r');
+    else if (pref('noDots')) document.body.classList.add('no-dots');
     if (pref('chg') && D.multiRelease()) document.body.classList.add('chg-on');
     document.body.classList.add('no-anim');
     if (innerWidth < 1500 && innerWidth > 1100) document.body.classList.add('no-l');
     renderTop();
+    /* 评审意见抽屉和浮层：和画板、需求面板分开，原型阶段也能用 */
+    document.body.insertAdjacentHTML('beforeend', '<aside class="cmt-panel" id="cmt-panel"></aside><div class="cmt-pop" id="cmt-pop"></div>');
     render();
     syncTools();
     setTimeout(function () { document.body.classList.remove('no-anim'); }, 50);
