@@ -4,7 +4,7 @@
   var W = window.W, h = W.h, D = W.doc, HOST = W.host;
   function $(s, r) { return (r || document).querySelector(s); }
   function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
-  var ui = { zoom: 'fit', last: {}, scale: 1, cur: null, sel: null, visible: {}, docKey: '', enterSeq: 0, hostEnd: null, unknown: false, proto: false };
+  var ui = { zoom: 'fit', last: {}, scale: 1, cur: null, sel: null, visible: {}, docKey: '', enterSeq: 0, hostEnd: null, unknown: false, proto: false, cmt: { scope: 'page', sel: null, page: null, draft: '', popDraft: '', pop: null } };
   var PREF;
   function pref(k, v) {
     try {
@@ -155,6 +155,7 @@
       '<div class="vtools">' + badge +
       '<button class="vbtn" data-tool="hot" title="显示画板中所有可点击区域">热区 <kbd>H</kbd></button>' +
       '<button class="vbtn" data-tool="dots" title="显示或隐藏功能点标注圆点">标注 <kbd>N</kbd></button>' +
+      '<button class="vbtn" data-tool="comments" title="查看、添加和导出评审意见">意见<span class="cmt-badge">' + cmtBadgeText() + '</span></button>' +
       (D.multiRelease() ? '<button class="vbtn chg" data-tool="chg" title="只看 ' + h.esc(D.cur()) + ' 新增、修改、移除的功能点">本版变化</button>' : '') +
       '<button class="vbtn" data-tool="zoom" id="zoomBtn"><span class="lb">适应窗口</span></button>' +
       '<button class="vbtn" data-tool="left"><span class="lb">目录</span></button>' +
@@ -174,6 +175,8 @@
     if (c) c.classList.toggle('on', B.contains('chg-on'));
     var hot = $('[data-tool="hot"]');
     if (hot) hot.classList.toggle('on', B.contains('hot'));
+    var cm = $('[data-tool="comments"]');
+    if (cm) cm.classList.toggle('on', B.contains('cmt-on'));
   }
 
   /* ---------- 主渲染 ---------- */
@@ -181,8 +184,8 @@
     o = o || {};
     var r = parse();
     document.body.classList.remove('m-l', 'm-r');
-    if (r.view === 'doc') return renderDoc(r);
-    if (r.view === 'flow') return renderFlowIndex(r);
+    if (r.view === 'doc') { renderDoc(r); return cmtSync(); }
+    if (r.view === 'flow') { renderFlowIndex(r); return cmtSync(); }
     var p = W.pages[r.id];
     var st = stOf(r.id, r.st);
     var flow = r.q.f ? flowById(r.q.f) : null;
@@ -198,6 +201,7 @@
     setTab(flow ? 'flow' : p.end);
     ui.last[p.end] = p.id;
     ui.cur = { p: p, st: st, flow: flow, q: r.q };
+    if (ui.cmt.page !== p.id) { ui.cmt.page = p.id; ui.cmt.sel = null; }
     ui.docKey = '';
     ui.unknown = false;
     if (!o.keepSel) ui.sel = r.q.fn || null;
@@ -206,6 +210,7 @@
     if (!ui.proto) renderRight(p, st);
     renderFlowbar(r, flow);
     if (paintNow) afterPaint();
+    cmtSync();
   }
   W.render = render;
 
@@ -466,6 +471,182 @@
     ui.hlT = setTimeout(function () { ui.hl = null; drawBoxes(null); }, 1600);
   }
 
+  /* ---------- 评审意见 ---------- */
+  /* 对象：功能点 `页面/功能点`，公共组件 `S:端/功能点`，页面级 `页面`。卡片 key 与之对应 */
+  function cmtTarget(key) {
+    var p = ui.cur && ui.cur.p;
+    if (!p || !key) return '';
+    return /^S:/.test(key) ? 'S:' + p.end + '/' + key.slice(2) : p.id + '/' + key;
+  }
+  function cmtLabel(target) {
+    var s = String(target), sh = /^S:/.test(s), parts = (sh ? s.slice(2) : s).split('/');
+    var a = parts[0], fid = parts.slice(1).join('/');
+    if (sh) {
+      var sf = W.sharedFns(a).find(function (x) { return x.fn.id === fid; });
+      return sf ? '公共 · ' + sf.fn.name : s;
+    }
+    var p = W.pages[a];
+    if (!p) return s;
+    if (!fid) return p.title;
+    var f = p.fns.find(function (x) { return x.id === fid; });
+    return f ? f.name : s;
+  }
+  function cmtBadgeText() {
+    var n = W.comments.count();
+    return n ? String(n) : '';
+  }
+  function cmtBtnHTML(key) {
+    var c = W.comments.count(cmtTarget(key));
+    return '<button class="cmt-btn' + (c ? ' has' : '') + '" data-cmt="' + h.esc(key) + '" title="对这个功能点留意见">意见 (<span class="cmt-n">' + c + '</span>)</button>';
+  }
+  /* 当前要挂的对象：圆点选中的功能点；没有选中时挂到本页 */
+  function cmtOwn() {
+    if (ui.cmt.sel) return ui.cmt.sel;
+    return ui.cur ? ui.cur.p.id : '';
+  }
+  /* 当前页范围：本页的页面级意见、本页功能点的意见，以及本端公共组件的意见 */
+  function cmtShown(list) {
+    if (ui.cmt.scope !== 'page' || !ui.cur) return list;
+    var p = ui.cur.p;
+    return list.filter(function (c) {
+      if (c.pageId === p.id) return true;
+      return c.target.indexOf('S:' + p.end + '/') === 0;
+    });
+  }
+  function cmtItemHTML(c) {
+    return '<div class="cmt-item"><div class="cmt-m"><b>' + h.esc(c.author || '未署名') + '</b><span>' + h.esc(D.localTime(c.at)) + '</span>' +
+      '<button class="cmt-act sm" data-cmt-act="del" data-cid="' + h.esc(c.id) + '">删除</button></div><div class="cmt-t">' + h.esc(c.text) + '</div></div>';
+  }
+  function cmtGroupsHTML(list) {
+    var order = [], map = {};
+    list.forEach(function (c) {
+      if (!map[c.target]) { map[c.target] = []; order.push(c.target); }
+      map[c.target].push(c);
+    });
+    return order.map(function (t) {
+      return '<div class="cmt-g' + (t === ui.cmt.sel ? ' on' : '') + '"><h4><code>' + h.esc(t) + '</code> ' + h.esc(cmtLabel(t)) + ' · ' + map[t].length + ' 条</h4>' +
+        map[t].map(cmtItemHTML).join('') + '</div>';
+    }).join('');
+  }
+  function cmtPanelHTML() {
+    var all = W.comments.list(), shown = cmtShown(all), own = cmtOwn();
+    var sc = ui.cmt.scope === 'page';
+    return '<div class="cmt-h"><b>评审意见</b><span>共 ' + all.length + ' 条</span><button class="cmt-x" data-cmt-act="close" title="关闭">×</button></div>' +
+      '<div class="cmt-tools"><label>作者 <input class="cmt-inp" id="cmt-author" value="' + h.esc(W.comments.author()) + '" placeholder="可不填"></label>' +
+      '<button class="cmt-act sm' + (sc ? ' on' : '') + '" data-cmt-act="scope" data-v="page">本页</button><button class="cmt-act sm' + (sc ? '' : ' on') + '" data-cmt-act="scope" data-v="all">全部</button></div>' +
+      '<div class="cmt-compose"><div class="cmt-to">挂到：<b>' + h.esc(own ? cmtLabel(own) : '请先打开一个页面') + '</b>' + (ui.cmt.sel ? '<a data-cmt-act="page">改为本页</a>' : '') + '</div>' +
+      '<textarea class="cmt-ta" id="cmt-text" rows="3" placeholder="写下修改意见，例如：驳回时要填写原因">' + h.esc(ui.cmt.draft) + '</textarea>' +
+      '<div class="cmt-row"><span class="cmt-err" id="cmt-err"></span><button class="cmt-act pri" data-cmt-act="submit">提交意见</button></div></div>' +
+      '<div class="cmt-body">' + (shown.length ? cmtGroupsHTML(shown) : '<p class="cmt-empty">' + (sc && ui.cur ? '本页还没有意见。' : '还没有意见。') + '</p>') + '</div>' +
+      '<div class="cmt-foot"><span>意见保存在本机浏览器，导出后交给负责修改的人。</span><button class="cmt-act" data-cmt-act="export">导出意见 JSON</button></div>';
+  }
+  function cmtRenderPanel() {
+    var box = $('#cmt-panel');
+    if (!box) return;
+    var body = box.querySelector('.cmt-body'), top = body ? body.scrollTop : 0;
+    box.innerHTML = cmtPanelHTML();
+    body = box.querySelector('.cmt-body');
+    if (body) body.scrollTop = top;
+  }
+  function cmtPopHTML(target) {
+    var list = W.comments.list(target);
+    return '<div class="cmt-h"><b>' + h.esc(cmtLabel(target)) + '</b><span>' + h.esc(target) + '</span><button class="cmt-x" data-cmt-act="popclose" title="关闭">×</button></div>' +
+      '<div class="cmt-body">' + (list.length ? list.map(cmtItemHTML).join('') : '<p class="cmt-empty">还没有意见。</p>') + '</div>' +
+      '<div class="cmt-compose"><textarea class="cmt-ta" id="cmt-pop-text" rows="3" placeholder="对这个功能点写意见">' + h.esc(ui.cmt.popDraft) + '</textarea>' +
+      '<div class="cmt-row"><span class="cmt-err" id="cmt-pop-err"></span><button class="cmt-act pri" data-cmt-act="popsubmit">提交</button></div></div>';
+  }
+  function cmtRenderPop() {
+    var box = $('#cmt-pop');
+    if (!box || !ui.cmt.pop) return;
+    box.innerHTML = cmtPopHTML(ui.cmt.pop);
+  }
+  function cmtOpenPop(target, anchor) {
+    var box = $('#cmt-pop');
+    if (!box) return;
+    ui.cmt.pop = target;
+    cmtRenderPop();
+    box.classList.add('open');
+    var r = anchor.getBoundingClientRect();
+    var left = r.left - 340;
+    if (left < 8) left = Math.min(r.right + 8, innerWidth - 340);
+    box.style.left = Math.max(8, left) + 'px';
+    box.style.top = Math.max(60, Math.min(r.top, innerHeight - 260)) + 'px';
+  }
+  function cmtClosePop() {
+    var box = $('#cmt-pop');
+    ui.cmt.pop = null;
+    if (box) { box.classList.remove('open'); box.innerHTML = ''; }
+  }
+  function cmtToggle(on) {
+    var B = document.body.classList;
+    B.toggle('cmt-on', on === undefined ? !B.contains('cmt-on') : !!on);
+    if (!B.contains('cmt-on')) cmtClosePop();
+    cmtSync();
+  }
+  /* 数据变化或画面切换后同步：顶栏角标、卡片按钮计数、打开中的面板 */
+  function cmtSync() {
+    if (!W.comments) return;
+    var badge = cmtBadgeText();
+    $$('.cmt-badge').forEach(function (b) { b.textContent = badge; });
+    $$('[data-cmt]').forEach(function (b) {
+      var c = W.comments.count(cmtTarget(b.dataset.cmt));
+      b.classList.toggle('has', c > 0);
+      var n = b.querySelector('.cmt-n');
+      if (n) n.textContent = c;
+    });
+    if (document.body.classList.contains('cmt-on')) cmtRenderPanel();
+    if (ui.cmt.pop) cmtRenderPop();
+    syncTools();
+  }
+  /* 点圆点时，若意见面板开着，把意见挂到这个功能点 */
+  function cmtFollow(key) {
+    if (!document.body.classList.contains('cmt-on')) return;
+    var t = cmtTarget(key);
+    if (!t) return;
+    ui.cmt.sel = t;
+    cmtSync();
+    var g = $('#cmt-panel .cmt-g.on');
+    if (g) g.scrollIntoView({ block: 'nearest' });
+  }
+  function cmtSave(target, text, errId) {
+    try {
+      W.comments.add({ target: target, text: text });
+      return true;
+    } catch (e) {
+      var el = $('#' + errId);
+      if (el) el.textContent = e.message;
+      return false;
+    }
+  }
+  function cmtAct(el) {
+    var k = el.dataset.cmtAct;
+    if (k === 'close') return cmtToggle(false);
+    if (k === 'scope') { ui.cmt.scope = el.dataset.v; return cmtSync(); }
+    if (k === 'page') { ui.cmt.sel = null; return cmtSync(); }
+    if (k === 'submit') {
+      var t = cmtOwn();
+      if (!t) { $('#cmt-err').textContent = '先打开一个页面，再留意见。'; return; }
+      if (!cmtSave(t, ($('#cmt-text') || {}).value || '', 'cmt-err')) return;
+      ui.cmt.draft = '';
+      return cmtSync();
+    }
+    if (k === 'popsubmit') {
+      if (!cmtSave(ui.cmt.pop, ($('#cmt-pop-text') || {}).value || '', 'cmt-pop-err')) return;
+      ui.cmt.popDraft = '';
+      return cmtSync();
+    }
+    if (k === 'del') { W.comments.remove(el.dataset.cid); return cmtSync(); }
+    if (k === 'export') { W.comments.download(W.comments.author()); return; }
+    if (k === 'popclose') { cmtClosePop(); return; }
+  }
+  /* 卡片上的“意见”按钮：打开或关闭该功能点的浮层 */
+  function cmtCardBtn(btn) {
+    var t = cmtTarget(btn.dataset.cmt);
+    if (!t) return;
+    if (ui.cmt.pop === t) return cmtClosePop();
+    cmtOpenPop(t, btn);
+  }
+
   /* ---------- 左侧目录 ---------- */
   function renderLeft(tab, r, flow) {
     var L = $('#left');
@@ -500,7 +681,7 @@
     var st = D.status(f);
     var removed = D.removed(f);
     var n = shared ? D.letter(i) : i + 1;
-    return '<div class="fc' + (removed ? ' removed fold' : '') + '" data-fid="' + h.esc(key) + '"><div class="fc-h" data-fc="' + h.esc(key) + '"><span class="n' + (shared ? ' sh' : st !== 'confirmed' ? ' st-' + st : '') + '">' + n + '</span><b>' + h.esc(f.name) + '<span class="fid">' + h.esc(f.id) + '</span> ' + D.badgeHTML(f, D.multiRelease() ? D.cur() : '__none__') + (f.ui === false ? '<span class="bdg ui">无界面</span>' : '') + '</b></div>' +
+    return '<div class="fc' + (removed ? ' removed fold' : '') + '" data-fid="' + h.esc(key) + '"><div class="fc-h" data-fc="' + h.esc(key) + '"><span class="n' + (shared ? ' sh' : st !== 'confirmed' ? ' st-' + st : '') + '">' + n + '</span><b>' + h.esc(f.name) + '<span class="fid">' + h.esc(f.id) + '</span> ' + D.badgeHTML(f, D.multiRelease() ? D.cur() : '__none__') + (f.ui === false ? '<span class="bdg ui">无界面</span>' : '') + '</b>' + cmtBtnHTML(key) + '</div>' +
       '<div class="fc-b">' + D.fnBodyHTML(f, p, { states: states, ver: D.multiRelease() ? D.cur() : '__none__', showRemoved: chgOn() }) + '</div></div>';
   }
   function renderRight(p, st) {
@@ -768,6 +949,11 @@
 
   /* ---------- 事件 ---------- */
   function onKey(e) {
+    if (e.key === 'Escape' && (ui.cmt.pop || document.body.classList.contains('cmt-on'))) {
+      if (ui.cmt.pop) cmtClosePop();
+      else cmtToggle(false);
+      return;
+    }
     if (e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'h' || e.key === 'H') toggleHot();
@@ -792,6 +978,12 @@
   }
   document.addEventListener('click', function (e) {
     var t = e.target;
+    var cb = t.closest('[data-cmt]');
+    if (cb) { cmtCardBtn(cb); return; }
+    var ca = t.closest('[data-cmt-act]');
+    if (ca) { cmtAct(ca); return; }
+    if (ui.cmt.pop && !t.closest('#cmt-pop')) cmtClosePop();
+    if (t.closest('#cmt-panel,#cmt-pop')) return;
     var tb = t.closest('[data-tab]');
     if (tb) {
       e.preventDefault();
@@ -802,7 +994,7 @@
       return;
     }
     var fdot = t.closest('[data-fdot]');
-    if (fdot) { selectFn(fdot.dataset.fdot, true); return; }
+    if (fdot) { cmtFollow(fdot.dataset.fdot); selectFn(fdot.dataset.fdot, true); return; }
     var fch = t.closest('[data-fc]');
     if (fch) {
       var card = fch.parentNode;
@@ -847,6 +1039,7 @@
       var k2 = tool.dataset.tool, B = document.body.classList;
       if (k2 === 'hot') toggleHot();
       if (k2 === 'dots') toggleDots();
+      if (k2 === 'comments') cmtToggle();
       if (k2 === 'sdots') { pref('sharedDots', !pref('sharedDots')); tool.classList.toggle('on', !!pref('sharedDots')); placeDots(); }
       if (k2 === 'chg') { B.toggle('chg-on'); pref('chg', B.contains('chg-on')); ui.docKey = ''; render({ keepSel: true }); }
       if (k2 === 'zoom') { ui.zoom = ui.zoom === 'fit' ? '100' : 'fit'; fit(); }
@@ -892,6 +1085,12 @@
   document.addEventListener('change', function (e) {
     var sl = e.target;
     if (sl.matches && sl.matches('select[data-pick]')) sl.classList.toggle('e', !sl.value);
+    if (sl.id === 'cmt-author') W.comments.setAuthor(sl.value);
+  });
+  /* 意见草稿实时保存在内存里，面板重绘时不丢字 */
+  document.addEventListener('input', function (e) {
+    if (e.target.id === 'cmt-text') ui.cmt.draft = e.target.value;
+    if (e.target.id === 'cmt-pop-text') ui.cmt.popDraft = e.target.value;
   });
   document.addEventListener('scroll', function (e) { if (e.target.closest && e.target.closest('#ab')) placeDotsSoon(); }, true);
   document.addEventListener('keydown', onKey);
@@ -910,6 +1109,8 @@
       sharedDots: !!pref('sharedDots'),
       ignoredMarks: $$('#dots .xbox').length,
       cards: $$('#right .fc').length,
+      commentsOpen: document.body.classList.contains('cmt-on'),
+      commentCount: W.comments.count(),
       unknown: ui.unknown, scale: ui.scale, errors: W.errors.slice()
     };
   };
@@ -926,6 +1127,8 @@
     document.body.classList.add('no-anim');
     if (innerWidth < 1500 && innerWidth > 1100) document.body.classList.add('no-l');
     renderTop();
+    /* 评审意见抽屉和浮层：和画板、需求面板分开，原型阶段也能用 */
+    document.body.insertAdjacentHTML('beforeend', '<aside class="cmt-panel" id="cmt-panel"></aside><div class="cmt-pop" id="cmt-pop"></div>');
     render();
     syncTools();
     setTimeout(function () { document.body.classList.remove('no-anim'); }, 50);

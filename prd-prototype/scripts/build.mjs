@@ -270,7 +270,7 @@ export async function build(input, opts = {}) {
     ...vendor,
     rt('core.js'), rt('behave.js'), rt('md.js'), rt('doc.js'), rt('host.js'), rt('audit.js'),
     ...userJs.map((x) => '/* ' + path.relative(prd, x.f).split(path.sep).join('/') + ' */\n' + x.src),
-    rt('viewer.js')
+    rt('comments.js'), rt('viewer.js')
   ];
   scripts.forEach((s, i) => { if (/<\/script/i.test(s) && i >= vendor.length) die('运行时脚本中出现 </script'); });
   const title = (cfg.name || '原型') + ' · ' + release + (proto ? ' · 原型' : ' · 原型需求');

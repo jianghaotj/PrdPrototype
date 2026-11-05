@@ -27,7 +27,8 @@
 - **需求文档**（首页）：概述与范围、角色权限、信息架构、核心流程、全局规则、逐页需求（页面目标、状态与出现条件、功能点、字段表、规则、异常与边界）、公共组件、数据字典、需求与原型的差异、待确认与 AI 假设、澄清记录、变更记录。
 - **各端页面**：PC 浏览器框或手机框画板。画板上的编号圆点与右侧功能点卡片一一对应，点击互相定位，并高亮目标区域。弹层状态只显示最高层的功能点。
 - **核心流程**：逐步演示。直接点画板里的按钮也会前进。
-- **工具**：热区（`H`）、标注圆点（`N`）、缩放、目录和需求面板开关、数据场景切换、重置演示数据、本版变化。
+- **工具**：热区（`H`）、标注圆点（`N`）、缩放、目录和需求面板开关、数据场景切换、重置演示数据、本版变化、意见。
+- **意见**：评审的人可以在功能点上留意见，然后导出一个 JSON 文件。意见只存在评审人自己的浏览器里，不上传。`scripts/merge-comments.mjs` 把几份 JSON 合并成按功能点分组的 Markdown，交给修改需求的人或 Agent 逐条处理。
 - **声明式交互**：表单必填和长度校验、提交（防重复点击、失败后可重试、成功后更新列表）、搜索筛选。这些由组件实现，规则会自动写进需求文档。
 - **范围基线**（可选）：确认范围后写入 `prd/scope.json`。之后新增或移除的页面、状态、功能点只给提醒，并在需求文档单列“范围确认后新增”。
 - **验收条件**（可选）：功能点可以写 `ac`（前置条件、用户操作、预期结果），集中列在需求文档的“验收条件”一章。
@@ -134,6 +135,7 @@ node prd-prototype/scripts/probe-host.mjs 已有原型.html [--steps '[...]'] [-
 node prd-prototype/scripts/build.mjs <项目目录> [--md]
 node prd-prototype/scripts/build.mjs <项目目录> --scope-baseline --confirmed-at 2026-11-04
 node prd-prototype/scripts/snap.mjs <产物.html> [--view "#/p/P01/list"]
+node prd-prototype/scripts/merge-comments.mjs 意见A.json 意见B.json -o 评审意见合并.md [--prd <项目目录>]
 node prd-prototype/scripts/test-skill.mjs
 ```
 
@@ -143,6 +145,7 @@ node prd-prototype/scripts/test-skill.mjs
 - `build.mjs`：构建并对账。`--md` 同时导出需求文档 Markdown。`--scope-baseline` 在用户确认范围增删后，刷新 `prd/scope.json`。
 - `probe-host.mjs`：探测已有 HTML 的结构和风险点。
 - `snap.mjs`：截取交付物的各个视图，用来检查画面。
+- `merge-comments.mjs`：把交付物里导出的评审意见 JSON 合并成 Markdown，每条带序号。
 - `test-skill.mjs`：技能自身的回归测试。
 
 ## 样例
@@ -163,6 +166,7 @@ node prd-prototype/scripts/test-skill.mjs
 - 声明式交互：校验、提交、搜索筛选、`FIELD_REQ`。
 - 规范包：`--theme`、PC 作用域、对话框、分页、缺省页。
 - 版本迭代与归档。
+- 评审意见：留意见、刷新后保留、导出 JSON、原型阶段和托管原型阶段的面板，以及多份意见的合并。
 - 浏览器端交互：圆点定位、状态切换、弹层层级、流程演示、快捷键、窄屏、托管状态识别、sandbox。
 - 内容安全：DOMPurify 清洗。
 - 脚手架。

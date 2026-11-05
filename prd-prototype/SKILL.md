@@ -25,7 +25,7 @@ description: "一站式产出“交互原型 + 需求文档”的单 HTML：从�
 - **需求文档**（首页）：概述、范围、角色、信息架构、核心流程、全局规则、逐页需求、公共组件、数据字典、验收条件（有 `ac` 时）、需求与原型的差异（托管模式）、范围确认后新增（有范围基线时）、待确认与 AI 假设、澄清记录、变更记录；右侧是评审摘要和构建检查结果。
 - **各端页面**：左侧目录，中间设备画板（PC 浏览器框或手机框），右侧需求面板（页面目标、状态与出现条件、编号功能点卡片、页面规则、入口、跳转）。画板上的编号圆点与卡片一一对应。
 - **核心流程**：逐步演示，可直接点画板前进。
-- 工具：热区 `H`、标注圆点 `N`、缩放、目录/需求面板开关、重置演示数据、本版变化（多版本时）。
+- 工具：热区 `H`、标注圆点 `N`、缩放、目录/需求面板开关、重置演示数据、本版变化（多版本时）、意见（顶栏“意见”，评审意见可导出 JSON，见 `references/comments.md`）。
 
 ## 任务路由
 
@@ -68,8 +68,8 @@ description: "一站式产出“交互原型 + 需求文档”的单 HTML：从�
 同一版本内按评审意见修改，不升版本、不写 `changes`。
 
 1. 找到项目的 `prd/` 目录（交付 HTML 旁边）。只改 `prd/` 下的源文件，不手改交付 HTML。
-2. 评审意见改到对应位置：页面/状态/功能点/字段/规则。新增的功能点同时在 render 里实现并绑定；删掉的功能点同时从 render 里删掉。
-3. 来源写评审结论，如 `src: '11/04 评审意见 1'`；用户确认了某条“待确认”或“AI 假设”时，改写内容、去掉标记和 `status`，`src` 写确认来源。
+2. 评审意见改到对应位置：页面/状态/功能点/字段/规则。意见是交付 HTML 里导出的 JSON 时，先运行 `node scripts/merge-comments.mjs <意见1.json> [意见2.json …] -o 评审意见合并.md --prd <项目目录>`，按合并稿的 `#序号` 逐条处理（格式见 `references/comments.md`）。新增的功能点同时在 render 里实现并绑定；删掉的功能点同时从 render 里删掉。
+3. 来源写评审结论，如 `src: '11/04 评审意见 1'`；意见来自导出的 JSON 时，写 `src: '评审意见 #3（张三）'`，序号和作者取自合并稿。用户确认了某条“待确认”或“AI 假设”时，改写内容、去掉标记和 `status`，`src` 写确认来源。
 4. 评审推翻了某条澄清结论时，在该条 `clarify` 的 `a` 后注明“（11/04 评审改为……）”，不删原记录。
 5. 改完后先构建（不加 `--scope-baseline`），看 `SCOPE_ADDED` / `SCOPE_REMOVED`。有增删时，把这些条目逐条列给用户，说明是评审新增的还是误加的。**用户确认保留的条目后**，再执行 `--scope-baseline` 刷新基线，并加 `--confirmed-at <今天日期>`。误加的功能点直接删掉再构建。用户还没确认前不刷新，新增内容会继续以 `SCOPE_ADDED` 提醒，并留在需求文档“范围确认后新增”一章。只改文字、不增删时不需要刷新。
 6. 重新构建，汇报改了哪些功能点。需要单独追溯评审修改时，可以在 `releases` 加一个小版本（如 V1.0.1）并按流程 D 记录。
@@ -128,6 +128,7 @@ node scripts/probe-host.mjs <已有原型.html> [--steps '[{"js":"showPage(\"x\"
 node scripts/build.mjs <项目目录> [--md] [--out 文件名.html]                  # --md 同时导出需求文档 Markdown
 node scripts/build.mjs <项目目录> --scope-baseline [--confirmed-at 2026-11-04]  # 用户确认增删后：检查通过则刷新 prd/scope.json（新建时手写，见 spec-format.md）
 node scripts/snap.mjs <产物.html> [--view "#/p/P01/list"]... [--only] [--out 截图目录]   # 默认含需求文档和各端首页；原型阶段只含各端首页
+node scripts/merge-comments.mjs <意见1.json> [意见2.json ...] [-o 评审意见合并.md] [--prd <项目目录>]   # 合并交付 HTML 导出的评审意见
 node scripts/test-skill.mjs                                                   # 技能自身回归测试
 ```
 
@@ -138,6 +139,7 @@ node scripts/test-skill.mjs                                                   # 
 - `references/components.md`：线框组件 `h.*`、交互属性、页面写法范式、换设计体系的方法。
 - `references/host-mode.md`：为已有 HTML 补需求。
 - `references/iteration.md`：版本迭代与本版变化。
+- `references/comments.md`：评审意见的留存、导出 JSON 格式与合并（流程 C）。
 - `references/audit-codes.md`：构建检查代码与修改办法。
 - `examples/leave-approval/`：线框基线样例（手机端 + PC 端、表单、列表、抽屉、弹窗、流程、数据场景）。
 - `examples/course-mgmt/`：高教 PC 高保真样例（gaodeng-pc，列表搜索与分页、新建弹窗的校验与提交重试、详情抽屉）。

@@ -1167,6 +1167,107 @@ console.log('\n12. 原型阶段');
   }
 }
 
+/* ---------- 13. 评审意见回收 ---------- */
+console.log('\n13. 评审意见回收');
+{
+  const MERGE = path.join(SKILL, 'scripts', 'merge-comments.mjs');
+  const LS = 'prd-comments:leave-approval';
+  const PROTO_13 = [PROD, 'W.product({', "W.product({\n  stage: 'prototype',"];
+  const protoFile = variant(EXAMPLE, [PROTO_13]);
+  const pr = await build(protoFile, {});
+  const hostProto = await build(variant(HOSTFX, [PROTO_13]), {});
+  const bc = await launch();
+  try {
+    const pg = await bc.newPage({ width: 1600, height: 1000 });
+    const open = async (file, hash) => { await pg.goto('about:blank'); await pg.goto(fileUrl(file) + (hash || '')); await pg.waitFor('window.__PRD_READY === true', 20000); await sleep(400); };
+    const ev = (js) => pg.evaluate(js);
+    const jev = async (js) => JSON.parse(await pg.evaluate('JSON.stringify(' + js + ')'));
+    const submitPop = async (text) => ev(`(function () { var t = document.getElementById('cmt-pop-text'); t.value = ${JSON.stringify(text)}; t.dispatchEvent(new Event('input', { bubbles: true })); document.querySelector('[data-cmt-act=popsubmit]').click(); return 1; })()`);
+
+    /* 1. 默认模式：对功能点留意见，刷新后仍在 */
+    await open(ex.file, '#/p/P02/detail');
+    await ev('localStorage.clear(); 1');
+    await open(ex.file, '#/p/P02/detail');
+    await ev('W.comments.setAuthor("测试员"); 1');
+    await ev('document.querySelector(".cmt-btn[data-cmt=decide]").click(); 1');
+    await sleep(150);
+    await submitPop('驳回时请写明原因');
+    await sleep(150);
+    const s1 = await jev(`{ ls: localStorage.getItem('${LS}') || '', btn: document.querySelector('.cmt-btn[data-cmt=decide]').textContent.replace(/\\s+/g, '') }`);
+    await open(ex.file, '#/p/P02/detail');
+    const s1b = await jev(`{ btn: document.querySelector('.cmt-btn[data-cmt=decide]').textContent.replace(/\\s+/g, ''), n: W.comments.count('P02/decide') }`);
+    ok(s1.ls.indexOf('驳回时请写明原因') > 0 && s1.btn === '意见(1)' && s1b.n === 1 && s1b.btn === '意见(1)', '默认模式请假审批：对功能点“通过 / 驳回”添加意见，写入 ' + LS + '；刷新后仍在', JSON.stringify({ s1, s1b }));
+
+    /* 2. 导出 JSON：结构与文件名 */
+    const exp = await jev(`W.comments.exportJSON('测试员')`);
+    ok(exp.v === 1 && exp.productId === 'leave-approval' && exp.release === 'V1.0' && exp.author === '测试员' && Array.isArray(exp.comments) && exp.comments.length === 1 && exp.comments[0].target === 'P02/decide' && exp.comments[0].resolved === false, '导出对象含 v、productId、comments（每条有 target、text、author、at、resolved）', JSON.stringify(exp).slice(0, 300));
+    const names = await jev(`(function () { var got = []; var orig = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { got.push(this.download); }; try { W.comments.download('测试员'); } finally { HTMLAnchorElement.prototype.click = orig; } return got; })()`);
+    ok(names.length === 1 && /^请假审批-评审意见-V1\.0-\d{4}-\d{2}-\d{2}\.json$/.test(names[0]), '下载文件名为 (产品名)-评审意见-(release)-(日期).json', JSON.stringify(names));
+    const expFile = path.join(TMP, 'cmt-a.json');
+    fs.writeFileSync(expFile, JSON.stringify(exp, null, 2));
+
+    /* 3. 原型阶段：顶栏有“意见”，打开面板后 #right 仍空、no-r 仍在；点圆点自动选中功能点 */
+    await open(pr.file, '#/p/P02/detail');
+    await ev('localStorage.clear(); 1');
+    await open(pr.file, '#/p/P02/detail');
+    const t3a = await jev(`{ btn: !!document.querySelector('#top [data-tool="comments"]'), docTab: document.querySelectorAll('#top .vtabs a[data-tab="doc"]').length, right: document.getElementById('right').innerHTML.length, noR: document.body.classList.contains('no-r') }`);
+    await ev('document.querySelector("[data-tool=comments]").click(); 1');
+    await sleep(200);
+    const t3b = await jev(`{ open: W.viewerDiag().commentsOpen, right: document.getElementById('right').innerHTML.length, noR: document.body.classList.contains('no-r'), noDots: document.body.classList.contains('no-dots') }`);
+    ok(t3a.btn && t3a.docTab === 0 && t3a.right === 0 && t3a.noR && t3b.open && t3b.right === 0 && t3b.noR, '原型阶段：顶栏有“意见”按钮；打开面板后 #right 仍为空，no-r 仍在（不破坏 T12/T15）', JSON.stringify({ t3a, t3b }));
+    await ev('document.dispatchEvent(new KeyboardEvent("keydown", { key: "n" })); 1'); await sleep(200);
+    await ev('document.querySelector("#dots .fdot[data-fdot=decide]").click(); 1'); await sleep(200);
+    const t3c = await ev('document.querySelector("#cmt-panel .cmt-to").textContent');
+    ok(/通过 \/ 驳回/.test(t3c), '原型阶段：面板开着时点圆点，意见自动挂到该功能点（' + t3c + '）');
+    await ev('document.querySelector("#cmt-text").value = "原型阶段的意见"; document.querySelector("#cmt-text").dispatchEvent(new Event("input", { bubbles: true })); document.querySelector("[data-cmt-act=submit]").click(); 1'); await sleep(200);
+    const t3d = await jev(`{ n: W.comments.count('P02/decide'), open: W.viewerDiag().commentsOpen, right: document.getElementById('right').innerHTML.length }`);
+    ok(t3d.n === 1 && t3d.open && t3d.right === 0, '原型阶段：面板里对选中的功能点提交意见（写入 P02/decide），#right 仍为空', JSON.stringify(t3d));
+
+    /* 4. 托管原型阶段：面板可开、可添加、可导出 */
+    await open(hostProto.file, '#/p/C01/list');
+    await ev('localStorage.clear(); 1');
+    await open(hostProto.file, '#/p/C01/list');
+    await ev('document.querySelector("[data-tool=comments]").click(); 1'); await sleep(200);
+    const pageNow = await ev('W.viewerDiag().page');
+    await ev('document.querySelector("#cmt-text").value = "托管原型的意见"; document.querySelector("#cmt-text").dispatchEvent(new Event("input", { bubbles: true })); document.querySelector("[data-cmt-act=submit]").click(); 1'); await sleep(200);
+    const t4 = await jev(`{ open: W.viewerDiag().commentsOpen, n: W.comments.count(), exp: W.comments.exportJSON('').comments.length, page: W.comments.list().map(function (c) { return c.pageId; })[0] }`);
+    ok(t4.open && t4.n === 1 && t4.exp === 1 && t4.page === pageNow, '托管原型阶段：面板可开，可添加页面级意见，并可导出（页面 ' + pageNow + '）', JSON.stringify(t4));
+    const hostExp = await jev(`W.comments.exportJSON('测试员')`);
+    fs.writeFileSync(path.join(TMP, 'cmt-host.json'), JSON.stringify(hostExp, null, 2));
+
+    /* 5. 合并脚本：两份 JSON 合并，按 target 分组，全文连续编号 */
+    const fileB = { v: 1, productId: 'leave-approval', productName: '请假审批', release: 'V1.0', exportedAt: '2026-11-05T02:00:00.000Z', author: '李四', comments: [{ id: 'c_b1', target: 'P01', pageId: 'P01', fnId: null, text: '列表默认按提交时间排序？', author: '李四', at: '2026-11-05T02:00:00.000Z', resolved: false }] };
+    const fileBPath = path.join(TMP, 'cmt-b.json');
+    fs.writeFileSync(fileBPath, JSON.stringify(fileB, null, 2));
+    const outMd = path.join(TMP, '评审意见合并.md');
+    let mergeErr = '';
+    try { execFileSync(process.execPath, [MERGE, expFile, fileBPath, '-o', outMd], { stdio: 'pipe' }); } catch (e) { mergeErr = String(e.stderr || e.message); }
+    const mdText = fs.existsSync(outMd) ? fs.readFileSync(outMd, 'utf8') : '';
+    ok(!mergeErr && /# 评审意见合并 · 请假审批 · V1\.0/.test(mdText) && mdText.indexOf('## P02/decide') >= 0 && mdText.indexOf('## P01') >= 0 && mdText.indexOf('- #1（测试员，') >= 0 && mdText.indexOf('- #2（李四，2026-11-05）：列表默认按提交时间排序？') >= 0 && mdText.indexOf('驳回时请写明原因') > 0, 'merge-comments.mjs：两份 JSON 合并输出含两条、按 target 分组、带序号', mergeErr || mdText.slice(0, 400));
+    ok(/^## P02\/decide$/m.test(mdText) && /^## P01$/m.test(mdText), 'merge-comments.mjs：无 --prd 时标题只写 target');
+    const withPrd = path.join(TMP, 'merged-prd.md');
+    execFileSync(process.execPath, [MERGE, expFile, fileBPath, '-o', withPrd, '--prd', EXAMPLE], { stdio: 'pipe' });
+    const prdText = fs.readFileSync(withPrd, 'utf8');
+    ok(/## P02\/decide · .+/.test(prdText) && /## P01 · 待我审批/.test(prdText), 'merge-comments.mjs --prd：页面功能点标题补上名称');
+    /* 公共组件在 kit.js：--prd 应读到 S:pc/pc-nav 名称；条目作者空时用文件级 author 兜底 */
+    const fileS = { v: 1, productId: 'leave-approval', productName: '请假审批', release: 'V1.0', exportedAt: '2026-11-05T03:00:00.000Z', author: '王五', comments: [{ id: 'c_s1', target: 'S:pc/pc-nav', pageId: null, fnId: 'pc-nav', text: '菜单数字超过 99 要测一下', author: '', at: '2026-11-05T03:00:00.000Z', resolved: false }] };
+    const fileSPath = path.join(TMP, 'cmt-s.json');
+    fs.writeFileSync(fileSPath, JSON.stringify(fileS, null, 2));
+    const withS = path.join(TMP, 'merged-s.md');
+    execFileSync(process.execPath, [MERGE, fileSPath, '-o', withS, '--prd', EXAMPLE], { stdio: 'pipe' });
+    const sText = fs.readFileSync(withS, 'utf8');
+    ok(/## S:pc\/pc-nav · 顶部导航与账号菜单/.test(sText) && /- #1（王五，2026-11-05）：菜单数字超过 99 要测一下/.test(sText), 'merge-comments.mjs --prd：公共组件读 kit.js 补名称；条目作者空时用文件级 author', sText.slice(0, 400));
+    let badErr = 0;
+    try { execFileSync(process.execPath, [MERGE, path.join(TMP, 'cmt-bad.json')], { stdio: 'pipe' }); } catch (e) { badErr = e.status; }
+    fs.writeFileSync(path.join(TMP, 'cmt-bad.json'), '{"v":2}');
+    let badV = 0;
+    try { execFileSync(process.execPath, [MERGE, path.join(TMP, 'cmt-bad.json')], { stdio: 'pipe' }); } catch (e) { badV = e.status; }
+    ok(badErr !== 0 && badV !== 0, 'merge-comments.mjs：文件不存在或不是 v:1 意见 JSON 时报错退出');
+  } finally {
+    await bc.close();
+  }
+}
+
 console.log('\n结果：' + pass + ' 通过，' + failN + ' 失败');
 if (failN) console.log('失败项：\n  - ' + fails.join('\n  - '));
 if (!KEEP && !failN) fs.rmSync(TMP, { recursive: true, force: true });
