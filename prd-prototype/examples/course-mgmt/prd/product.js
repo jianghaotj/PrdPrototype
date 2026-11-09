@@ -4,7 +4,7 @@ W.product({
   id: 'course-mgmt',
   name: '课程管理',
   date: '2026-11-04',
-  fidelity: '高保真（高教 PC 规范包 gaodeng-pc）',
+  fidelity: '高保真（视觉由 AI 自拟）',
   releases: [
     { id: 'V1.0', date: '2026-11-04', summary: '首版：教务管理台课程列表，含筛选、分页、新建课程和详情抽屉' }
   ],

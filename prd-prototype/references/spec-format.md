@@ -8,8 +8,8 @@
 │  ├─ product.js        产品级需求（W.product）
 │  ├─ kit.js            公共外壳与公共功能点（W.shared、W.ui、W.MTABS）
 │  ├─ scope.json        可选：范围基线（确认范围后写入，格式见文末）
-│  ├─ theme.css         可选：设计变量覆盖
-│  ├─ *.js              可选：共享演示数据等，按文件名顺序加载
+│  ├─ theme.css         可选：项目样式（高保真的配色、字阶、组件覆盖，见 hifi.md）
+│  ├─ *.js              可选：共享演示数据、组件扩展（如 theme-kit.js）等，按文件名顺序加载
 │  └─ pages/
 │     ├─ M01-home.js    一个页面一个文件；文件名决定目录顺序
 │     └─ P01-todo.js
@@ -26,7 +26,7 @@
 | --- | --- | --- |
 | `id` | 是 | 英文短名，用于浏览器本地保存演示数据，如 `leave-approval`。项目建好后不要改，否则评审者浏览器里的演示数据会重置 |
 | `name` | 是 | 产品名，也是默认输出文件名前缀 |
-| `date`、`fidelity` | | 日期；保真度说明，默认“低保真线框” |
+| `date`、`fidelity` | | 日期；保真度说明，默认“低保真线框”，`--hifi` 生成的项目为“高保真（视觉由 AI 自拟）” |
 | `releases` | 是 | `[{ id: 'V1.0', date, summary }]`，最后一项为当前版本 |
 | `background` | 是 | 业务背景（Markdown）：谁、什么场景、什么问题、本期做成什么 |
 | `goals` | | 建设目标列表 |
@@ -58,7 +58,7 @@
 | `home` | 该端首页的页面 ID |
 | `url` | PC 地址栏里的演示地址 |
 | `desc` | 端的说明，进入“信息架构” |
-| `width`、`height` | 画板尺寸，默认 PC 1280 宽、手机 375×812；选用规范包（`--theme`）时 PC 为 1440×900 |
+| `width`、`height` | 画板尺寸，默认 PC 1280 宽、手机 375×812；`new.mjs --hifi` 生成的 PC 端为 1440×900 |
 | `host`、`ignore`、`boot`、`settle`、`resetKeys`、`online` | 托管模式专用，见 `host-mode.md`。`online: true` 放行该端的网络脚本和样式（需联网） |
 
 ## W.page({...})

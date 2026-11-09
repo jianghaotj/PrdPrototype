@@ -10,7 +10,6 @@ import crypto from 'node:crypto';
 import vm from 'node:vm';
 import { build, auditSingleFile } from './build.mjs';
 import { launch, fileUrl, sleep } from './lib/browser.mjs';
-import { installTheme } from './lib/theme.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SKILL = path.resolve(here, '..');
@@ -336,6 +335,73 @@ try {
   await sleep(250);
   const opened = await page.evaluate('getComputedStyle(document.querySelector("#right")).display');
   ok(narrow.right === 'none' && opened === 'block' && narrow.scale < 1, '窄屏：侧栏收起为抽屉，画板等比缩小');
+
+  /* 顶部模块切换下拉框：宽屏和 390 宽窄屏都能看到、能点开、能用键盘选 */
+  const key = (k) => page.evaluate('document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: ' + JSON.stringify(k) + ', bubbles: true })); 1');
+  const vsw = () => page.evaluate(`JSON.stringify((function () {
+    var b = document.getElementById('vsw-btn'), m = document.getElementById('vsw-menu'), r = b.getBoundingClientRect(), mr = m.getBoundingClientRect();
+    var top = document.getElementById('top');
+    return { cur: document.getElementById('vsw-cur').textContent, exp: b.getAttribute('aria-expanded'), hidden: m.hidden, role: m.getAttribute('role'),
+      opts: [].map.call(m.querySelectorAll('[role=option]'), function (o) { return o.dataset.tab + (o.getAttribute('aria-selected') === 'true' ? '*' : ''); }).join(','),
+      focus: document.activeElement.dataset.tab || document.activeElement.id, btnW: Math.round(r.width), btnL: Math.round(r.left), btnR: Math.round(r.right),
+      menuL: Math.round(mr.left), menuR: Math.round(mr.right), menuB: Math.round(mr.bottom), topOverflow: top.scrollWidth > top.clientWidth,
+      toolsOut: [].filter.call(document.querySelectorAll('#top .vtools > *'), function (el) { var q = el.getBoundingClientRect(); return q.width && getComputedStyle(el).display !== 'none' && (q.right > innerWidth + 1 || q.bottom > top.getBoundingClientRect().bottom + 1); }).length,
+      label: b.getAttribute('aria-label'), curCut: (function (c) { return c.scrollWidth > c.clientWidth || c.clientWidth === 0; })(document.getElementById('vsw-cur')),
+      nOut: document.querySelector('#vsw-btn .vsw-n').getBoundingClientRect().right > r.right + 1 };
+  })())`).then(JSON.parse);
+  for (const [w, hgt] of [[1600, 1000], [1024, 768], [390, 844]]) {
+    await page.setViewport(w, hgt);
+    await go(ex.file, '#/doc');
+    const v0 = await vsw();
+    ok(v0.cur === '需求文档' && v0.exp === 'false' && v0.hidden && v0.role === 'listbox' && v0.opts === 'doc*,m,pc,flow' && v0.label === '切换查看内容，当前：需求文档' && !v0.topOverflow && v0.btnR <= w && !v0.curCut && !v0.nOut,
+      w + ' 宽：顶部切换是收起的下拉框，完整显示当前“需求文档”，选项为需求文档、两个端和核心流程，顶栏不溢出', JSON.stringify(v0));
+    if (w === 1024) ok(v0.toolsOut === 0 && v0.btnW >= 150, '1024 宽：顶栏分两行，下拉框不被工具按钮挤窄（宽 ' + v0.btnW + 'px），工具按钮都可见', JSON.stringify(v0));
+    if (w === 390) ok(v0.btnW >= 280 && v0.toolsOut === 0, '390 宽：下拉框单独占第一行（宽 ' + v0.btnW + 'px），工具按钮都在第二行可见', JSON.stringify(v0));
+    await page.evaluate('document.getElementById("vsw-btn").click(); 1');
+    await sleep(150);
+    const v1 = await vsw();
+    ok(v1.exp === 'true' && !v1.hidden && v1.focus === 'doc' && v1.menuL >= 0 && v1.menuR <= w && v1.menuB <= hgt, w + ' 宽：点开后列表完整显示在窗口内，焦点在当前项', JSON.stringify(v1));
+    await page.evaluate('document.querySelector("#vsw-menu [data-tab=pc]").click(); 1');
+    await sleep(400);
+    const v2 = await vsw();
+    const d2 = await page.evaluate('W.viewerDiag()');
+    ok(v2.hidden && v2.exp === 'false' && v2.cur === '审批台（PC）' && /pc\*/.test(v2.opts) && d2.view === 'page' && d2.page === 'P01', w + ' 宽：点选项后收起，切到该端首页，按钮显示新的当前项', JSON.stringify([v2, d2.page]));
+  }
+  await page.setViewport(1600, 1000);
+  await go(ex.file, '#/doc');
+  await page.evaluate('document.getElementById("vsw-btn").focus(); 1');
+  await key('ArrowDown');
+  const k1 = await vsw();
+  await key('ArrowDown'); await key('ArrowDown');
+  const k2 = await vsw();
+  await key('End');
+  const k3 = await vsw();
+  await key('Escape');
+  const k4 = await vsw();
+  await key('Enter');
+  await key('Home'); await key('ArrowDown');
+  await key('Enter');
+  await sleep(400);
+  const k5 = await vsw();
+  const kd = await page.evaluate('W.viewerDiag()');
+  ok(!k1.hidden && k1.focus === 'doc' && k2.focus === 'pc' && k3.focus === 'flow' && k4.hidden && k4.focus === 'vsw-btn' && k5.hidden && k5.focus === 'vsw-btn' && kd.page === 'M01' && k5.cur === '员工手机端',
+    '键盘：↓ 打开并聚焦当前项，↓ / End 移动，Esc 收起并回到按钮，Enter 选中后切换并收起', JSON.stringify({ k1: k1.focus, k2: k2.focus, k3: k3.focus, k4: [k4.hidden, k4.focus], k5: [k5.hidden, k5.focus, k5.cur], page: kd.page }));
+  await page.evaluate('document.getElementById("vsw-btn").click(); 1');
+  await key('h');
+  const hk = await page.evaluate('document.body.classList.contains("hot")');
+  await page.evaluate('document.body.click(); 1');
+  await sleep(100);
+  const outside = await vsw();
+  ok(!hk && outside.hidden, '下拉框打开时按 H 不触发热区；点外面收起');
+  /* 用鼠标选完后焦点回到按钮，H 等快捷键仍要生效（旧标签栏点完就能按 H） */
+  await page.evaluate('document.getElementById("vsw-btn").click(); 1');
+  await page.evaluate('document.querySelector("#vsw-menu [data-tab=pc]").click(); 1');
+  await sleep(300);
+  const hf = await page.evaluate('document.activeElement.id');
+  await key('h');
+  const hk2 = await page.evaluate('document.body.classList.contains("hot")');
+  await key('h');
+  ok(hf === 'vsw-btn' && hk2, '选完切换项后焦点在按钮上，按 H 仍能打开热区', JSON.stringify({ hf, hk2 }));
   await page.setViewport(1600, 1000);
 
   /* 托管 */
@@ -432,10 +498,14 @@ console.log('\n8. 脚手架');
   ok(!hrr.ok && hasCode(hrr, 'UNREGISTERED') && !hasCode(hrr, 'JS'), '托管模板构建能加载原型并列出未登记元素');
 }
 
-/* ---------- 9. 规范包（主题） ---------- */
-console.log('\n9. 规范包（主题）');
+/* ---------- 9. 高保真（项目自带样式） ---------- */
+console.log('\n9. 高保真（项目自带样式）');
 const read = (f) => fs.readFileSync(f, 'utf8');
-/* allowed: 选择器必须以 allowedPrefix 开头。wire.css 限定到 .ab；规范包只给 PC 画板，限定到 .ab[data-device="pc"] */
+/* 课程管理样例的高保真样式（模型自拟，不对应任何公司规范），用来测“项目自带 theme.css + theme-kit.js”这条路径 */
+const HIFI_PRD = path.join(SKILL, 'examples', 'course-mgmt', 'prd');
+const HIFI_CSS = path.join(HIFI_PRD, 'theme.css');
+const HIFI_KIT = path.join(HIFI_PRD, 'theme-kit.js');
+/* allowed: 选择器必须以 allowedPrefix 开头。wire.css 限定到 .ab；样例的高保真样式只给 PC 画板，限定到 .ab[data-device="pc"] */
 function unscopedSelectors(css, allowed = /^(\.ab\b|:where\(\.ab\)|\.hot \.ab\b)/) {
   const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
   const bad = [];
@@ -491,24 +561,51 @@ function digestOf(fp) {
   return h.digest('hex');
 }
 {
-  const dir = path.join(TMP, 'theme-scaffold');
-  execFileSync(process.execPath, [path.join(here, 'new.mjs'), dir, '--name', '主题测试', '--theme', 'gaodeng-pc', '--end', 'pc:管理后台'], { stdio: 'pipe' });
-  ok(fs.existsSync(path.join(dir, 'prd', 'theme.css')) && fs.existsSync(path.join(dir, 'prd', 'theme-kit.js')), '选用规范包时 prd/ 下生成 theme.css 和 theme-kit.js');
-  ok(/width: 1440, height: 900/.test(fs.readFileSync(path.join(dir, 'prd', 'product.js'), 'utf8')), '选用规范包时 PC 端默认 1440×900');
-  let badTheme = false;
-  try { execFileSync(process.execPath, [path.join(here, 'new.mjs'), path.join(TMP, 'theme-bad'), '--name', 'x', '--theme', 'no-such'], { stdio: 'pipe' }); } catch (e) { badTheme = true; }
-  ok(badTheme, '规范包名称不存在时拒绝生成');
+  const dir = path.join(TMP, 'hifi-scaffold');
+  execFileSync(process.execPath, [path.join(here, 'new.mjs'), dir, '--name', '高保真测试', '--hifi', '--end', 'pc:管理后台', '--end', 'mobile:学员端'], { stdio: 'pipe' });
+  const prodSrc = fs.readFileSync(path.join(dir, 'prd', 'product.js'), 'utf8');
+  const css = fs.existsSync(path.join(dir, 'prd', 'theme.css')) ? read(path.join(dir, 'prd', 'theme.css')) : '';
+  ok(css.includes('references/hifi.md') && !fs.existsSync(path.join(dir, 'prd', 'theme-kit.js')), '--hifi 生成 prd/theme.css 骨架（指向 references/hifi.md），不生成组件扩展');
+  ok(/id: 'pc'[^\n]*width: 1440, height: 900/.test(prodSrc) && !/id: 'm'[^\n]*width: 1440/.test(prodSrc) && prodSrc.includes("fidelity: '高保真（视觉由 AI 自拟）'"), '--hifi 时 PC 端默认 1440×900、手机端不变，fidelity 写“高保真（视觉由 AI 自拟）”');
+  ok(unscopedSelectors(css).length === 0, '--hifi 骨架里的选择器都限定在 .ab 内');
+  const sk = await build(dir, {});
+  ok(!sk.ok && !hasCode(sk, 'JS') && !hasCode(sk, 'SINGLE_FILE'), '--hifi 骨架项目能正常加载（只报需求内容未填）');
+  let themeErr = '', themeRefused = false;
+  try { execFileSync(process.execPath, [path.join(here, 'new.mjs'), path.join(TMP, 'theme-gone'), '--name', 'x', '--theme', 'gaodeng-pc'], { stdio: 'pipe' }); } catch (e) { themeRefused = true; themeErr = String(e.stderr || ''); }
+  ok(themeRefused && /--theme 已移除/.test(themeErr) && /--hifi/.test(themeErr) && !fs.existsSync(path.join(TMP, 'theme-gone', 'prd', 'product.js')), '--theme 已移除：报错说明改用 --hifi，不生成项目', themeErr);
   let badHost = false;
-  try { execFileSync(process.execPath, [path.join(here, 'new.mjs'), path.join(TMP, 'theme-host'), '--name', 'x', '--theme', 'gaodeng-pc', '--host', path.join(HOSTFX, 'existing', 'crm.html')], { stdio: 'pipe' }); } catch (e) { badHost = true; }
-  ok(badHost, '托管模式不能与 --theme 同用');
-  let badNoValue = false;
-  try { execFileSync(process.execPath, [path.join(here, 'new.mjs'), path.join(TMP, 'theme-novalue'), '--name', 'x', '--theme'], { stdio: 'pipe' }); } catch (e) { badNoValue = true; }
-  ok(badNoValue && !fs.existsSync(path.join(TMP, 'theme-novalue', 'prd', 'product.js')), '--theme 不带规范包名时报错，不生成线框项目');
+  try { execFileSync(process.execPath, [path.join(here, 'new.mjs'), path.join(TMP, 'hifi-host'), '--name', 'x', '--hifi', '--host', path.join(HOSTFX, 'existing', 'crm.html')], { stdio: 'pipe' }); } catch (e) { badHost = true; }
+  ok(badHost && !fs.existsSync(path.join(TMP, 'hifi-host', 'prd', 'product.js')), '托管模式不能与 --hifi 同用');
+  ok(!fs.existsSync(path.join(SKILL, 'themes')) && !fs.existsSync(path.join(SKILL, 'scripts', 'lib', 'theme.mjs')), '技能里不再有设计规范包（themes/、scripts/lib/theme.mjs 已移除）');
+  /* 技能文件里只允许兼容提示提到旧规范包名：new.mjs（--theme 报错）、build.mjs（旧项目提示）、本测试 */
+  const mention = [];
+  const walk = (d) => fs.readdirSync(d).forEach((n) => {
+    const f = path.join(d, n);
+    if (fs.statSync(f).isDirectory()) { if (n !== 'vendor' && n !== '.prd-build') walk(f); return; }
+    if (!/\.(js|mjs|css|md|tpl|yaml|json)$/.test(n)) return;
+    if (/gaodeng|高教|高等教育事业部/.test(read(f))) mention.push(path.relative(SKILL, f));
+  });
+  walk(SKILL);
+  const allowed = ['scripts/new.mjs', 'scripts/build.mjs', 'scripts/test-skill.mjs'];
+  ok(mention.every((f) => allowed.includes(f.split(path.sep).join('/'))), '技能文件里不再引用公司设计规范（只在兼容提示里提到旧名）', mention.join(', '));
+}
+/* 兼容：旧项目 prd/ 下自带从规范包复制来的 theme.css、theme-kit.js，构建照常纳入，命令行给一句提示 */
+{
+  const legacy = variant(EXAMPLE, []);
+  fs.writeFileSync(path.join(legacy, 'prd', 'theme.css'), '/* gaodeng-pc · tokens.css（旧项目里的副本） */\n.ab[data-device="pc"] { --acc: #3264fa; }\n.ab[data-device="pc"] .btn.pri { background: var(--acc); }\n');
+  fs.writeFileSync(path.join(legacy, 'prd', 'theme-kit.js'), '/* gaodeng-pc 组件扩展（旧项目里的副本） */\n(function () { W.h.legacyProbe = function () { return "kit-loaded"; }; })();\n');
+  const lr = await build(legacy, {});
+  const lhtml = lr.ok ? read(lr.file) : '';
+  ok(lr.ok && lhtml.includes('.ab[data-device="pc"] .btn.pri { background: var(--acc); }') && lhtml.includes('W.h.legacyProbe') && JSON.stringify(lr.legacyTheme) === JSON.stringify(['theme.css', 'theme-kit.js']), '旧项目自带的 theme.css、theme-kit.js 照常内联，构建通过，并识别出来源于旧规范包', lr.ok ? JSON.stringify(lr.legacyTheme) : JSON.stringify(lr.report.errors.slice(0, 3)));
+  const out = execFileSync(process.execPath, [path.join(here, 'build.mjs'), legacy], { encoding: 'utf8' });
+  ok(/已移除的设计规范包 gaodeng-pc/.test(out) && /references\/hifi\.md/.test(out) && /检查通过/.test(out), '构建命令行对旧规范包副本给出提示（不阻止交付）', out.slice(-600));
+  ok(ex.ok && ex.legacyTheme.length === 0, '没有旧规范包副本的项目不出这条提示');
 }
 const themed = variant(EXAMPLE, []);
-installTheme(path.join(themed, 'prd'), 'gaodeng-pc');
+fs.copyFileSync(HIFI_CSS, path.join(themed, 'prd', 'theme.css'));
+fs.copyFileSync(HIFI_KIT, path.join(themed, 'prd', 'theme-kit.js'));
 const tr = await build(themed, {});
-ok(tr.ok && fs.readFileSync(tr.file, 'utf8').includes('.ab[data-device="pc"] .btn.pri'), '带规范包的样例构建通过，主题样式内联进交付文件', tr.ok ? '' : JSON.stringify(tr.report.errors.slice(0, 3)));
+ok(tr.ok && fs.readFileSync(tr.file, 'utf8').includes('.ab[data-device="pc"] .btn.pri'), '请假审批套上样例的高保真样式后构建通过，样式内联进交付文件', tr.ok ? '' : JSON.stringify(tr.report.errors.slice(0, 3)));
 if (tr.ok) {
   const bt = await launch();
   try {
@@ -523,14 +620,14 @@ if (tr.ok) {
       th: getComputedStyle(document.querySelector('#ab .tbl th')).height,
       tag: getComputedStyle(document.querySelector('#ab .tag')).borderRadius
     })`));
-    ok(sz.pri === 'rgb(50, 100, 250)' && sz.priText === 'rgb(255, 255, 255)', '主按钮使用规范品牌色 #3264FA，文字白色（' + sz.pri + '）', JSON.stringify(sz));
-    ok(sz.sm === '32px' && sz.td === '54px' && sz.th === '54px' && sz.tag === '2px', '按钮 32 高、表格单元格和表头 54 高、标签圆角 2px', JSON.stringify(sz));
+    ok(sz.pri === 'rgb(15, 110, 102)' && sz.priText === 'rgb(255, 255, 255)', '主按钮取项目 theme.css 的主色 #0f6e66，文字白色（' + sz.pri + '）', JSON.stringify(sz));
+    ok(sz.sm === '30px' && parseFloat(sz.td) >= 52 && parseFloat(sz.td) <= 53 && sz.th === '44px' && sz.tag === '999px', '项目样式生效：小按钮 30 高、表格行约 52 高（含行线）、表头 44 高、标签胶囊形', JSON.stringify(sz));
     await open(tr.file, '#/p/P02/reject');
     const dlg = JSON.parse(await pg.evaluate(`JSON.stringify({
       w: getComputedStyle(document.querySelector('#ab .dlg')).width,
       head: getComputedStyle(document.querySelector('#ab .dlg h3')).height
     })`));
-    ok(dlg.w === '480px' && dlg.head === '56px', '弹窗默认宽 480、头部 56（' + JSON.stringify(dlg) + '）');
+    ok(dlg.w === '480px' && dlg.head === '60px', '组件扩展生效：弹窗默认宽 480，头部 60（' + JSON.stringify(dlg) + '）');
     const kit = JSON.parse(await pg.evaluate(`(function () {
       var root = document.getElementById('ab');
       root.insertAdjacentHTML('beforeend', W.h.btn('测试', { sz: 'xs', cls: 'probe' }));
@@ -548,7 +645,7 @@ if (tr.ok) {
       });
     })()`));
     ok(kit.xs === '24px', '辅助按钮 sz:xs 为 24 高', kit.xs);
-    ok(kit.pager3.indexOf('共 3 条') >= 0 && kit.pager3.indexOf('pg-n') < 0, '分页：不足 10 行隐藏页码，保留“共 N 条”（按规范原文）', kit.pager3);
+    ok(kit.pager3.indexOf('共 3 条') >= 0 && kit.pager3.indexOf('pg-n') < 0, '分页：不足 10 行隐藏页码，保留“共 N 条”', kit.pager3);
     ok(kit.pager23.indexOf('第 1~10 条 / 共 23 条') >= 0 && kit.pager23p2.indexOf('第 11~20 条 / 共 23 条') >= 0, '分页：超过 10 行显示页码和“第 X~Y 条 / 共 N 条”');
     ok(kit.modalXl && kit.empty.indexOf('data-empty="system"') >= 0 && kit.emptyTable.indexOf('class="emp"') >= 0 && kit.emptyTable.indexOf('<table') < 0, '弹窗四档宽度可选；整表无数据用缺省页替代表格');
   } finally { await bt.close(); }
@@ -570,14 +667,14 @@ if (tr.ok) {
     const probe = async (file) => { await pg.goto('about:blank'); await pg.goto(fileUrl(file) + '#/p/P01/list'); await pg.waitFor('window.__PRD_READY === true'); await sleep(400); return pg.evaluate(shellProbe); };
     const plain = await probe(ex.file);
     const withTheme = await probe(tr.file);
-    ok(plain === withTheme && plain.indexOf('none') < 0, '外壳关键元素的计算样式不受规范包影响', plain === withTheme ? '' : 'plain:\n' + plain + '\ntheme:\n' + withTheme);
+    ok(plain === withTheme && plain.indexOf('none') < 0, '外壳关键元素的计算样式不受项目高保真样式影响', plain === withTheme ? '' : 'plain:\n' + plain + '\ntheme:\n' + withTheme);
   } finally { await sb.close(); }
 }
-/* 组件扩展守卫（不依赖样例页面）：theme-kit.js 覆盖的 h.empty、h.table、h.modal 在手机端必须与不带规范包时输出完全一致；
-   PC 端确实走规范版（否则覆盖没生效）。样例的手机页没有调用这三个组件，所以单靠指纹测试覆盖不到。 */
+/* 组件扩展守卫（不依赖样例页面）：样例 theme-kit.js 覆盖的 h.empty、h.table、h.modal 在手机端必须与不带扩展时输出完全一致；
+   PC 端确实走扩展版（否则覆盖没生效）。请假审批的手机页没有调用这三个组件，所以单靠指纹测试覆盖不到。 */
 {
   const RUNTIME_CORE = path.join(SKILL, 'assets', 'runtime', 'core.js');
-  const KIT = path.join(SKILL, 'themes', 'gaodeng-pc', 'theme-kit.js');
+  const KIT = HIFI_KIT;
   const mkH = (withKit, device) => {
     const win = { console, document: {}, addEventListener() {}, location: { href: 'about:blank' } };
     win.window = win;
@@ -598,53 +695,20 @@ if (tr.ok) {
   };
   const run = (h, fn) => { try { return fn(h); } catch (e) { return 'THROW ' + e.message; } };
   const mobileDiff = Object.keys(kitCases).filter((k) => run(mkH(false, 'mobile'), kitCases[k]) !== run(mkH(true, 'mobile'), kitCases[k]));
-  ok(mobileDiff.length === 0, '手机端调用 h.empty、h.table、h.modal，输出与不带规范包时完全一致（' + Object.keys(kitCases).length + ' 种调用）', mobileDiff.join(', '));
+  ok(mobileDiff.length === 0, '手机端调用 h.empty、h.table、h.modal，输出与不带组件扩展时完全一致（' + Object.keys(kitCases).length + ' 种调用）', mobileDiff.join(', '));
   const pcSame = Object.keys(kitCases).filter((k) => run(mkH(false, 'pc'), kitCases[k]) === run(mkH(true, 'pc'), kitCases[k]));
-  ok(pcSame.length < Object.keys(kitCases).length, 'PC 端 h.empty、h.table、h.modal 使用规范版（覆盖已生效）');
+  ok(pcSame.length < Object.keys(kitCases).length, 'PC 端 h.empty、h.table、h.modal 使用扩展版（覆盖已生效）');
   ok(run(mkH(true, 'mobile'), (h) => h.pager(23)) === '', '手机端 h.pager 返回空串（手机端没有分页组件）');
 }
-/* 选择器作用域守卫：wire.css 限定在 .ab 内；规范包只给 PC 画板，限定在 .ab[data-device="pc"] 内 */
+/* 选择器作用域守卫：wire.css 限定在 .ab 内；样例的高保真样式只给 PC 画板，限定在 .ab[data-device="pc"] 内 */
 {
   const wire = read(path.join(SKILL, 'assets', 'runtime', 'wire.css'));
-  const packTheme = read(path.join(SKILL, 'themes', 'gaodeng-pc', 'theme.css'));
-  const packTokens = read(path.join(SKILL, 'themes', 'gaodeng-pc', 'tokens.css'));
-  const bad = [...unscopedSelectors(wire), ...unscopedSelectors(packTheme, PC_SCOPE), ...unscopedSelectors(packTokens, PC_SCOPE)];
-  ok(bad.length === 0, 'wire.css 限定在 .ab 内，规范包限定在 .ab[data-device="pc"] 内', bad.slice(0, 10).join(' | '));
-}
-/* 规范包预览页：自己的 .ab 作用域里能取到变量（改动前的基准：正文色、字号、品牌按钮、色块） */
-{
-  const bp = await launch();
-  try {
-    const pg = await bp.newPage({ width: 1440, height: 900 });
-    const pv = (f) => path.join(SKILL, 'themes', 'gaodeng-pc', 'preview', f);
-    for (const f of ['colors.html', 'type.html', 'components.html']) {
-      await pg.goto('about:blank');
-      await pg.goto(fileUrl(pv(f)));
-      await sleep(300);
-      const r = JSON.parse(await pg.evaluate(`JSON.stringify({
-        body: getComputedStyle(document.body).color,
-        font: getComputedStyle(document.body).fontFamily,
-        h1: getComputedStyle(document.querySelector('h1')).fontSize,
-        transparentChips: [].slice.call(document.querySelectorAll('.chip')).filter(function (c) { return getComputedStyle(c).backgroundColor === 'rgba(0, 0, 0, 0)'; }).length,
-        chips: document.querySelectorAll('.chip').length
-      })`));
-      ok(r.body === 'rgb(26, 34, 51)' && /PingFang/.test(r.font) && r.h1 === '28px', f + '：正文色、苹方字体、标题 28px 取到规范值（' + JSON.stringify(r) + '）');
-      ok(r.chips === 0 || r.transparentChips === 0, f + '：色块都有颜色（' + r.chips + ' 个）');
-    }
-    await pg.goto('about:blank');
-    await pg.goto(fileUrl(pv('components.html')));
-    await sleep(300);
-    const b = JSON.parse(await pg.evaluate(`JSON.stringify((function () {
-      var el = document.querySelector('.btn-primary.btn-lg:not([disabled])');
-      var cs = getComputedStyle(el);
-      return { bg: cs.backgroundColor, h: cs.height };
-    })())`));
-    ok(b.bg === 'rgb(50, 100, 250)' && b.h === '40px', '预览页主按钮为品牌色 #3264FA、40 高（' + JSON.stringify(b) + '）');
-  } finally { await bp.close(); }
+  const bad = [...unscopedSelectors(wire), ...unscopedSelectors(read(HIFI_CSS), PC_SCOPE)];
+  ok(bad.length === 0, 'wire.css 限定在 .ab 内，样例高保真样式限定在 .ab[data-device="pc"] 内', bad.slice(0, 10).join(' | '));
 }
 
 /* 请假审批：交付文件的指纹与仓库已提交的产物一致（改动前后渲染不变）。
-   手机画板不套规范包：带规范包的构建，手机页的指纹与不带规范包的一致；PC 页则有变化。 */
+   样例的高保真样式只作用于 PC 画板：套上后手机页的指纹与线框一致；PC 页则有变化。 */
 {
   const COMMITTED = path.join(EXAMPLE, '请假审批-原型需求.html');
   const fb = await launch();
@@ -660,9 +724,9 @@ if (tr.ok) {
     const mobileKeys = Object.keys(cur.fp).filter((k) => cur.devices[k.split('/')[0]] === 'mobile');
     const pcKeys = Object.keys(cur.fp).filter((k) => cur.devices[k.split('/')[0]] !== 'mobile');
     const mobileDiff = mobileKeys.filter((k) => themedFp.fp[k] !== cur.fp[k]);
-    ok(mobileKeys.length > 0 && mobileDiff.length === 0, '带规范包时，手机页的渲染与不带规范包时一致（' + mobileKeys.length + ' 个状态）', mobileDiff.slice(0, 5).join(', '));
+    ok(mobileKeys.length > 0 && mobileDiff.length === 0, '套上 PC 高保真样式后，手机页的渲染与线框一致（' + mobileKeys.length + ' 个状态）', mobileDiff.slice(0, 5).join(', '));
     const pcDiff = pcKeys.filter((k) => themedFp.fp[k] !== cur.fp[k]);
-    ok(pcKeys.length > 0 && pcDiff.length === pcKeys.length, '带规范包时，PC 页全部按规范包输出（' + pcDiff.length + '/' + pcKeys.length + ' 个状态有变化）');
+    ok(pcKeys.length > 0 && pcDiff.length === pcKeys.length, '套上 PC 高保真样式后，PC 页全部按项目样式输出（' + pcDiff.length + '/' + pcKeys.length + ' 个状态有变化）');
   } finally { await fb.close(); }
 }
 
@@ -879,12 +943,12 @@ const BEH = path.join(SKILL, 'tests', 'fixtures', 'behave');
   } finally { await bb.close(); }
 }
 
-/* ---------- 11. 高教 PC 样例：课程管理（gaodeng-pc，只做 PC 端） ---------- */
-console.log('\n11. 高教 PC 样例（课程管理）');
+/* ---------- 11. 高保真样例：课程管理（视觉由 AI 自拟，只做 PC 端） ---------- */
+console.log('\n11. 高保真样例（课程管理）');
 {
   const COURSE = path.join(SKILL, 'examples', 'course-mgmt');
   const cm = await build(variant(COURSE, []), { md: true });
-  ok(cm.ok, '课程管理样例（gaodeng-pc，PC 端）构建通过', cm.ok ? '' : JSON.stringify(cm.report.errors.slice(0, 3)));
+  ok(cm.ok, '课程管理高保真样例（PC 端）构建通过', cm.ok ? '' : JSON.stringify(cm.report.errors.slice(0, 3)));
   const cmMd = cm.mdFile ? fs.readFileSync(cm.mdFile, 'utf8') : '';
   ok(cm.ok && /【AI 假设】/.test(cmMd) && cm.report.stats.assumed > 0 && cm.report.stats.pending === 0, '课程管理需求文档标出 AI 假设且没有待确认项（AI 假设 ' + (cm.report.stats ? cm.report.stats.assumed : 0) + ' 条）');
   ok(cm.ok && cmMd.includes('课程名称为必填项，为空时不能提交') && cmMd.includes('课程代码长度为 6–12 个字，不在此范围内时不能提交'), '课程管理需求文档由 h.fld 的 req / min / max 生成必填与长度规则');
@@ -894,7 +958,7 @@ console.log('\n11. 高教 PC 样例（课程管理）');
   ok(cm.ok && stripBuildDate(cmMd) === stripBuildDate(cmCommitted), '课程管理需求文档与仓库已提交的版本一致（产物未过期，已忽略构建日期戳）');
   /* 分页说明：每页 10 条，少于 10 条写“不足”；搜索计数是原型限制，单独成句 */
   ok(cm.ok && cmMd.includes('课程不足 10 条时只显示“共 N 条”') && !cmMd.includes('不超过 10 条') && cmMd.includes('原型只展示第 1 页，搜索时计数不变'), '课程管理分页说明写作“不足 10 条”，原型限制单独成句');
-  /* 浏览器：列表按 gaodeng-pc 表格取值渲染；超过 10 条时只渲染第 1 页的 10 行，与分页文字一致 */
+  /* 浏览器：列表按样例 theme.css 第 7 节取值渲染；超过 10 条时只渲染第 1 页的 10 行，与分页文字一致 */
   if (cm.ok) {
     const bc = await launch();
     try {
@@ -909,8 +973,8 @@ console.log('\n11. 高教 PC 样例（课程管理）');
           rh: row.offsetHeight, rfs: b.fontSize, rc: b.color, rbb: b.borderBottomColor };
       })())`;
       const st = JSON.parse(await pg.evaluate(styleJs));
-      ok(st.hh === 54 && st.hbg === 'rgb(245, 247, 250)' && st.hfs === '14px' && st.hfw === '500' && st.hc === 'rgb(26, 34, 51)' && st.hbb === 'rgb(225, 230, 240)' && st.rh === 54 && st.rfs === '14px' && st.rc === 'rgb(87, 92, 102)' && st.rbb === 'rgb(245, 247, 250)',
-        '课程管理列表表头与行按 gaodeng-pc 表格取值（表头 54 高、LV6 底、14px Medium、LV1 字、底边 LV5；行 54 高、LV2 字、行线 LV6）', JSON.stringify(st));
+      ok(st.hh === 44 && st.hbg === 'rgb(244, 247, 248)' && st.hfs === '13px' && st.hfw === '600' && st.hc === 'rgb(74, 89, 97)' && st.hbb === 'rgb(219, 226, 230)' && st.rh === 52 && st.rfs === '14px' && st.rc === 'rgb(23, 32, 38)' && st.rbb === 'rgb(237, 241, 243)',
+        '课程管理列表表头与行按样例 theme.css 取值（表头 44 高、浅灰底、13px 600；行 52 高、14px、浅分割线）', JSON.stringify(st));
       /* 连续新建两门课程（演示数据默认提交成功），列表应为 11 条，画面只渲染第 1 页 10 行 */
       const submitOnce = async (no, name) => {
         await open('#/p/P01/create');
@@ -1105,7 +1169,7 @@ console.log('\n12. 原型阶段');
       ok(d1.view === 'page' && d1.page === homeId && d2.view === 'page' && d2.page === homeId, 'T11 原型阶段：无 hash 或 #/doc 都进入第一个端的首页（' + homeId + '）', JSON.stringify([d1.view, d1.page, d2.view, d2.page]));
       /* T12 */
       await fresh(pf, '');
-      const d12 = JSON.parse(await pg.evaluate(`JSON.stringify({ docTab: document.querySelectorAll('#top .vtabs a[data-tab="doc"]').length, needBtn: document.querySelectorAll('[data-tool="right"]').length, rightHTML: document.getElementById('right').innerHTML.length, noR: document.body.classList.contains('no-r') })`));
+      const d12 = JSON.parse(await pg.evaluate(`JSON.stringify({ docTab: document.querySelectorAll('#top .vsw-menu [data-tab="doc"]').length, needBtn: document.querySelectorAll('[data-tool="right"]').length, rightHTML: document.getElementById('right').innerHTML.length, noR: document.body.classList.contains('no-r') })`));
       ok(d12.docTab === 0 && d12.needBtn === 0 && d12.rightHTML === 0 && d12.noR, 'T12 顶栏无“需求文档”标签和“需求”按钮；右栏为空；body 带 no-r', JSON.stringify(d12));
       /* T13 */
       const badge = await pg.evaluate(`(document.querySelector('.audit-badge') || {}).textContent || ''`);
@@ -1132,8 +1196,8 @@ console.log('\n12. 原型阶段');
       ok(dotN > 0 && afterDot.noR && afterDot.right === 0 && afterQ.noR && afterQ.right === 0, 'T15 点圆点、带 ?fn= 打开：需求面板不展开（no-r 保留，#right 为空）', JSON.stringify({ dotN, afterDot, afterQ }));
       /* T20 */
       await fresh(pf, '');
-      const flowTabs = await pg.evaluate(`document.querySelectorAll('#top .vtabs a[data-tab="flow"]').length`);
-      await pg.evaluate(`document.querySelector('#top .vtabs a[data-tab="flow"]').click()`);
+      const flowTabs = await pg.evaluate(`document.querySelectorAll('#top .vsw-menu [data-tab="flow"]').length`);
+      await pg.evaluate(`document.querySelector('#top .vsw-menu [data-tab="flow"]').click()`);
       await sleep(400);
       await pg.evaluate(`document.querySelector('[data-step="f1|0"]').click()`);
       await sleep(500);
@@ -1142,7 +1206,7 @@ console.log('\n12. 原型阶段');
     }
     /* T19：默认模式回归（不写 stage）：圆点偏好照旧记住，无 hash 仍进需求文档 */
     await fresh(exFile, '');
-    const g1 = JSON.parse(await pg.evaluate(`JSON.stringify({ view: W.viewerDiag().view, hidden: document.body.classList.contains('no-dots'), docTab: document.querySelectorAll('#top .vtabs a[data-tab="doc"]').length })`));
+    const g1 = JSON.parse(await pg.evaluate(`JSON.stringify({ view: W.viewerDiag().view, hidden: document.body.classList.contains('no-dots'), docTab: document.querySelectorAll('#top .vsw-menu [data-tab="doc"]').length })`));
     await pressN();
     await open(exFile, '');
     const g2 = JSON.parse(await pg.evaluate(`JSON.stringify({ view: W.viewerDiag().view, hidden: document.body.classList.contains('no-dots') })`));
@@ -1152,7 +1216,7 @@ console.log('\n12. 原型阶段');
     if (hostPf) {
       await fresh(hostPf, '');
       await pg.waitFor('document.querySelectorAll("#dots .xbox").length > 0', 8000).catch(() => {});
-      const h23 = JSON.parse(await pg.evaluate(`JSON.stringify({ view: W.viewerDiag().view, page: W.viewerDiag().page, home: W.P.ends[0].home, noDots: document.body.classList.contains('no-dots'), noR: document.body.classList.contains('no-r'), rightLen: document.getElementById('right').innerHTML.length, docTab: document.querySelectorAll('#top .vtabs a[data-tab="doc"]').length })`));
+      const h23 = JSON.parse(await pg.evaluate(`JSON.stringify({ view: W.viewerDiag().view, page: W.viewerDiag().page, home: W.P.ends[0].home, noDots: document.body.classList.contains('no-dots'), noR: document.body.classList.contains('no-r'), rightLen: document.getElementById('right').innerHTML.length, docTab: document.querySelectorAll('#top .vsw-menu [data-tab="doc"]').length })`));
       ok(h23.view === 'page' && h23.page === h23.home && h23.noDots && h23.noR && h23.rightLen === 0 && h23.docTab === 0, 'T23 托管原型阶段：打开即第一个端的首页（' + h23.home + '），圆点和虚线框隐藏，没有需求栏和需求文档标签', JSON.stringify(h23));
       const badge24 = await pg.evaluate(`(document.querySelector('.audit-badge') || {}).textContent || ''`);
       ok(badge24 === '原型阶段 · 检查通过', 'T24 托管原型阶段未放行网络：检查标识为“原型阶段 · 检查通过”，不带需联网', badge24);
@@ -1224,7 +1288,7 @@ console.log('\n13. 评审意见回收');
     await open(pr.file, '#/p/P02/detail');
     await ev('localStorage.clear(); 1');
     await open(pr.file, '#/p/P02/detail');
-    const t3a = await jev(`{ btn: !!document.querySelector('#top [data-tool="comments"]'), docTab: document.querySelectorAll('#top .vtabs a[data-tab="doc"]').length, right: document.getElementById('right').innerHTML.length, noR: document.body.classList.contains('no-r') }`);
+    const t3a = await jev(`{ btn: !!document.querySelector('#top [data-tool="comments"]'), docTab: document.querySelectorAll('#top .vsw-menu [data-tab="doc"]').length, right: document.getElementById('right').innerHTML.length, noR: document.body.classList.contains('no-r') }`);
     await ev('document.querySelector("[data-tool=comments]").click(); 1');
     await sleep(200);
     const t3b = await jev(`{ open: W.viewerDiag().commentsOpen, right: document.getElementById('right').innerHTML.length, noR: document.body.classList.contains('no-r'), noDots: document.body.classList.contains('no-dots') }`);

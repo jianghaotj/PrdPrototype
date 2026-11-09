@@ -236,9 +236,14 @@ export async function build(input, opts = {}) {
   if (fs.existsSync(path.join(prd, 'kit.js'))) files.push(path.join(prd, 'kit.js'));
   files.push(...rootJs, ...walkJs(path.join(prd, 'pages')));
   const userJs = files.map((f) => { const src = read(f); checkJs(f, src); return { f, src }; });
+  /* 项目自带的样式 prd/theme.css：有就内联进交付文件，线框和高保真都走这一条。
+     1.2.0 起技能不再内置设计规范包；旧项目里从规范包复制来的 theme.css、theme-kit.js 属于项目文件，照常纳入，只在命令行提示一句 */
   const themeFile = path.join(prd, 'theme.css');
   const theme = fs.existsSync(themeFile) ? read(themeFile) : '';
   if (/<\/style/i.test(theme)) die('theme.css 中出现了 </style');
+  const kitFile = userJs.find((x) => x.f === path.join(prd, 'theme-kit.js'));
+  const legacyTheme = [['theme.css', theme], ['theme-kit.js', kitFile ? kitFile.src : '']]
+    .filter(([, src]) => /gaodeng-pc/.test(src)).map(([n]) => n);
 
   /* 托管原型 */
   const buildWarns = [];
@@ -390,7 +395,7 @@ export async function build(input, opts = {}) {
   if (!report.ok) {
     const failed = path.join(tmpDir, base + '.failed.html');
     fs.writeFileSync(failed, assemble(report));
-    return { ok: false, report, failed, release, name: cfg.name, outFile };
+    return { ok: false, report, failed, release, name: cfg.name, outFile, legacyTheme };
   }
   /* --scope-baseline：检查通过后用当前清单覆盖基线，再完整构建一次，让交付文件和需求文档都按新基线生成。
      第二次构建失败时恢复原来的 scope.json，避免留下没有对应交付的基线。 */
@@ -430,7 +435,7 @@ export async function build(input, opts = {}) {
   let csvFiles = null, pack = null;
   if (opts.csv) csvFiles = writeCsvSet(path.dirname(outFile), cfg, release, csvSheets);
   if (opts.exportPack) pack = await writeExportPack(project, cfg, release, outFile, outName, csvSheets, csvRows, pageList);
-  return { ok: true, report, file: outFile, size: Buffer.byteLength(html), mdFile, archived, release, name: cfg.name, csvFiles, pack };
+  return { ok: true, report, file: outFile, size: Buffer.byteLength(html), mdFile, archived, release, name: cfg.name, csvFiles, pack, legacyTheme };
 }
 
 /* ---------- CSV 与研发包 ---------- */
@@ -519,6 +524,10 @@ function printReport(r) {
       if (byCode[code].length > 40) console.log('  …另有 ' + (byCode[code].length - 40) + ' 条');
     });
     console.log('\n排查用文件（含右侧检查结果）：' + r.failed);
+  }
+  if (r.legacyTheme && r.legacyTheme.length) {
+    console.log('\n提示：prd/ 下的 ' + r.legacyTheme.join('、') + ' 来自已移除的设计规范包 gaodeng-pc。它们是项目自己的文件，构建照常纳入，画面不变。' +
+      '\n  以后要换成模型自拟的高保真样式，按 references/hifi.md 改写即可；不需要时可以删掉，回到线框样式（删 theme-kit.js 前先确认页面没有调用它新增的组件，如 h.pager）。');
   }
   const softWarns = r.report.warns.filter((w) => w.soft);
   const hardWarns = r.report.warns.filter((w) => !w.soft);

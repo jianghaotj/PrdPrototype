@@ -149,9 +149,80 @@
   W.goStep = goStep;
 
   /* ---------- 顶栏 ---------- */
+  /* 顶部模块切换：下拉框（按钮 + 选项列表）。选项是需求文档、各端原型、核心流程。
+     窄屏时按钮单独占第一行，一眼能看出可以切换；键盘可用 ↑ ↓ Home End Enter Esc。 */
+  function tabList() {
+    var P = W.P, out = [];
+    if (!ui.proto) out.push({ id: 'doc', name: '需求文档', sub: '全文需求、评审摘要、导出', ic: '文' });
+    P.ends.forEach(function (e) {
+      var n = (W.order[e.id] || []).length;
+      out.push({ id: e.id, name: e.name, sub: (e.device === 'mobile' ? '手机原型' : 'PC 原型') + ' · ' + n + ' 个页面', ic: e.device === 'mobile' ? '机' : '屏', sep: out.length && !out[out.length - 1].end, end: true });
+    });
+    if ((P.flows || []).length) out.push({ id: 'flow', name: '核心流程', sub: P.flows.length + ' 条流程逐步演示', ic: '流', sep: true });
+    return out;
+  }
+  function vswHTML() {
+    var list = tabList();
+    return '<div class="vsw" id="vsw">' +
+      '<button type="button" class="vsw-btn" id="vsw-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="vsw-menu" title="切换查看内容（共 ' + list.length + ' 项）">' +
+      '<span class="vsw-k">切换</span><span class="vsw-cur" id="vsw-cur"></span><span class="vsw-n">' + list.length + ' 项</span>' +
+      '<svg class="vsw-ch" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
+      '<div class="vsw-menu" id="vsw-menu" role="listbox" aria-label="切换查看内容" hidden>' +
+      list.map(function (t) {
+        return (t.sep ? '<div class="vsw-sep" role="presentation"></div>' : '') +
+          '<div class="vsw-opt" role="option" tabindex="-1" id="vsw-o-' + h.esc(t.id) + '" data-tab="' + h.esc(t.id) + '" aria-selected="false">' +
+          '<span class="vsw-ic" aria-hidden="true">' + t.ic + '</span><span class="vsw-t"><b>' + h.esc(t.name) + '</b><small>' + h.esc(t.sub) + '</small></span>' +
+          '<svg class="vsw-ck" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></div>';
+      }).join('') + '</div></div>';
+  }
+  function vswOpts() { return $$('#vsw-menu .vsw-opt'); }
+  function vswOpen(focusLast) {
+    var m = $('#vsw-menu'), b = $('#vsw-btn');
+    if (!m) return;
+    m.hidden = false;
+    b.setAttribute('aria-expanded', 'true');
+    document.body.classList.add('vsw-open');
+    var opts = vswOpts();
+    var cur = opts.filter(function (o) { return o.getAttribute('aria-selected') === 'true'; })[0];
+    (focusLast ? opts[opts.length - 1] : cur || opts[0]).focus();
+  }
+  function vswClose(refocus) {
+    var m = $('#vsw-menu'), b = $('#vsw-btn');
+    if (!m || m.hidden) return;
+    m.hidden = true;
+    b.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('vsw-open');
+    if (refocus) b.focus();
+  }
+  W.vswOpen = vswOpen;
+  W.vswClose = vswClose;
+  /* 返回 true 表示按键已由下拉框处理；焦点停在收起的按钮上时，其它键（H、N、← →）交给全局快捷键 */
+  function vswKey(e) {
+    var inMenu = !!e.target.closest('#vsw-menu');
+    if (!inMenu) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vswOpen(false); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); vswOpen(true); }
+      else if (e.key === 'Escape' && !$('#vsw-menu').hidden) vswClose(true);
+      else return false;
+      return true;
+    }
+    var opts = vswOpts(), i = opts.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); opts[(i + 1) % opts.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); opts[(i - 1 + opts.length) % opts.length].focus(); }
+    else if (e.key === 'Home') { e.preventDefault(); opts[0].focus(); }
+    else if (e.key === 'End') { e.preventDefault(); opts[opts.length - 1].focus(); }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (i >= 0) { vswClose(true); goTab(opts[i].dataset.tab); } }
+    else if (e.key === 'Escape') { e.preventDefault(); vswClose(true); }
+    else if (e.key === 'Tab') vswClose(false);
+    return true;
+  }
+  function goTab(tab) {
+    if (tab === 'doc') location.hash = '#/doc';
+    else if (tab === 'flow') location.hash = '#/flow';
+    else location.hash = hashFor(ui.last[tab]);
+  }
   function renderTop() {
     var P = W.P;
-    var tabs = (ui.proto ? '' : '<a data-tab="doc">需求文档</a>') + P.ends.map(function (e) { return '<a data-tab="' + h.esc(e.id) + '">' + h.esc(e.name) + '</a>'; }).join('') + ((P.flows || []).length ? '<a data-tab="flow">核心流程</a>' : '');
     var a = W.audit, badge = '';
     if (a && ui.proto) {
       badge = '<span class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" style="cursor:default" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '原型阶段 · 检查通过' : '原型阶段 · 检查未通过') + (a.needOnline ? ' · 需联网' : '') + '</span>';
@@ -164,7 +235,7 @@
       badge = '<a class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" href="#/doc" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '检查通过' : '检查未通过') + (parts.length ? ' · ' + parts.join(' · ') : '') + '</a>';
     }
     $('#top').innerHTML = '<a class="brand" data-tab="doc"><span class="brand-m">' + h.esc((P.name || '原')[0]) + '</span><span class="t">' + h.esc(P.name || '') + '</span><small>' + h.esc([D.cur(), P.date, P.fidelity || '低保真'].filter(Boolean).join(' · ')) + '</small></a>' +
-      '<nav class="vtabs">' + tabs + '</nav>' +
+      vswHTML() +
       '<div class="vtools">' + badge +
       (P.roles && P.roles.length ? '<select id="role-sel" class="role-sel"><option value="all">全部角色</option>' + P.roles.map(function (r) { return '<option value="' + h.esc(r.id) + '">' + h.esc(r.name) + '</option>'; }).join('') + '</select>' : '') +
       '<button class="vbtn" data-tool="hot" title="显示画板中所有可点击区域">热区 <kbd>H</kbd></button>' +
@@ -182,7 +253,18 @@
       if (roleSel) roleSel.value = ui.role;
     }
   }
-  function setTab(tab) { $$('.vtabs a').forEach(function (a) { a.classList.toggle('on', a.dataset.tab === tab); }); }
+  function setTab(tab) {
+    var name = '';
+    vswOpts().forEach(function (o) {
+      var on = o.dataset.tab === tab;
+      o.classList.toggle('on', on);
+      o.setAttribute('aria-selected', on ? 'true' : 'false');
+      if (on) name = o.querySelector('b').textContent;
+    });
+    var cur = $('#vsw-cur'), b = $('#vsw-btn');
+    if (cur) cur.textContent = name;
+    if (b) b.setAttribute('aria-label', '切换查看内容，当前：' + name);
+  }
   function syncTools() {
     var narrow = innerWidth <= 1100, B = document.body.classList;
     var l = $('[data-tool="left"]'), r = $('[data-tool="right"]');
@@ -248,7 +330,7 @@
     var e = W.end(p.end);
     var ctx = { st: st, s: W.store, p: p, q: q || {}, end: e };
     var html;
-    /* 组件扩展（如规范包 theme-kit.js）按这个值判断当前端，手机端走原有实现 */
+    /* 项目里的组件扩展（如 prd/theme-kit.js）按这个值判断当前端，只改 PC 端时手机端走原有实现 */
     W.device = e.device === 'mobile' ? 'mobile' : 'pc';
     try { html = p.render(ctx); } catch (err) {
       console.error(err);
@@ -918,7 +1000,7 @@
     } else s += '<div class="np-sec"><h3>构建检查</h3><div class="issue w">此文件未经过构建检查。</div></div>';
     if (W.errors.length) s += '<div class="np-sec"><h3>运行错误</h3>' + W.errors.slice(0, 20).map(function (m) { return '<div class="issue e">' + h.esc(m) + '</div>'; }).join('') + '</div>';
     s += '<div class="np-sec"><h3>浏览方式</h3><ul>' +
-      '<li>顶部切换<b>端</b>，左侧目录选页面；右侧是本页需求，切换页面状态看不同情况</li>' +
+      '<li>顶部<b>切换</b>下拉框选择需求文档、各端原型或核心流程，左侧目录选页面；右侧是本页需求，切换页面状态看不同情况</li>' +
       '<li>画板上的<b>编号圆点</b>对应右侧功能点，点击互相定位；按 <kbd>N</kbd> 显示或隐藏</li>' +
       '<li>按 <kbd>H</kbd> 显示所有可点击区域；画板里的按钮可以直接点</li>' +
       ((W.P.flows || []).length ? '<li>“核心流程”逐步演示，键盘 ← → 切换步骤</li>' : '') +
@@ -1036,6 +1118,8 @@
   }
   W.setRole = setRole;
   function onKey(e) {
+    if (e.target.closest && e.target.closest('#vsw') && vswKey(e)) return;
+    if (e.key === 'Escape' && document.body.classList.contains('vsw-open')) { vswClose(true); return; }
     if (e.key === 'Escape' && (ui.cmt.pop || document.body.classList.contains('cmt-on'))) {
       if (ui.cmt.pop) cmtClosePop();
       else cmtToggle(false);
@@ -1071,13 +1155,17 @@
     if (ca) { cmtAct(ca); return; }
     if (ui.cmt.pop && !t.closest('#cmt-pop')) cmtClosePop();
     if (t.closest('#cmt-panel,#cmt-pop')) return;
+    if (t.closest('#vsw-btn')) {
+      e.preventDefault();
+      if ($('#vsw-menu').hidden) vswOpen(false); else vswClose(false);
+      return;
+    }
+    if (!t.closest('#vsw-menu')) vswClose(false);
     var tb = t.closest('[data-tab]');
     if (tb) {
       e.preventDefault();
-      var tab = tb.dataset.tab;
-      if (tab === 'doc') location.hash = '#/doc';
-      else if (tab === 'flow') location.hash = '#/flow';
-      else location.hash = hashFor(ui.last[tab]);
+      if (tb.closest('#vsw-menu')) vswClose(true);
+      goTab(tb.dataset.tab);
       return;
     }
     var fdot = t.closest('[data-fdot]');
@@ -1184,6 +1272,8 @@
   });
   document.addEventListener('scroll', function (e) { if (e.target.closest && e.target.closest('#ab')) placeDotsSoon(); }, true);
   document.addEventListener('keydown', onKey);
+  /* 点到托管原型的 iframe 里时，外层收不到 click，靠窗口失焦收起下拉框 */
+  window.addEventListener('blur', function () { vswClose(false); });
   document.addEventListener('click', function () { setTimeout(syncTools, 0); });
   window.addEventListener('hashchange', function () { render(); });
   window.addEventListener('resize', function () { clearTimeout(window._rz); window._rz = setTimeout(function () { fit(); if (ui.cur) placeDots(); }, 80); });

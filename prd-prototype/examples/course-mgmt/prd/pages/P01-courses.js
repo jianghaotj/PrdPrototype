@@ -6,25 +6,22 @@
   var CREDITS = ['1', '2', '3', '4'];
   var PAGE = 10;   /* 每页 10 条，与 h.pager 一致。原型只渲染第 1 页的行 */
 
-  /* 列表样式按 gaodeng-pc 表格规范 [6.5]，取值与 theme.css §6 的 .tbl th / .tbl td 相同：
-     表头 54 高、LV6 底、14px Medium、LV1 字、底边 LV5；行 54 高、14px、LV2 字、行线 LV6。
-     列表用 h.rows 的弹性行实现（搜索筛选依赖它），所以样式直接写在行上，不套 .tbl。 */
-  var TH = 'height:var(--row-h);padding:0 12px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--fg);font-size:var(--text-sm);font-weight:var(--fw-medium)';
-  var TD = 'height:var(--row-h);padding:0 12px;border-bottom:1px solid var(--surface);color:var(--fg-2);font-size:var(--text-sm)';
+  /* 列表用 h.rows 的弹性行实现（搜索筛选依赖它），不套 .tbl。
+     表头 .lst-h、行 .lst-r、外框 .lst 的样式写在项目 theme.css 第 7 节，页面里不写色值。 */
 
   /* 列表的列宽与表头一致；name 列占满剩余宽度 */
   function cell(text, px) {
     return '<span' + (px ? ' style="width:' + px + 'px"' : ' class="f1"') + '>' + text + '</span>';
   }
   function head() {
-    return '<div class="row g12" style="' + TH + '">' +
+    return '<div class="row g12 lst-h">' +
       cell('课程代码', 120) + cell('课程名称') + cell('开课学院', 168) + cell('学分', 64) + cell('任课教师', 120) + cell('状态', 96) + cell('', 64) +
       '</div>';
   }
   function row(x) {
-    return '<div class="row g12" style="' + TD + '">' +
-      cell(h.esc(x.no), 120) +
-      cell(h.esc(x.name)) +
+    return '<div class="row g12 lst-r">' +
+      cell('<span class="lst-code">' + h.esc(x.no) + '</span>', 120) +
+      cell('<b>' + h.esc(x.name) + '</b>') +
       cell(h.esc(x.college), 168) + cell(h.esc(x.credit), 64) + cell(h.esc(x.teacher), 120) +
       '<span style="width:96px">' + h.tag(h.esc(x.status), x.status === '已发布' ? 'ok' : 'warn') + '</span>' +
       '<span style="width:64px">' + h.btn('详情', { k: 'txt', sz: 'sm', go: 'P01', st: 'detail', set: { pick: x.id }, fn: 'table' }) + '</span>' +
@@ -98,7 +95,7 @@
       {
         id: 'pager', name: '分页计数',
         desc: '每页 10 条。课程不足 10 条时只显示“共 N 条”；10 条及以上时显示页码和“第 X~Y 条 / 共 N 条”。搜索后，计数和页码按匹配的结果计算，匹配超过 10 条时可以翻页。原型限制：原型只展示第 1 页，搜索时计数不变；翻页按钮只作展示。',
-        status: 'assumed', statusNote: '每页 10 条按 gaodeng-pc 规范的分页规则；搜索时计数的口径是 AI 假设',
+        status: 'assumed', statusNote: '每页 10 条、不足 10 条时隐藏页码，以及搜索时计数的口径，都是 AI 假设',
         ac: { pre: '列表中已有 9 门课程，新增 1 门后共 10 条', act: '打开课程管理页', expect: '分页显示“第 1~10 条 / 共 10 条”，只有页码 1' }
       },
       {
@@ -160,7 +157,7 @@
           '<span class="ml-a"></span>' +
           h.btn('新建课程', { k: 'pri', go: 'P01', st: 'create', fn: 'create-entry', ic: 'plus' }) +
         '</div>' +
-        '<div class="mt16">' + (items.length ? head() : '') +
+        '<div class="mt16 lst">' + (items.length ? head() : '') +
           h.rows('list', items.slice(0, PAGE).map(function (x) { return row(x); }), { fn: 'table', empty: empty, nomatch: '换个课程名称或代码试试' }) +
         '</div>' +
         h.pager(items.length, { fn: 'pager' }) +

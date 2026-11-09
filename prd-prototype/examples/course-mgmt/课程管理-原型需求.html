@@ -8,26 +8,46 @@
 <title>课程管理 · V1.0 · 原型需求</title>
 <style>
 /* ========== 原型需求浏览器外壳 ========== */
-:root{--v-bg:#e9ebee;--v-line:#e1e4e8;--v-ink:#1d2129;--v-ink2:#4e5969;--v-ink3:#86909c;--v-acc:#2f5bea;--v-accw:#eaf0ff;--v-amb:#9a5200;--v-ambw:#fff3e2;--v-ok:#1e7f4f;--v-okw:#e7f5ed;--v-chg:#b85c00;--v-chgw:#fff1e0;--v-err:#c4322a;--v-errw:#fdeceb}
+:root{--top-h:52px;--v-bg:#e9ebee;--v-line:#e1e4e8;--v-ink:#1d2129;--v-ink2:#4e5969;--v-ink3:#86909c;--v-acc:#2f5bea;--v-accw:#eaf0ff;--v-amb:#9a5200;--v-ambw:#fff3e2;--v-ok:#1e7f4f;--v-okw:#e7f5ed;--v-chg:#b85c00;--v-chgw:#fff1e0;--v-err:#c4322a;--v-errw:#fdeceb}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
 body{font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;color:var(--v-ink);background:var(--v-bg);overflow:hidden;-webkit-font-smoothing:antialiased}
 a{color:inherit}
-#app{display:grid;grid-template-rows:52px minmax(0,1fr);grid-template-columns:248px minmax(0,1fr) 360px;height:100vh;transition:grid-template-columns .2s}
+#app{display:grid;grid-template-rows:var(--top-h) minmax(0,1fr);grid-template-columns:248px minmax(0,1fr) 360px;height:100vh;transition:grid-template-columns .2s}
 body.no-anim #app{transition:none}
 body.no-l #app{grid-template-columns:0 minmax(0,1fr) 360px}
 body.no-r #app{grid-template-columns:248px minmax(0,1fr) 0}
 body.no-l.no-r #app{grid-template-columns:0 minmax(0,1fr) 0}
 
-#top{grid-column:1/-1;display:flex;align-items:center;gap:18px;padding:0 14px 0 16px;background:#fff;border-bottom:1px solid var(--v-line);min-width:0;z-index:5}
+#top{grid-column:1/-1;display:flex;align-items:center;gap:18px;padding:0 14px 0 16px;background:#fff;border-bottom:1px solid var(--v-line);min-width:0;z-index:45}
 .brand{display:flex;align-items:center;gap:10px;font-weight:650;white-space:nowrap;cursor:pointer;text-decoration:none;min-width:0;flex:0 1 320px;max-width:min(360px,28%)}
 .brand-m{width:26px;height:26px;border-radius:7px;background:var(--v-ink);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
-.brand .t{overflow:hidden;text-overflow:ellipsis}
+.brand .t{overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;max-width:220px}
 .brand small{font-weight:400;color:var(--v-ink3);font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis}
-.vtabs{display:flex;gap:2px;height:100%;overflow-x:auto;scrollbar-width:none;min-width:140px;flex:1 1 0}
-.vtabs a{display:flex;align-items:center;padding:0 12px;color:var(--v-ink2);text-decoration:none;border-bottom:2px solid transparent;font-size:14px;white-space:nowrap;cursor:pointer}
-.vtabs a:hover{color:var(--v-ink)}
-.vtabs a.on{color:var(--v-ink);border-color:var(--v-ink);font-weight:600}
+.vsw{position:relative;flex:none;display:flex}
+.vsw-btn{height:34px;max-width:340px;min-width:0;padding:0 10px 0 12px;border:1px solid #c9ced6;background:#fff;border-radius:8px;font:14px/1 inherit;font-family:inherit;color:var(--v-ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.vsw-btn:hover{border-color:#9aa1ab}
+.vsw-btn:focus-visible,.vsw-opt:focus-visible{outline:2px solid var(--v-acc);outline-offset:2px}
+.vsw-btn[aria-expanded="true"]{border-color:var(--v-acc);box-shadow:0 0 0 3px var(--v-accw)}
+.vsw-k{font-size:12px;color:var(--v-ink3);padding-right:8px;border-right:1px solid var(--v-line)}
+.vsw-cur{font-weight:600;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:200px}
+.vsw-n{font-size:11.5px;color:var(--v-ink3);background:#f0f2f5;border-radius:999px;padding:3px 7px;flex:none}
+.vsw-ch{flex:none;color:var(--v-ink2);transition:transform .15s}
+.vsw-btn[aria-expanded="true"] .vsw-ch{transform:rotate(180deg)}
+.vsw-menu{position:absolute;left:0;top:calc(100% + 6px);width:300px;max-width:calc(100vw - 16px);max-height:calc(100vh - 80px);overflow:auto;background:#fff;border:1px solid var(--v-line);border-radius:10px;box-shadow:0 12px 36px rgba(0,0,0,.16);padding:6px;z-index:60}
+.vsw-menu[hidden]{display:none}
+.vsw-opt{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;cursor:pointer;color:var(--v-ink)}
+.vsw-opt:hover,.vsw-opt:focus{background:#f5f6f8;outline:none}
+.vsw-opt:focus-visible{outline-offset:-2px}
+.vsw-opt.on{background:var(--v-accw)}
+.vsw-ic{width:28px;height:28px;border-radius:7px;background:#f0f2f5;color:var(--v-ink2);display:grid;place-items:center;font-size:12px;font-weight:600;flex:none}
+.vsw-opt.on .vsw-ic{background:var(--v-acc);color:#fff}
+.vsw-t{display:flex;flex-direction:column;min-width:0;flex:1}
+.vsw-t b{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vsw-t small{font-size:12px;color:var(--v-ink3);line-height:1.4}
+.vsw-ck{flex:none;color:var(--v-acc);visibility:hidden}
+.vsw-opt.on .vsw-ck{visibility:visible}
+.vsw-sep{height:1px;background:var(--v-line);margin:5px 4px}
 .vtools{margin-left:auto;display:flex;gap:8px;align-items:center;flex:none}
 .vbtn{height:30px;padding:0 10px;border:1px solid var(--v-line);background:#fff;border-radius:6px;font:13px/1 inherit;font-family:inherit;color:var(--v-ink2);cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .vbtn:hover{border-color:#c5cad1;color:var(--v-ink)}
@@ -252,7 +272,7 @@ body.flow-on #flowbar{display:flex}
 .cmt-btn{margin-left:auto;flex:none;height:22px;padding:0 7px;border:1px solid var(--v-line);border-radius:5px;background:#fff;color:var(--v-ink3);font-family:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
 .cmt-btn:hover,.cmt-btn.has{border-color:var(--v-chg);color:var(--v-chg)}
 .cmt-panel,.cmt-pop{position:fixed;display:none;flex-direction:column;background:#fff;color:var(--v-ink);font-size:13px;border:1px solid var(--v-line);box-shadow:0 10px 36px rgba(0,0,0,.16)}
-.cmt-panel{top:52px;right:0;bottom:0;width:360px;max-width:100vw;z-index:40;border-width:0 0 0 1px}
+.cmt-panel{top:var(--top-h);right:0;bottom:0;width:360px;max-width:100vw;z-index:40;border-width:0 0 0 1px}
 body.cmt-on .cmt-panel{display:flex}
 .cmt-pop{width:332px;max-height:70vh;z-index:41;border-radius:10px}
 .cmt-pop.open{display:flex}
@@ -289,20 +309,33 @@ body.cmt-on .cmt-panel{display:flex}
 .cmt-pop .cmt-body{max-height:40vh}
 
 /* 窄屏 */
+@media (max-width:1360px){ .vbtn kbd{display:none} }
 @media (max-width:1100px){
   #app{grid-template-columns:0 minmax(0,1fr) 0!important}
-  #left,#right{position:fixed;top:52px;bottom:0;width:320px;max-width:88vw;z-index:20;box-shadow:0 0 40px rgba(0,0,0,.18);display:none}
+  #left,#right{position:fixed;top:var(--top-h);bottom:0;width:320px;max-width:88vw;z-index:20;box-shadow:0 0 40px rgba(0,0,0,.18);display:none}
   #left{left:0}#right{right:0}
   body.m-l #left{display:block}
   body.m-r #right{display:block}
   .brand small{display:none}
+  /* 1100 及以下顶栏分两行：第一行是产品名和切换下拉框，第二行是工具按钮，放不下时横向滚动。
+     一行放不下时不再压缩下拉框，保证当前项一直看得见 */
+  :root{--top-h:94px}
+  #top{flex-wrap:wrap;align-content:center;gap:6px 12px;padding:6px 12px}
+  .vtools{flex:1 0 100%;margin-left:0;overflow-x:auto;scrollbar-width:none;gap:6px;padding:2px 0}
+  .vtools::-webkit-scrollbar{display:none}
+  .vtools > *{flex:none}
+  .brand{flex:0 1 auto;max-width:50%}
 }
 @media (max-width:760px){
-  #top{gap:8px;padding:0 8px}
+  /* 手机宽度：切换下拉框占满第一行 */
+  #top{gap:6px 8px;padding:6px 8px}
+  .brand{flex:none;max-width:none}
   .brand span.t{display:none}
+  .vsw{flex:1 1 0}
+  .vsw-btn{flex:1;max-width:none}
+  .vsw-cur{flex:1;text-align:left;max-width:none}
   [data-tool="zoom"],[data-tool="reset"],[data-tool="hot"],.audit-badge{display:none}
   .vbtn{padding:0 8px}
-  .vtabs a{padding:0 8px;font-size:13px}
   #stage-in{padding:12px 8px}
   .doc{padding:24px 18px 40px}
   .doc-bar{margin:-24px -18px 14px}
@@ -325,7 +358,7 @@ body.cmt-on .cmt-panel{display:flex}
 </style>
 <style>
 /* ========== 线框组件（只作用于画板 .ab 内） ==========
-   换成团队设计体系时：先改下面的设计变量，再在项目 theme.css 中覆盖组件类。
+   出高保真时：在项目 prd/theme.css 里覆盖下面的设计变量和组件类（做法见 references/hifi.md）。
    页面代码只调用 h.* 组件函数，不直接写颜色，换皮不需要改页面。 */
 .ab{
   --ink:#1d2129;--ink2:#4e5969;--ink3:#86909c;--line:#dcdfe4;--line2:#eceef1;--fill:#f5f6f8;--fill2:#eceef2;--pg:#f6f7f9;
@@ -599,427 +632,166 @@ body.cmt-on .cmt-panel{display:flex}
 <style>
 /* theme.css */
 /* ─────────────────────────────────────────────────────────────────────────
- * gaodeng-pc · tokens.css
+ * 课程管理 · 高保真样式（项目自带，构建时内联进交付 HTML）
  *
- * 来源：高等教育事业部设计组《设计规范》Web 2.0.1（PDF 未随仓库提供，文字依据为其转文本）。
- * 方括号中的数字是规范目录章节号，例如 [1.1] 色彩、[6.5] 表格。
- * 标记：
- *   [规范]    原文有明确值
- *   [补齐]    规范未登记，为小字可读性或实现需要加深或派生，待设计组确认
- *   [AI 归纳] 由规范多处高频值归纳，规范本身没有这一节
- *   [待确认]  原文冲突或转文本后不可靠，详见 CONFLICTS.md
- * 设计基准 1440×900，1 个 CSS px 等于 1 个设计 px。
- * 作用域为 .ab[data-device="pc"]：只给 PC 画板用，手机画板和评审外壳不受影响。
- * ─────────────────────────────────────────────────────────────────────── */
-
-.ab[data-device="pc"] {
-  /* ── 文字 [1.1 色彩] ─────────────────────────────────────────────── */
-  --fg: #1a2233;            /* [规范] LV1 标题、正文主色 */
-  --fg-2: #575c66;          /* [规范] LV2 次级正文、表格行内容 */
-  --muted: #858c99;         /* [规范] LV3 解释说明文案、图标。作小字用 --fg-3-ink（[非原文，见 DESIGN.md §11]，CONFLICTS C20） */
-  --fg-disabled: #c2c5cc;   /* [规范] LV4 不可点文字。占位符是否豁免见 CONFLICTS C24 */
-  --fg-3-ink: #656c7a;      /* [补齐] LV3 的小字版，白底 5.28:1 */
-
-  /* ── 背景与线 [1.1] ───────────────────────────────────────────────── */
-  --bg: #ffffff;            /* [规范] 画布 */
-  --surface: #f5f7fa;       /* [规范] LV6 表头背景、表格和列表分割线 [1.1] */
-  --border: #e1e6f0;        /* [规范] LV5 强分割线（如表头下方）、边框色 [1.1] */
-
-  /* ── 品牌色 [1.1] ─────────────────────────────────────────────────── */
-  --accent: #3264fa;        /* [规范] 默认：主按钮、强调文字、当前项 */
-  --accent-hover: #5c8aff;  /* [规范] 悬停：描边、图标（文字见 DESIGN.md §11）；待确认 主按钮底（CONFLICTS C12） */
-  --accent-hover-icon: #5983ff; /* [规范] 图标悬停 [2.1]，与上一值不同，原文如此（CONFLICTS C11） */
-  --accent-disabled: #adcaff;   /* [规范] 不可点 */
-  --accent-weak: #f0f6ff;   /* [规范] 高亮底：鼠标经过、表格选中行 [6.5] */
-  --surface-hover: #f2f5ff;    /* [待确认] 原名 --accent-nav-hover，用途存疑，见 CONFLICTS C13。名字中性化，不代表导航 */
-  --accent-quiz: #d6e5ff;   /* [规范] 题库蓝，业务专用 [1.1 LV3-2] */
-  --accent-weak-2: #e6ecff; /* [待确认] 原文位置不清，用途未知（CONFLICTS C13） */
-  --accent-on: #ffffff;     /* 实心品牌底上的文字 */
-
-  /* ── 语义色 [1.1 辅助色] ──────────────────────────────────────────── */
-  --success: #0ac77c;
-  --danger: #ff6859;
-  --warn: #ff8000;
-  --warn-2: #fabe0a;        /* 仅配深色字 [AI 假设]，见 CONFLICTS C21 */
-
-  /* 小字与实心按钮用的加深值。原色压白底只有 2.2–3.4:1，见 DESIGN.md §11。 */
-  --success-ink: #07784c;   /* [补齐] 白底 5.53:1 */
-  --danger-ink: #c62f20;    /* [补齐] 白底 5.49:1 */
-  --warn-ink: #b05600;      /* [补齐] 白底 5.03:1 */
-  --danger-fill: #c62f20;   /* [补齐] 危险实心按钮底，白字 5.49:1 */
-
-  /* 语义色浅底 [补齐]：规范未登记，由原色 12% 透明叠在白底上派生，只用于标签和提示条底色 */
-  --success-weak: rgb(10 199 124 / 12%);
-  --warn-weak: rgb(255 128 0 / 12%);
-  --danger-weak: rgb(255 104 89 / 12%);
-
-  /* ── 字体 [1.2 文字] ──────────────────────────────────────────────── */
-  /* 中文与数字用苹方，英文用 Helvetica；优先级：苹方 → 微软雅黑，Helvetica → Arial。 */
-  --font-family: "PingFang SC", -apple-system, "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --font-mono: "SF Mono", Menlo, Consolas, monospace;
-
-  /* ── 字号 [1.2] 七档，各档用途见 DESIGN.md §3 ─────────────────────── */
-  --text-xs: 12px;          /* [规范] Caption：弱化内容、注释 */
-  --text-sm: 14px;          /* [规范] Content：正文、按钮文案（待确认 C1） */
-  --text-base: 16px;        /* [规范] Action：标题、主操作按钮文案（待确认 C1） */
-  --text-lg: 18px;          /* [规范] 模块标题、一二级导航标题、列表标题（待确认 C2） */
-  --text-md: 20px;          /* [规范] 模块标题文案（待确认 C2） */
-  --text-xl: 24px;          /* [规范] 单个模块强调（待确认 C2） */
-  --text-2xl: 28px;         /* [规范] 页面核心强调 */
-
-  --fw-regular: 400;
-  --fw-medium: 500;         /* [规范] 标题用 Medium。规范中的"加粗"按 Medium 理解（C19） */
-
-  /* ── 行高 [1.2 字阶与行高] ────────────────────────────────────────── */
-  /* 单行文案 = 字号 + 8px。规范表：12/20、14/22、16/24、18/26、20/28、24/32、28/36 */
-  --lh-xs: 20px;
-  --lh-sm: 22px;
-  --lh-base: 24px;
-  --lh-lg: 26px;
-  --lh-md: 28px;
-  --lh-xl: 32px;
-  --lh-2xl: 36px;
-  --leading-body: 1.5;      /* [规范] 多行正文默认 1.5 倍行高 */
-
-  /* ── 圆角 [1.4] 与标签 [6.4] ─────────────────────────────────────── */
-  --radius-sm: 4px;         /* [规范] 按钮、选择器、输入框、表单。按钮是否只有此一种形态见 CONFLICTS C22 */
-  --radius-lg: 8px;         /* [规范] 对话框、通知提醒框 */
-  --radius-tag: 2px;        /* [规范] 标签 [6.4]；异形分类标签 4px/1px 待确认（C6） */
-
-  /* ── 控件高度与按钮 [2.2、5.x] ───────────────────────────────────── */
-  --h-lg: 40px;             /* [规范] 页面中，字号 16 */
-  --h-md: 32px;             /* [规范] 弹窗、表格内，字号 14 */
-  --h-sm: 24px;             /* [规范] 辅助操作，字号 14（小按钮 28px 冲突见 C10） */
-
-  --btn-min-w: 86px;        /* [规范] 40px 按钮最小宽 */
-  --btn-min-w-icon: 106px;  /* [规范] 40px 含图标 */
-  --btn-min-w-md: 72px;     /* [规范] 32px 按钮最小宽 */
-  --btn-min-w-icon-md: 84px;   /* [待确认] 32px 含图标，原文仅见一处 84px（C18） */
-  --btn-min-w-sm: 54px;     /* [规范] 24px 按钮最小宽 */
-
-  --icon-size: 18px;        /* [规范] 40px 按钮图标 */
-  --icon-size-md: 16px;     /* [规范] 32px 按钮图标 */
-  --icon-size-sm: 14px;     /* [规范] 24px 按钮图标 */
-
-  /* ── 阴影 [1.3 图层样式] ─────────────────────────────────────────── */
-  --shadow-md: 0 4px 12px -2px rgb(26 31 51 / 10%);  /* [规范] 中阴影，卡片。6.8 另有一组，见 C4 */
-  --shadow-lg:                                       /* [补齐] 大阴影，规范只说明沿用 Ant Design 数值，具体数值待确认（C16） */
-    0 6px 16px -8px rgb(26 34 51 / 8%),
-    0 9px 28px 0 rgb(26 34 51 / 5%),
-    0 12px 48px 16px rgb(26 34 51 / 3%);
-  --shadow-scroll: 0 0 8px 0 rgb(225 230 240 / 30%); /* [规范] 弹窗内固定区滚动时的投影 [7.1] */
-
-  /* ── 对话框 [7.1] ─────────────────────────────────────────────────── */
-  --dialog-w-s: 480px;      /* 最小宽，定宽不定高 */
-  --dialog-w-m: 640px;
-  --dialog-w-l: 720px;
-  --dialog-w-xl: 960px;
-  --dialog-h-min: 220px;
-  --dialog-h-max: 640px;    /* 超出后中间内容区滚动，头和脚固定 */
-  --dialog-head-h: 56px;
-  --dialog-body-min-h: 60px;
-  --dialog-info-w: 352px;   /* [待确认] 信息提醒类，只见于图示（C17） */
-  --dialog-radius: var(--radius-lg);
-  --mask-bg: rgb(26 34 51 / 64%);  /* 遮罩，LV1 #1A2233 64% */
-
-  /* ── 间距 [AI 归纳] ───────────────────────────────────────────────── */
-  /* 规范没有间距章节。正文反复出现 4/8/12/16/24/32/40/48，且要求间距取 8 的倍数。 */
-  --sp-1: 4px;
-  --sp-2: 8px;
-  --sp-3: 12px;
-  --sp-4: 16px;
-  --sp-6: 24px;
-  --sp-8: 32px;
-  --sp-10: 40px;
-  --sp-12: 48px;
-
-  /* ── 布局与导航 [3.2、4.5] ───────────────────────────────────────── */
-  --canvas-w: 1440px;       /* [规范] 设计稿画板，1920/1440/1366 主流，1280 少数 */
-  --canvas-h: 900px;
-  --container-w: 1200px;    /* [规范] 仅用于上中下布局，原文示例值 [3.2]。展示类顶部侧边布局居中，宽度原文未给；侧边布局自适应 */
-  --nav-primary: 64px;      /* [规范] 常规顶部导航一级 */
-  --nav-secondary: 40px;    /* [规范] 常规顶部导航二级（与 48+8n 公式冲突，C9） */
-  --nav-primary-display: 80px;   /* [规范] 展示类页面一级 */
-  --nav-secondary-display: 48px; /* [规范] 展示类页面二级 */
-  --nav-base: 48px;         /* [规范] 顶部导航公式：48 + 8n */
-  --nav-step: 8px;
-  --sidebar-base: 200px;    /* [规范] 侧边导航宽度公式：200 + 8n */
-  --sidebar-step: 8px;
-
-  /* ── 表格与下拉 [5.8、6.5] ───────────────────────────────────────── */
-  --row-h: 54px;            /* [规范] 默认单元格高度 */
-  --row-h-compact: 40px;    /* [规范] 仅用于对话框内 */
-  --rows-per-page: 10;      /* [规范] 默认一页 10 行；不足 10 行隐藏页码；带输入操作的表格用滚动，不分页 [6.5] */
-  --popup-max-h: 320px;     /* [规范] 下拉弹窗最大高度，超出内部滚动 */
-
-  /* ── 标签 [6.4] ───────────────────────────────────────────────────── */
-  --tag-font: 10px;         /* [规范] 常规体；20px 高的标签为 12px */
-  --tag-h-sm: 14px;
-  --tag-h-md: 16px;
-  --tag-h-lg: 18px;
-  --tag-h-xl: 20px;
-}
-
-/* ─────────────────────────────────────────────────────────────────────────
- * gaodeng-pc · theme.css（组件覆盖，只作用于 .ab[data-device="pc"] 画板）
- *
- * 1. 把 wire.css 的设计变量（--ink、--acc、--line 等）指向 tokens.css 的规范变量；
- * 2. 按规范调整组件的尺寸和形态。页面代码不用改，只调用 h.* 组件。
- * 作用域为 .ab[data-device="pc"]：手机画板（data-device="mobile"）不套用本包。
- *
- * 合并方式：new.mjs --theme gaodeng-pc 时，tokens.css 与本文件合并为 prd/theme.css，
- * 构建时内联进交付 HTML。本文件依赖 tokens.css 中的变量名。
- * 标注见 DESIGN.md、冲突与待确认见 CONFLICTS.md（C 编号）。
+ * 视觉方案由模型按 references/hifi.md 自拟，不对应任何公司设计规范。[AI 假设]
+ * 方向：高校教务后台，信息密度中等、长时间使用不累眼。
+ *   - 主色：深青 #0f6e66，比常见的“后台蓝”更沉稳，白底对比度 6.1:1
+ *   - 中性色：偏冷的灰，正文 #172026，次级 #4a5961，说明 #63727a（白底 5.0:1，页面底色上 4.5:1）
+ *   - 字阶：12 / 13 / 14 / 16 / 20 / 24；标题 600，正文 400
+ *   - 间距：4 的倍数；圆角：控件 6、卡片和弹窗 12
+ *   - 状态：悬停、按下、键盘焦点、禁用、错误都有样式
+ * 作用域：.ab[data-device="pc"]，只改 PC 画板，手机画板和外壳不受影响。
+ * 页面代码不写色值，只用 h.* 组件和下面定义的类。
  * ───────────────────────────────────────────────────────────────────────── */
 
-/* ── 1. 设计变量（wire.css 的变量名不变） ─────────────────────────────── */
+/* ── 1. 设计变量：覆盖 wire.css 的变量（变量名不变），另加本项目用的几个 ── */
 .ab[data-device="pc"] {
-  --ink: var(--fg);
-  --ink2: var(--fg-2);
-  --ink3: var(--fg-3-ink);       /* 小字灰，见 DESIGN §11（C20） */
-  --line: var(--border);
-  --line2: var(--surface);
-  --fill: var(--surface);
-  --fill2: var(--surface);
-  --pg: var(--bg);
-  --acc: var(--accent);
-  --accw: var(--accent-weak);
-  --ok: var(--success-ink);
-  --okw: var(--success-weak);
-  --warn: var(--warn-ink);
-  --warnw: var(--warn-weak);
-  --err: var(--danger-ink);
-  --errw: var(--danger-weak);
-  --r: var(--radius-sm);
-  --r-lg: var(--radius-lg);
-  --font: var(--font-family);
-  font: var(--text-sm) / var(--lh-sm) var(--font);
-  color: var(--fg);
-  background: var(--bg);
+  --ink: #172026;
+  --ink2: #4a5961;
+  --ink3: #63727a;
+  --line: #dbe2e6;
+  --line2: #edf1f3;
+  --fill: #f4f7f8;
+  --fill2: #e9eff1;
+  --pg: #f2f5f6;
+  --acc: #0f6e66;
+  --acc-h: #0b5953;
+  --acc-d: #9cc9c3;
+  --accw: #e3f2ef;
+  --ok: #17734a;
+  --okw: #e3f4ea;
+  --warn: #8a5800;
+  --warnw: #fcf1d9;
+  --err: #b42318;
+  --errw: #fdebe9;
+  --r: 6px;
+  --r-lg: 12px;
+  --ring: 0 0 0 3px rgba(15, 110, 102, .22);
+  --sh-1: 0 1px 2px rgba(16, 32, 38, .05), 0 1px 3px rgba(16, 32, 38, .04);
+  --sh-2: 0 12px 32px rgba(16, 32, 38, .16), 0 2px 6px rgba(16, 32, 38, .06);
+  --row-h: 52px;
+  --head-h: 44px;
+  font: 14px/1.6 var(--font);
+  color: var(--ink);
+  background: var(--pg);
 }
 
-/* ── 2. 文字 [1.2]：标题用 Medium，字号按规范字阶 ───────────────────── */
-.ab[data-device="pc"] h1 { font-size: var(--text-2xl); line-height: var(--lh-2xl); font-weight: var(--fw-medium); }
-.ab[data-device="pc"] h2 { font-size: var(--text-md); line-height: var(--lh-md); font-weight: var(--fw-medium); }
-.ab[data-device="pc"] h3 { font-size: var(--text-base); line-height: var(--lh-base); font-weight: var(--fw-medium); }
-.ab[data-device="pc"] h4 { font-size: var(--text-sm); line-height: var(--lh-sm); font-weight: var(--fw-medium); }
-.ab[data-device="pc"] .b, .ab[data-device="pc"] .big { font-weight: var(--fw-medium); }  /* 规范里的“加粗”按 Medium 理解（C19） */
-.ab[data-device="pc"] .sm { font-size: var(--text-xs); }
-.ab[data-device="pc"] .md { font-size: var(--text-sm); }
-.ab[data-device="pc"] .lg { font-size: var(--text-base); }
-.ab[data-device="pc"] .xl { font-size: var(--text-md); }
+/* ── 2. 文字 ─────────────────────────────────────────────────────────── */
+.ab[data-device="pc"] h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: .01em; }
+.ab[data-device="pc"] h2 { font-size: 20px; line-height: 28px; font-weight: 600; }
+.ab[data-device="pc"] h3 { font-size: 16px; line-height: 24px; font-weight: 600; }
+.ab[data-device="pc"] .mut { color: var(--ink2); }
+.ab[data-device="pc"] .mut2 { color: var(--ink3); }
 
-/* ── 3. 按钮 [2.2]：页面中 40、弹窗与表格内 32、辅助操作 24 ─────────── */
-.ab[data-device="pc"] .btn {
-  height: var(--h-lg);
-  min-width: var(--btn-min-w);
-  padding: 0 16px;
-  gap: 8px;
-  font-size: var(--text-base);
-  line-height: 1;
-  border-radius: var(--r);
-  border: 1px solid var(--accent);
-  background: var(--bg);
-  color: var(--accent);
-}
-.ab[data-device="pc"] .btn svg { width: var(--icon-size); height: var(--icon-size); }
-.ab[data-device="pc"] .btn:has(> svg) { min-width: var(--btn-min-w-icon); }
-.ab[data-device="pc"] .btn.pri { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
-.ab[data-device="pc"] .btn.txt { height: auto; min-width: 0; padding: 0 4px; border-color: transparent; background: transparent; color: var(--accent); }
-.ab[data-device="pc"] .btn.red { color: var(--danger-ink); border-color: var(--danger-ink); }
-.ab[data-device="pc"] .btn.pri.red { background: var(--danger-fill); border-color: var(--danger-fill); color: var(--accent-on); }
-.ab[data-device="pc"] .btn.blk { width: 100%; }
-.ab[data-device="pc"] .btn.lg { height: var(--h-lg); font-size: var(--text-base); }
-.ab[data-device="pc"] .btn.sm {
-  height: var(--h-md);
-  min-width: var(--btn-min-w-md);
-  padding: 0 12px;
-  font-size: var(--text-sm);
-  border-radius: var(--r);
-}
-.ab[data-device="pc"] .btn.sm:has(> svg) { min-width: var(--btn-min-w-icon-md); }    /* 32px 含图标最小宽，原文仅一处（C18） */
-.ab[data-device="pc"] .btn.sm svg { width: var(--icon-size-md); height: var(--icon-size-md); }
-.ab[data-device="pc"] .btn.xs {
-  height: var(--h-sm);
-  min-width: var(--btn-min-w-sm);
-  padding: 0 8px;
-  font-size: var(--text-sm);
-  border-radius: var(--r);
-}
-.ab[data-device="pc"] .btn.xs svg { width: var(--icon-size-sm); height: var(--icon-size-sm); }
-.ab[data-device="pc"] .dlg .btn:not(.xs), .ab[data-device="pc"] .tbl .btn:not(.xs) {
-  height: var(--h-md);
-  min-width: var(--btn-min-w-md);
-  padding: 0 12px;
-  font-size: var(--text-sm);
-  border-radius: var(--r);
-}
-.ab[data-device="pc"] .btn[disabled] { opacity: 1; cursor: not-allowed; border-color: var(--accent-disabled); color: var(--accent-disabled); background: var(--bg); }
-.ab[data-device="pc"] .btn.pri[disabled] { background: var(--accent-disabled); border-color: var(--accent-disabled); color: var(--accent-on); }
-.ab[data-device="pc"] .btn.txt[disabled] { background: transparent; border-color: transparent; }
+/* ── 3. 外壳：白色顶栏，品牌块用主色，当前菜单下划线 ─────────────────── */
+.ab[data-device="pc"] .hdr { height: 60px; padding: 0 32px; gap: 48px; border-bottom-color: var(--line); box-shadow: var(--sh-1); }
+.ab[data-device="pc"] .logo { font-size: 16px; font-weight: 600; letter-spacing: .02em; }
+.ab[data-device="pc"] .logo i { width: 28px; height: 28px; border-radius: 8px; background: var(--acc); font-size: 13px; }
+.ab[data-device="pc"] .nav a { font-size: 14px; color: var(--ink2); border-bottom-width: 3px; padding-top: 3px; }
+.ab[data-device="pc"] .nav a:hover { color: var(--ink); }
+.ab[data-device="pc"] .nav a.on { color: var(--acc); border-color: var(--acc); font-weight: 600; }
+.ab[data-device="pc"] .ava { background: var(--accw); color: var(--acc); }
+.ab[data-device="pc"] .body { padding: 32px 40px 48px; }
+.ab[data-device="pc"] .ph-h { margin-bottom: 24px; }
+.ab[data-device="pc"] .menu-pop { border-color: var(--line); box-shadow: var(--sh-2); border-radius: 10px; }
+.ab[data-device="pc"] .menu-pop a:hover { background: var(--fill); }
 
-/* ── 4. 标签 [6.4]：圆角 2px；20px 高的标签字号 12px ─────────────────── */
-.ab[data-device="pc"] .tag {
-  height: var(--tag-h-xl);
-  padding: 0 6px;
-  font-size: var(--text-xs);
-  font-weight: 400;
-  line-height: 1;
-  border: 0;
-  border-radius: var(--radius-tag);
-}
-.ab[data-device="pc"] .t-gray { background: var(--surface); color: var(--fg-2); }
-.ab[data-device="pc"] .t-acc, .ab[data-device="pc"] .t-sys { background: var(--accent-weak); color: var(--accent); }
-.ab[data-device="pc"] .t-pend { border: 1px dashed var(--muted); background: var(--bg); color: var(--fg-2); }
-.ab[data-device="pc"] .t-ok { background: var(--success-weak); color: var(--success-ink); }
-.ab[data-device="pc"] .t-warn { background: var(--warn-weak); color: var(--warn-ink); }
-.ab[data-device="pc"] .t-err { background: var(--danger-weak); color: var(--danger-ink); }
-.ab[data-device="pc"] .t-dark { background: var(--fg); color: var(--accent-on); }
-.ab[data-device="pc"] .t-line { border: 1px solid var(--border); background: var(--bg); color: var(--fg-2); }
+/* ── 4. 按钮：默认 36 高；主按钮实心主色；悬停加深、按下下沉、焦点外圈 ── */
+.ab[data-device="pc"] .btn { height: 36px; padding: 0 16px; border-radius: var(--r); border-color: var(--line); color: var(--ink); font-weight: 500; transition: background .12s, border-color .12s, box-shadow .12s; }
+.ab[data-device="pc"] .btn:hover { border-color: #b8c3c9; background: var(--fill); }
+.ab[data-device="pc"] .btn:active { transform: translateY(1px); }
+.ab[data-device="pc"] .btn:focus-visible { outline: none; box-shadow: var(--ring); }
+.ab[data-device="pc"] .btn.pri { background: var(--acc); border-color: var(--acc); color: #fff; box-shadow: 0 1px 2px rgba(15, 110, 102, .25); }
+.ab[data-device="pc"] .btn.pri:hover { background: var(--acc-h); border-color: var(--acc-h); }
+.ab[data-device="pc"] .btn.txt { color: var(--acc); background: transparent; border-color: transparent; box-shadow: none; padding: 0 4px; height: auto; }
+.ab[data-device="pc"] .btn.txt:hover { color: var(--acc-h); text-decoration: underline; text-underline-offset: 3px; background: transparent; }
+.ab[data-device="pc"] .btn.sm { height: 30px; padding: 0 12px; font-size: 13px; border-radius: var(--r); }
+.ab[data-device="pc"] .btn.xs { height: 24px; padding: 0 8px; font-size: 12px; border-radius: 5px; }
+.ab[data-device="pc"] .btn[disabled] { opacity: 1; background: var(--fill); border-color: var(--line); color: #a3b0b6; box-shadow: none; transform: none; }
+.ab[data-device="pc"] .btn.pri[disabled] { background: var(--acc-d); border-color: var(--acc-d); color: #fff; }
 
-/* ── 5. 输入框 [5.6]：40 高（弹窗、表格内 32），内边距 12 ───────────── */
-.ab[data-device="pc"] .inp {
-  height: var(--h-lg);
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  background: var(--bg);
-  color: var(--fg);
-  font-size: var(--text-sm);
-}
-.ab[data-device="pc"] .dlg .inp, .ab[data-device="pc"] .tbl .inp { height: var(--h-md); }
-.ab[data-device="pc"] .inp.area { height: auto; padding: 8px 12px; }
-.ab[data-device="pc"] .inp.bad { border-color: var(--danger-ink); }
-.ab[data-device="pc"] input.inp:focus, .ab[data-device="pc"] select.inp:focus, .ab[data-device="pc"] textarea.inp:focus { border-color: var(--accent); }
-.ab[data-device="pc"] input::placeholder, .ab[data-device="pc"] textarea::placeholder { color: var(--muted); }    /* 占位符是否豁免见 C24 */
-.ab[data-device="pc"] .lbl { font-size: var(--text-sm); line-height: var(--lh-sm); color: var(--fg-2); }
-.ab[data-device="pc"] .lbl em { color: var(--danger-ink); }
-.ab[data-device="pc"] .hint { font-size: var(--text-xs); line-height: var(--lh-xs); color: var(--fg-3-ink); }
-.ab[data-device="pc"] .ferr { font-size: var(--text-xs); line-height: var(--lh-xs); color: var(--danger-ink); }
+/* ── 5. 标签：浅底深字，圆角 999 的胶囊形，前面带状态圆点 ───────────── */
+.ab[data-device="pc"] .tag { height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 500; gap: 6px; }
+.ab[data-device="pc"] .tag.t-ok::before, .ab[data-device="pc"] .tag.t-warn::before, .ab[data-device="pc"] .tag.t-err::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ab[data-device="pc"] .t-acc, .ab[data-device="pc"] .t-sys { background: var(--accw); color: var(--acc); }
 
-/* ── 6. 表格 [6.5]：单元格 54 高（对话框内 40），表头 LV6 底 ──────────── */
-.ab[data-device="pc"] .tbl { font-size: var(--text-sm); }
-.ab[data-device="pc"] .tbl th {
-  height: var(--row-h);
-  padding: 0 12px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  color: var(--fg);
-  font-size: var(--text-sm);
-  font-weight: var(--fw-medium);
-}
-.ab[data-device="pc"] .tbl td {
-  height: var(--row-h);
-  padding: 0 12px;
-  border-bottom: 1px solid var(--surface);
-  color: var(--fg-2);
-  font-size: var(--text-sm);
-}
-.ab[data-device="pc"] .tbl tr:not(:first-child):hover td { background: var(--accent-weak); }     /* 鼠标经过的高亮底 [1.1] */
-.ab[data-device="pc"] .dlg .tbl th, .ab[data-device="pc"] .dlg .tbl td { height: var(--row-h-compact); }
+/* ── 6. 输入框：40 高（弹窗内 36）；焦点主色描边加外圈；错误红框 ─────── */
+.ab[data-device="pc"] .inp { height: 40px; border-color: var(--line); border-radius: var(--r); transition: border-color .12s, box-shadow .12s; }
+.ab[data-device="pc"] .inp:hover { border-color: #b8c3c9; }
+.ab[data-device="pc"] .dlg .inp:not(.area) { height: 36px; }
+.ab[data-device="pc"] .inp.area { height: auto; }
+.ab[data-device="pc"] input.inp:focus, .ab[data-device="pc"] select.inp:focus, .ab[data-device="pc"] textarea.inp:focus, .ab[data-device="pc"] .inp:focus-within { border-color: var(--acc); box-shadow: var(--ring); }
+.ab[data-device="pc"] .inp.bad, .ab[data-device="pc"] .inp.bad:focus { border-color: var(--err); box-shadow: 0 0 0 3px rgba(180, 35, 24, .14); }
+.ab[data-device="pc"] .lbl { font-size: 13px; font-weight: 500; color: var(--ink); }
+.ab[data-device="pc"] .lbl em { color: var(--err); }
+.ab[data-device="pc"] .hint { color: var(--ink3); }
+.ab[data-device="pc"] .ferr { color: var(--err); }
 
-/* ── 7. 分页 [6.5]：页码按钮 24 高；少于 10 行时隐藏页码、保留“共 N 条”（由 h.pager 决定，见 CONFLICTS C25） ── */
-.ab[data-device="pc"] .pager {
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 16px;
-  color: var(--fg-2);
-  font-size: var(--text-sm);
-  line-height: var(--lh-sm);
-}
-.ab[data-device="pc"] .pg-b, .ab[data-device="pc"] .pg-n {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: var(--h-sm);
-  height: var(--h-sm);
-  padding: 0 4px;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  background: var(--bg);
-  color: var(--fg-2);
-  font-size: var(--text-sm);
-}
-.ab[data-device="pc"] .pg-n.on { border-color: var(--accent); background: var(--accent); color: var(--accent-on); }
-.ab[data-device="pc"] .pg-b.dis { border-color: var(--surface); color: var(--fg-disabled); }
+/* ── 7. 列表：白色卡片承载，表头浅灰、行 52 高、悬停浅主色底 ──────────── */
+.ab[data-device="pc"] .lst { background: #fff; border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--sh-1); overflow: hidden; }
+.ab[data-device="pc"] .lst-h { height: var(--head-h); padding: 0 20px; background: var(--fill); border-bottom: 1px solid var(--line); color: var(--ink2); font-size: 13px; font-weight: 600; }
+.ab[data-device="pc"] .lst-r { height: var(--row-h); padding: 0 20px; border-bottom: 1px solid var(--line2); color: var(--ink); font-size: 14px; transition: background .1s; }
+.ab[data-device="pc"] .lst-r:hover { background: #f7fbfa; }
+.ab[data-device="pc"] [data-frow]:nth-last-child(2) .lst-r { border-bottom: 0; }   /* 最后一个子元素是“没有匹配的结果”占位 */
+.ab[data-device="pc"] .lst-code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; color: var(--ink2); }
+.ab[data-device="pc"] .lst-r b { font-weight: 500; }
+.ab[data-device="pc"] .lst .emp { background: #fff; }
+.ab[data-device="pc"] .tbl th { background: var(--fill); color: var(--ink2); font-weight: 600; height: var(--head-h); }
+.ab[data-device="pc"] .tbl td { height: var(--row-h); }
 
-/* ── 8. 页签、选中态：选中用品牌色 [4.3、6.6] ──────────────────────── */
-.ab[data-device="pc"] .tabs > * { font-size: var(--text-sm); color: var(--fg-2); }
-.ab[data-device="pc"] .tabs > .on { border-color: var(--accent); color: var(--accent); font-weight: var(--fw-medium); }
-.ab[data-device="pc"] .opt.on { border-color: var(--accent); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); font-weight: var(--fw-medium); }
-.ab[data-device="pc"] .pill.on { border-color: var(--accent); background: var(--accent); color: var(--accent-on); }
-.ab[data-device="pc"] .ck.on::before { border-color: var(--accent); background-color: var(--accent); }
-.ab[data-device="pc"] .sw.on { background: var(--accent); }
-.ab[data-device="pc"] .step.on { color: var(--fg); font-weight: var(--fw-medium); }
-.ab[data-device="pc"] .step.on b { border-color: var(--accent); background: var(--accent); color: var(--accent-on); }
-.ab[data-device="pc"] .step.ok b { border-color: var(--accent); color: var(--accent); }
-.ab[data-device="pc"] .tl > .on { border-color: var(--accent); background: var(--accent); color: var(--accent-on); }
-.ab[data-device="pc"] .bar > i, .ab[data-device="pc"] .bar.acc > i { background: var(--accent); }
-.ab[data-device="pc"] .nav a.on { border-color: var(--accent); color: var(--accent); font-weight: var(--fw-medium); }
-.ab[data-device="pc"] .sidenav a.on { background: var(--accent-weak); color: var(--accent); font-weight: var(--fw-medium); }    /* AI 假设：规范未给侧边导航选中样式 */
+/* ── 8. 分页 ─────────────────────────────────────────────────────────── */
+.ab[data-device="pc"] .pager { margin-top: 16px; gap: 6px; color: var(--ink2); }
+.ab[data-device="pc"] .pg-b, .ab[data-device="pc"] .pg-n { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--r); background: #fff; color: var(--ink2); }
+.ab[data-device="pc"] .pg-n.on { background: var(--acc); border-color: var(--acc); color: #fff; font-weight: 600; }
+.ab[data-device="pc"] .pg-b.dis { color: #b7c1c6; background: var(--fill); }
+.ab[data-device="pc"] .pager > span:first-child { margin-right: 6px; }
 
-/* ── 9. 卡片、提示条：圆角 8（卡片，C5）、卡片中阴影（C4） ──────────────── */
-.ab[data-device="pc"] .card { border-color: var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); }
-.ab[data-device="pc"] .box { border-color: var(--border); border-radius: var(--radius-sm); }
-.ab[data-device="pc"] .bn-info { background: var(--accent-weak); color: var(--fg-2); }
-.ab[data-device="pc"] .bn-warn { background: var(--warn-weak); color: var(--warn-ink); }
-.ab[data-device="pc"] .bn-err { background: var(--danger-weak); color: var(--danger-ink); }
-.ab[data-device="pc"] .bn-ok { background: var(--success-weak); color: var(--success-ink); }
-.ab[data-device="pc"] .bn-gray { background: var(--surface); color: var(--fg-2); }
+/* ── 9. 选中态统一用主色 ─────────────────────────────────────────────── */
+.ab[data-device="pc"] .tabs > .on { color: var(--acc); border-color: var(--acc); }
+.ab[data-device="pc"] .opt.on { border-color: var(--acc); color: var(--acc); box-shadow: inset 0 0 0 1px var(--acc); }
+.ab[data-device="pc"] .pill.on { background: var(--acc); border-color: var(--acc); }
+.ab[data-device="pc"] .ck.on::before { border-color: var(--acc); background-color: var(--acc); }
+.ab[data-device="pc"] .sw.on { background: var(--acc); }
+.ab[data-device="pc"] .step.on b { background: var(--acc); border-color: var(--acc); }
+.ab[data-device="pc"] .bar > i { background: var(--acc); }
+.ab[data-device="pc"] .sidenav a.on { background: var(--accw); color: var(--acc); }
 
-/* ── 10. 对话框 [7.1]：宽 480/640/720/960（h.modal 的 size），高 220–640，头 56，圆角 8 ── */
-.ab[data-device="pc"] .ov:not(.ov-r) { background: var(--mask-bg); }
-.ab[data-device="pc"] .dlg {
-  width: var(--dialog-w-s);
-  max-width: calc(100% - 32px);
-  min-height: var(--dialog-h-min);
-  max-height: var(--dialog-h-max);
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-radius: var(--dialog-radius);
-  background: var(--bg);
-  box-shadow: var(--shadow-lg);
-}
-.ab[data-device="pc"] .dlg h3 {
-  flex: none;
-  height: var(--dialog-head-h);
-  margin: 0;
-  padding: 0 24px;
-  line-height: var(--dialog-head-h);
-  color: var(--fg);
-  font-size: var(--text-lg);
-  font-weight: var(--fw-medium);
-}
-.ab[data-device="pc"] .dlg-b {
-  flex: 1 1 auto;
-  min-height: var(--dialog-body-min-h);
-  overflow: auto;
-  padding: 16px 24px;
-  color: var(--fg-2);
-  font-size: var(--text-sm);
-  line-height: var(--lh-sm);
-}
-.ab[data-device="pc"] .dlg-a { flex: none; margin: 0; padding: 16px 24px; gap: 8px; justify-content: flex-end; }
+/* ── 10. 卡片与提示条 ────────────────────────────────────────────────── */
+.ab[data-device="pc"] .card { border-color: var(--line); border-radius: var(--r-lg); box-shadow: var(--sh-1); }
+.ab[data-device="pc"] .bn { border-radius: 8px; }
+.ab[data-device="pc"] .bn-info { background: var(--accw); color: #0b4f49; }
+.ab[data-device="pc"] .bn-err { background: var(--errw); color: #8f1d14; }
 
-/* ── 11. 缺省页 [6.3]：图形、标题、副标题、引导按钮（h.empty 生成） ───── */
-.ab[data-device="pc"] .emp { padding: 48px 16px; color: var(--fg-3-ink); }
-.ab[data-device="pc"] .emp-ic { margin-bottom: 16px; line-height: 0; color: var(--muted); }
-.ab[data-device="pc"] .emp-t { font-size: var(--text-base); line-height: var(--lh-base); font-weight: var(--fw-medium); color: var(--fg); }
-.ab[data-device="pc"] .emp-d { margin: 4px 0 0; font-size: var(--text-sm); line-height: var(--lh-sm); color: var(--fg-3-ink); }
+/* ── 11. 弹窗：头、体、脚三段，头脚有分隔线；遮罩偏冷 ─────────────────── */
+.ab[data-device="pc"] .ov:not(.ov-r) { background: rgba(14, 28, 33, .45); }
+.ab[data-device="pc"] .ov.ov-r { background: rgba(14, 28, 33, .28); }
+.ab[data-device="pc"] .dlg { padding: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-lg); box-shadow: var(--sh-2); }
+.ab[data-device="pc"] .dlg h3 { flex: none; margin: 0; height: 60px; line-height: 60px; padding: 0 24px; font-size: 17px; border-bottom: 1px solid var(--line2); }
+.ab[data-device="pc"] .dlg-b { flex: 1 1 auto; overflow: auto; padding: 20px 24px; color: var(--ink2); }
+.ab[data-device="pc"] .dlg-a { flex: none; margin: 0; padding: 14px 24px; gap: 10px; background: var(--fill); border-top: 1px solid var(--line2); }
 
-/* ── 12. 外层导航 [3.2]：一级 64 ───────────────────────────────────── */
-.ab[data-device="pc"] .hdr { height: var(--nav-primary); }
+/* ── 12. 抽屉 ────────────────────────────────────────────────────────── */
+.ab[data-device="pc"] .drw { border-left: 0; box-shadow: -16px 0 40px rgba(16, 32, 38, .14); }
+.ab[data-device="pc"] .drw-h { height: 60px; padding: 0 16px 0 24px; font-size: 16px; border-bottom-color: var(--line2); }
+.ab[data-device="pc"] .drw-b { padding: 20px 24px; }
+.ab[data-device="pc"] .kv { gap: 14px 24px; font-size: 14px; }
+.ab[data-device="pc"] .kv dt { color: var(--ink3); }
 
-/* ── 13. 通用：Toast ──────────────────────────────────────────────── */
-.ab[data-device="pc"] .toast { border-radius: var(--radius-sm); background: var(--fg); }
+/* ── 13. 缺省页（h.empty 生成） ──────────────────────────────────────── */
+.ab[data-device="pc"] .emp { padding: 56px 16px; }
+.ab[data-device="pc"] .emp-ic { width: 72px; height: 72px; margin-bottom: 16px; border-radius: 50%; background: var(--accw); color: var(--acc); display: grid; place-items: center; }
+.ab[data-device="pc"] .emp-t { font-size: 16px; font-weight: 600; color: var(--ink); }
+.ab[data-device="pc"] .emp-d { margin: 4px 0 0; font-size: 13px; color: var(--ink3); }
+
+/* ── 14. Toast ───────────────────────────────────────────────────────── */
+.ab[data-device="pc"] .toast { background: #14262a; border-radius: 8px; box-shadow: var(--sh-2); }
 
 </style>
 </head>
 <body>
 <div id="app"><header id="top"></header><aside id="left"></aside><main id="stagewrap"><div id="stage"><div id="stage-in"></div></div><div id="flowbar"></div></main><aside id="right"></aside></div>
-<script type="application/json" id="prd-audit">{"behave":{"P01":{"filter":["列表内容随输入实时筛选（匹配列表行中的文字），无匹配项时显示“没有匹配的结果”"],"create-form":["课程代码为必填项，为空时不能提交","课程代码长度为 6–12 个字，不在此范围内时不能提交","课程名称为必填项，为空时不能提交","课程名称长度为 2–30 个字，不在此范围内时不能提交","开课学院为必填项，为空时不能提交","学分为必填项，为空时不能提交","备注最多 200 个字，超出时不能提交"],"submit":["提交前先校验必填项和长度，不通过时在字段下方提示，不发出请求","提交中按钮禁用，重复点击只提交一次","提交失败时保留已填内容并提示，可直接重试（可在数据场景中切换，演示首次提交失败）","提交成功后在「开课课程列表」中新增一条，进入「课程管理」"]}},"ok":true,"at":"2026-11-05T09:14:34.738Z","release":"V1.0","errors":[],"warns":[],"stats":{"pages":1,"states":3,"fns":8,"fields":19,"pending":0,"assumed":31,"changes":0,"gaps":0,"release":"V1.0","interactive":14,"covered":14,"ignored":0,"renders":9,"errors":0,"warns":0,"netRequests":0,"netBlocked":0},"fnStates":{"P01":{"filter":["list"],"create-entry":["list"],"table":["list"],"pager":["list"],"create-form":["create"],"submit":["create"],"detail":["detail"]}},"links":{"P01":[]},"inventory":{"pages":[{"k":"P01","l":"P01 课程管理"}],"states":[{"k":"P01/list","l":"P01 课程管理 · 状态「课程列表」"},{"k":"P01/create","l":"P01 课程管理 · 状态「新建课程弹窗」"},{"k":"P01/detail","l":"P01 课程管理 · 状态「课程详情抽屉」"}],"fns":[{"k":"P01/filter","l":"P01 课程管理 · 功能点「课程搜索」"},{"k":"P01/table","l":"P01 课程管理 · 功能点「开课课程列表」"},{"k":"P01/pager","l":"P01 课程管理 · 功能点「分页计数」"},{"k":"P01/create-entry","l":"P01 课程管理 · 功能点「新建课程入口」"},{"k":"P01/create-form","l":"P01 课程管理 · 功能点「新建课程表单」"},{"k":"P01/submit","l":"P01 课程管理 · 功能点「提交新建课程」"},{"k":"P01/detail","l":"P01 课程管理 · 功能点「课程详情抽屉」"},{"k":"公共/pc-shell/pc-nav","l":"公共组件「教务管理台 顶部导航」 · 功能点「顶部导航与账号菜单」"}]},"scope":null,"needOnline":false}</script>
+<script type="application/json" id="prd-audit">{"behave":{"P01":{"filter":["列表内容随输入实时筛选（匹配列表行中的文字），无匹配项时显示“没有匹配的结果”"],"create-form":["课程代码为必填项，为空时不能提交","课程代码长度为 6–12 个字，不在此范围内时不能提交","课程名称为必填项，为空时不能提交","课程名称长度为 2–30 个字，不在此范围内时不能提交","开课学院为必填项，为空时不能提交","学分为必填项，为空时不能提交","备注最多 200 个字，超出时不能提交"],"submit":["提交前先校验必填项和长度，不通过时在字段下方提示，不发出请求","提交中按钮禁用，重复点击只提交一次","提交失败时保留已填内容并提示，可直接重试（可在数据场景中切换，演示首次提交失败）","提交成功后在「开课课程列表」中新增一条，进入「课程管理」"]}},"ok":true,"at":"2026-11-09T11:33:18.045Z","release":"V1.0","errors":[],"warns":[],"stats":{"pages":1,"states":3,"fns":8,"fields":19,"pending":0,"assumed":31,"changes":0,"gaps":0,"release":"V1.0","interactive":14,"covered":14,"ignored":0,"renders":9,"errors":0,"warns":0,"netRequests":0,"netBlocked":0},"fnStates":{"P01":{"filter":["list"],"create-entry":["list"],"table":["list"],"pager":["list"],"create-form":["create"],"submit":["create"],"detail":["detail"]}},"links":{"P01":[]},"inventory":{"pages":[{"k":"P01","l":"P01 课程管理"}],"states":[{"k":"P01/list","l":"P01 课程管理 · 状态「课程列表」"},{"k":"P01/create","l":"P01 课程管理 · 状态「新建课程弹窗」"},{"k":"P01/detail","l":"P01 课程管理 · 状态「课程详情抽屉」"}],"fns":[{"k":"P01/filter","l":"P01 课程管理 · 功能点「课程搜索」"},{"k":"P01/table","l":"P01 课程管理 · 功能点「开课课程列表」"},{"k":"P01/pager","l":"P01 课程管理 · 功能点「分页计数」"},{"k":"P01/create-entry","l":"P01 课程管理 · 功能点「新建课程入口」"},{"k":"P01/create-form","l":"P01 课程管理 · 功能点「新建课程表单」"},{"k":"P01/submit","l":"P01 课程管理 · 功能点「提交新建课程」"},{"k":"P01/detail","l":"P01 课程管理 · 功能点「课程详情抽屉」"},{"k":"公共/pc-shell/pc-nav","l":"公共组件「教务管理台 顶部导航」 · 功能点「顶部导航与账号菜单」"}]},"scope":null,"needOnline":false}</script>
 <script type="application/json" id="prd-scope"></script>
 <script>
 /*! @license DOMPurify 3.2.7 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.2.7/LICENSE */
@@ -3327,7 +3099,7 @@ W.product({
   id: 'course-mgmt',
   name: '课程管理',
   date: '2026-11-04',
-  fidelity: '高保真（高教 PC 规范包 gaodeng-pc）',
+  fidelity: '高保真（视觉由 AI 自拟）',
   releases: [
     { id: 'V1.0', date: '2026-11-04', summary: '首版：教务管理台课程列表，含筛选、分页、新建课程和详情抽屉' }
   ],
@@ -3456,22 +3228,22 @@ W.product({
 </script>
 <script>
 /* theme-kit.js */
-/* gaodeng-pc 组件扩展。new.mjs --theme gaodeng-pc 会把本文件复制为 prd/theme-kit.js。
-   在 core.js 之后加载，覆盖 h.modal、h.empty、h.table，并新增 h.pager。
-   只作用于 PC 画板：运行时把当前端写入 W.device（'pc' 或 'mobile'），手机端一律调用原来的组件实现，输出与不带规范包时一致。
-   页面调用方式不变；不选用规范包时不加载，线框组件保持原样。 */
+/* 课程管理 · 组件扩展（项目自带，和 theme.css 配套）。
+   prd/ 根目录下的 JS 在 kit.js 之后、pages/ 之前加载，所以这里可以覆盖 h.modal、h.empty、h.table，并新增 h.pager。
+   只作用于 PC 画板：运行时把当前端写入 W.device（'pc' 或 'mobile'），手机端一律调用原来的组件实现。
+   页面调用方式不变。尺寸和分页规则是本样例自拟的 [AI 假设]，不对应任何公司设计规范。 */
 (function () {
   'use strict';
   var W = window.W;
   var h = W.h;
   var base = { modal: h.modal, table: h.table, empty: h.empty };
-  var DLG_W = { s: 480, m: 640, l: 720, xl: 960 };
+  var DLG_W = { s: 480, m: 640, l: 800, xl: 960 };
   var EMP_ICON = { blank: 'box', info: 'info', system: 'warn' };
   var PAGE_SIZE = 10;
 
   function onPc() { return W.device === 'pc'; }
 
-  /* 对话框四档宽度 [7.1]：h.modal(标题, 正文, 按钮, { size: 's' | 'm' | 'l' | 'xl', fn })。
+  /* 对话框四档宽度：h.modal(标题, 正文, 按钮, { size: 's' | 'm' | 'l' | 'xl', fn })。
      也可以直接用 o.w 指定宽度（如 480）。PC 端不写 size 时为 480。 */
   h.modal = function (title, body, actions, o) {
     if (!onPc()) return base.modal(title, body, actions, o);
@@ -3481,20 +3253,20 @@ W.product({
     return base.modal(title, body, actions, o);
   };
 
-  /* 缺省页 [6.3]：图形、标题、副标题、引导按钮。
+  /* 缺省页：图形、标题、副标题、引导按钮。
      h.empty(标题, 副标题, 引导按钮 html, { kind: 'blank' | 'info' | 'system' })
      blank 空白（暂无数据、搜索无结果）；info 信息（内容已删除、无权限）；system 系统（加载失败、网络异常）。 */
   h.empty = function (title, desc, action, o) {
     if (!onPc()) return base.empty(title, desc, action);
     o = o || {};
     var kind = EMP_ICON[o.kind] ? o.kind : 'blank';
-    return '<div class="emp" data-empty="' + kind + '"><div class="emp-ic">' + h.i(EMP_ICON[kind], 40) + '</div>' +
+    return '<div class="emp" data-empty="' + kind + '"><div class="emp-ic">' + h.i(EMP_ICON[kind], 32) + '</div>' +
       '<div class="emp-t">' + title + '</div>' +
       (desc ? '<p class="emp-d">' + desc + '</p>' : '') +
       (action ? '<div class="mt16">' + action + '</div>' : '') + '</div>';
   };
 
-  /* 整表没有数据时用缺省页代替表格 [6.3、6.5]。
+  /* 整表没有数据时用缺省页代替表格。
      h.table(列名, 行, { fn, empty: 标题, emptyDesc, emptyAction, emptyKind }) */
   h.table = function (cols, rows, o) {
     if (!onPc()) return base.table(cols, rows, o);
@@ -3504,11 +3276,8 @@ W.product({
       h.empty(o.empty || '暂无数据', o.emptyDesc, o.emptyAction, { kind: o.emptyKind }) + '</div>';
   };
 
-  /* 分页 [6.5]：默认每页 10 行，页码显示规则按规范原文。
-     总行数不足 10 时隐藏页码，保留“共 N 条”；超过 10 行时显示页码和“第 X~Y 条 / 共 N 条”。
-     是否连“共 N 条”一起隐藏，原文未明确，见 CONFLICTS C25（待确认）。
-     h.pager(总行数, { page: 当前页, fn: 功能点 })
-     翻页按钮只作展示，不可点击（AI 假设）；带输入操作的表格用滚动，不用分页。
+  /* 分页：每页 10 行。总行数不足 10 时只显示“共 N 条”；10 行及以上时显示页码和“第 X~Y 条 / 共 N 条”。
+     h.pager(总行数, { page: 当前页, fn: 功能点 })。翻页按钮只作展示，不可点击。
      手机端没有分页组件，返回空串。 */
   h.pager = function (total, o) {
     if (!onPc()) return '';
@@ -3539,25 +3308,22 @@ W.product({
   var CREDITS = ['1', '2', '3', '4'];
   var PAGE = 10;   /* 每页 10 条，与 h.pager 一致。原型只渲染第 1 页的行 */
 
-  /* 列表样式按 gaodeng-pc 表格规范 [6.5]，取值与 theme.css §6 的 .tbl th / .tbl td 相同：
-     表头 54 高、LV6 底、14px Medium、LV1 字、底边 LV5；行 54 高、14px、LV2 字、行线 LV6。
-     列表用 h.rows 的弹性行实现（搜索筛选依赖它），所以样式直接写在行上，不套 .tbl。 */
-  var TH = 'height:var(--row-h);padding:0 12px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--fg);font-size:var(--text-sm);font-weight:var(--fw-medium)';
-  var TD = 'height:var(--row-h);padding:0 12px;border-bottom:1px solid var(--surface);color:var(--fg-2);font-size:var(--text-sm)';
+  /* 列表用 h.rows 的弹性行实现（搜索筛选依赖它），不套 .tbl。
+     表头 .lst-h、行 .lst-r、外框 .lst 的样式写在项目 theme.css 第 7 节，页面里不写色值。 */
 
   /* 列表的列宽与表头一致；name 列占满剩余宽度 */
   function cell(text, px) {
     return '<span' + (px ? ' style="width:' + px + 'px"' : ' class="f1"') + '>' + text + '</span>';
   }
   function head() {
-    return '<div class="row g12" style="' + TH + '">' +
+    return '<div class="row g12 lst-h">' +
       cell('课程代码', 120) + cell('课程名称') + cell('开课学院', 168) + cell('学分', 64) + cell('任课教师', 120) + cell('状态', 96) + cell('', 64) +
       '</div>';
   }
   function row(x) {
-    return '<div class="row g12" style="' + TD + '">' +
-      cell(h.esc(x.no), 120) +
-      cell(h.esc(x.name)) +
+    return '<div class="row g12 lst-r">' +
+      cell('<span class="lst-code">' + h.esc(x.no) + '</span>', 120) +
+      cell('<b>' + h.esc(x.name) + '</b>') +
       cell(h.esc(x.college), 168) + cell(h.esc(x.credit), 64) + cell(h.esc(x.teacher), 120) +
       '<span style="width:96px">' + h.tag(h.esc(x.status), x.status === '已发布' ? 'ok' : 'warn') + '</span>' +
       '<span style="width:64px">' + h.btn('详情', { k: 'txt', sz: 'sm', go: 'P01', st: 'detail', set: { pick: x.id }, fn: 'table' }) + '</span>' +
@@ -3631,7 +3397,7 @@ W.product({
       {
         id: 'pager', name: '分页计数',
         desc: '每页 10 条。课程不足 10 条时只显示“共 N 条”；10 条及以上时显示页码和“第 X~Y 条 / 共 N 条”。搜索后，计数和页码按匹配的结果计算，匹配超过 10 条时可以翻页。原型限制：原型只展示第 1 页，搜索时计数不变；翻页按钮只作展示。',
-        status: 'assumed', statusNote: '每页 10 条按 gaodeng-pc 规范的分页规则；搜索时计数的口径是 AI 假设',
+        status: 'assumed', statusNote: '每页 10 条、不足 10 条时隐藏页码，以及搜索时计数的口径，都是 AI 假设',
         ac: { pre: '列表中已有 9 门课程，新增 1 门后共 10 条', act: '打开课程管理页', expect: '分页显示“第 1~10 条 / 共 10 条”，只有页码 1' }
       },
       {
@@ -3693,7 +3459,7 @@ W.product({
           '<span class="ml-a"></span>' +
           h.btn('新建课程', { k: 'pri', go: 'P01', st: 'create', fn: 'create-entry', ic: 'plus' }) +
         '</div>' +
-        '<div class="mt16">' + (items.length ? head() : '') +
+        '<div class="mt16 lst">' + (items.length ? head() : '') +
           h.rows('list', items.slice(0, PAGE).map(function (x) { return row(x); }), { fn: 'table', empty: empty, nomatch: '换个课程名称或代码试试' }) +
         '</div>' +
         h.pager(items.length, { fn: 'pager' }) +
@@ -3996,9 +3762,80 @@ W.product({
   W.goStep = goStep;
 
   /* ---------- 顶栏 ---------- */
+  /* 顶部模块切换：下拉框（按钮 + 选项列表）。选项是需求文档、各端原型、核心流程。
+     窄屏时按钮单独占第一行，一眼能看出可以切换；键盘可用 ↑ ↓ Home End Enter Esc。 */
+  function tabList() {
+    var P = W.P, out = [];
+    if (!ui.proto) out.push({ id: 'doc', name: '需求文档', sub: '全文需求、评审摘要、导出', ic: '文' });
+    P.ends.forEach(function (e) {
+      var n = (W.order[e.id] || []).length;
+      out.push({ id: e.id, name: e.name, sub: (e.device === 'mobile' ? '手机原型' : 'PC 原型') + ' · ' + n + ' 个页面', ic: e.device === 'mobile' ? '机' : '屏', sep: out.length && !out[out.length - 1].end, end: true });
+    });
+    if ((P.flows || []).length) out.push({ id: 'flow', name: '核心流程', sub: P.flows.length + ' 条流程逐步演示', ic: '流', sep: true });
+    return out;
+  }
+  function vswHTML() {
+    var list = tabList();
+    return '<div class="vsw" id="vsw">' +
+      '<button type="button" class="vsw-btn" id="vsw-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="vsw-menu" title="切换查看内容（共 ' + list.length + ' 项）">' +
+      '<span class="vsw-k">切换</span><span class="vsw-cur" id="vsw-cur"></span><span class="vsw-n">' + list.length + ' 项</span>' +
+      '<svg class="vsw-ch" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
+      '<div class="vsw-menu" id="vsw-menu" role="listbox" aria-label="切换查看内容" hidden>' +
+      list.map(function (t) {
+        return (t.sep ? '<div class="vsw-sep" role="presentation"></div>' : '') +
+          '<div class="vsw-opt" role="option" tabindex="-1" id="vsw-o-' + h.esc(t.id) + '" data-tab="' + h.esc(t.id) + '" aria-selected="false">' +
+          '<span class="vsw-ic" aria-hidden="true">' + t.ic + '</span><span class="vsw-t"><b>' + h.esc(t.name) + '</b><small>' + h.esc(t.sub) + '</small></span>' +
+          '<svg class="vsw-ck" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></div>';
+      }).join('') + '</div></div>';
+  }
+  function vswOpts() { return $$('#vsw-menu .vsw-opt'); }
+  function vswOpen(focusLast) {
+    var m = $('#vsw-menu'), b = $('#vsw-btn');
+    if (!m) return;
+    m.hidden = false;
+    b.setAttribute('aria-expanded', 'true');
+    document.body.classList.add('vsw-open');
+    var opts = vswOpts();
+    var cur = opts.filter(function (o) { return o.getAttribute('aria-selected') === 'true'; })[0];
+    (focusLast ? opts[opts.length - 1] : cur || opts[0]).focus();
+  }
+  function vswClose(refocus) {
+    var m = $('#vsw-menu'), b = $('#vsw-btn');
+    if (!m || m.hidden) return;
+    m.hidden = true;
+    b.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('vsw-open');
+    if (refocus) b.focus();
+  }
+  W.vswOpen = vswOpen;
+  W.vswClose = vswClose;
+  /* 返回 true 表示按键已由下拉框处理；焦点停在收起的按钮上时，其它键（H、N、← →）交给全局快捷键 */
+  function vswKey(e) {
+    var inMenu = !!e.target.closest('#vsw-menu');
+    if (!inMenu) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vswOpen(false); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); vswOpen(true); }
+      else if (e.key === 'Escape' && !$('#vsw-menu').hidden) vswClose(true);
+      else return false;
+      return true;
+    }
+    var opts = vswOpts(), i = opts.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); opts[(i + 1) % opts.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); opts[(i - 1 + opts.length) % opts.length].focus(); }
+    else if (e.key === 'Home') { e.preventDefault(); opts[0].focus(); }
+    else if (e.key === 'End') { e.preventDefault(); opts[opts.length - 1].focus(); }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (i >= 0) { vswClose(true); goTab(opts[i].dataset.tab); } }
+    else if (e.key === 'Escape') { e.preventDefault(); vswClose(true); }
+    else if (e.key === 'Tab') vswClose(false);
+    return true;
+  }
+  function goTab(tab) {
+    if (tab === 'doc') location.hash = '#/doc';
+    else if (tab === 'flow') location.hash = '#/flow';
+    else location.hash = hashFor(ui.last[tab]);
+  }
   function renderTop() {
     var P = W.P;
-    var tabs = (ui.proto ? '' : '<a data-tab="doc">需求文档</a>') + P.ends.map(function (e) { return '<a data-tab="' + h.esc(e.id) + '">' + h.esc(e.name) + '</a>'; }).join('') + ((P.flows || []).length ? '<a data-tab="flow">核心流程</a>' : '');
     var a = W.audit, badge = '';
     if (a && ui.proto) {
       badge = '<span class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" style="cursor:default" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '原型阶段 · 检查通过' : '原型阶段 · 检查未通过') + (a.needOnline ? ' · 需联网' : '') + '</span>';
@@ -4011,7 +3848,7 @@ W.product({
       badge = '<a class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" href="#/doc" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '检查通过' : '检查未通过') + (parts.length ? ' · ' + parts.join(' · ') : '') + '</a>';
     }
     $('#top').innerHTML = '<a class="brand" data-tab="doc"><span class="brand-m">' + h.esc((P.name || '原')[0]) + '</span><span class="t">' + h.esc(P.name || '') + '</span><small>' + h.esc([D.cur(), P.date, P.fidelity || '低保真'].filter(Boolean).join(' · ')) + '</small></a>' +
-      '<nav class="vtabs">' + tabs + '</nav>' +
+      vswHTML() +
       '<div class="vtools">' + badge +
       (P.roles && P.roles.length ? '<select id="role-sel" class="role-sel"><option value="all">全部角色</option>' + P.roles.map(function (r) { return '<option value="' + h.esc(r.id) + '">' + h.esc(r.name) + '</option>'; }).join('') + '</select>' : '') +
       '<button class="vbtn" data-tool="hot" title="显示画板中所有可点击区域">热区 <kbd>H</kbd></button>' +
@@ -4029,7 +3866,18 @@ W.product({
       if (roleSel) roleSel.value = ui.role;
     }
   }
-  function setTab(tab) { $$('.vtabs a').forEach(function (a) { a.classList.toggle('on', a.dataset.tab === tab); }); }
+  function setTab(tab) {
+    var name = '';
+    vswOpts().forEach(function (o) {
+      var on = o.dataset.tab === tab;
+      o.classList.toggle('on', on);
+      o.setAttribute('aria-selected', on ? 'true' : 'false');
+      if (on) name = o.querySelector('b').textContent;
+    });
+    var cur = $('#vsw-cur'), b = $('#vsw-btn');
+    if (cur) cur.textContent = name;
+    if (b) b.setAttribute('aria-label', '切换查看内容，当前：' + name);
+  }
   function syncTools() {
     var narrow = innerWidth <= 1100, B = document.body.classList;
     var l = $('[data-tool="left"]'), r = $('[data-tool="right"]');
@@ -4095,7 +3943,7 @@ W.product({
     var e = W.end(p.end);
     var ctx = { st: st, s: W.store, p: p, q: q || {}, end: e };
     var html;
-    /* 组件扩展（如规范包 theme-kit.js）按这个值判断当前端，手机端走原有实现 */
+    /* 项目里的组件扩展（如 prd/theme-kit.js）按这个值判断当前端，只改 PC 端时手机端走原有实现 */
     W.device = e.device === 'mobile' ? 'mobile' : 'pc';
     try { html = p.render(ctx); } catch (err) {
       console.error(err);
@@ -4765,7 +4613,7 @@ W.product({
     } else s += '<div class="np-sec"><h3>构建检查</h3><div class="issue w">此文件未经过构建检查。</div></div>';
     if (W.errors.length) s += '<div class="np-sec"><h3>运行错误</h3>' + W.errors.slice(0, 20).map(function (m) { return '<div class="issue e">' + h.esc(m) + '</div>'; }).join('') + '</div>';
     s += '<div class="np-sec"><h3>浏览方式</h3><ul>' +
-      '<li>顶部切换<b>端</b>，左侧目录选页面；右侧是本页需求，切换页面状态看不同情况</li>' +
+      '<li>顶部<b>切换</b>下拉框选择需求文档、各端原型或核心流程，左侧目录选页面；右侧是本页需求，切换页面状态看不同情况</li>' +
       '<li>画板上的<b>编号圆点</b>对应右侧功能点，点击互相定位；按 <kbd>N</kbd> 显示或隐藏</li>' +
       '<li>按 <kbd>H</kbd> 显示所有可点击区域；画板里的按钮可以直接点</li>' +
       ((W.P.flows || []).length ? '<li>“核心流程”逐步演示，键盘 ← → 切换步骤</li>' : '') +
@@ -4883,6 +4731,8 @@ W.product({
   }
   W.setRole = setRole;
   function onKey(e) {
+    if (e.target.closest && e.target.closest('#vsw') && vswKey(e)) return;
+    if (e.key === 'Escape' && document.body.classList.contains('vsw-open')) { vswClose(true); return; }
     if (e.key === 'Escape' && (ui.cmt.pop || document.body.classList.contains('cmt-on'))) {
       if (ui.cmt.pop) cmtClosePop();
       else cmtToggle(false);
@@ -4918,13 +4768,17 @@ W.product({
     if (ca) { cmtAct(ca); return; }
     if (ui.cmt.pop && !t.closest('#cmt-pop')) cmtClosePop();
     if (t.closest('#cmt-panel,#cmt-pop')) return;
+    if (t.closest('#vsw-btn')) {
+      e.preventDefault();
+      if ($('#vsw-menu').hidden) vswOpen(false); else vswClose(false);
+      return;
+    }
+    if (!t.closest('#vsw-menu')) vswClose(false);
     var tb = t.closest('[data-tab]');
     if (tb) {
       e.preventDefault();
-      var tab = tb.dataset.tab;
-      if (tab === 'doc') location.hash = '#/doc';
-      else if (tab === 'flow') location.hash = '#/flow';
-      else location.hash = hashFor(ui.last[tab]);
+      if (tb.closest('#vsw-menu')) vswClose(true);
+      goTab(tb.dataset.tab);
       return;
     }
     var fdot = t.closest('[data-fdot]');
@@ -5031,6 +4885,8 @@ W.product({
   });
   document.addEventListener('scroll', function (e) { if (e.target.closest && e.target.closest('#ab')) placeDotsSoon(); }, true);
   document.addEventListener('keydown', onKey);
+  /* 点到托管原型的 iframe 里时，外层收不到 click，靠窗口失焦收起下拉框 */
+  window.addEventListener('blur', function () { vswClose(false); });
   document.addEventListener('click', function () { setTimeout(syncTools, 0); });
   window.addEventListener('hashchange', function () { render(); });
   window.addEventListener('resize', function () { clearTimeout(window._rz); window._rz = setTimeout(function () { fit(); if (ui.cur) placeDots(); }, 80); });

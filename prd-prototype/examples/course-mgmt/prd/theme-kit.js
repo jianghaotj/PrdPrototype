@@ -1,19 +1,19 @@
-/* gaodeng-pc 组件扩展。new.mjs --theme gaodeng-pc 会把本文件复制为 prd/theme-kit.js。
-   在 core.js 之后加载，覆盖 h.modal、h.empty、h.table，并新增 h.pager。
-   只作用于 PC 画板：运行时把当前端写入 W.device（'pc' 或 'mobile'），手机端一律调用原来的组件实现，输出与不带规范包时一致。
-   页面调用方式不变；不选用规范包时不加载，线框组件保持原样。 */
+/* 课程管理 · 组件扩展（项目自带，和 theme.css 配套）。
+   prd/ 根目录下的 JS 在 kit.js 之后、pages/ 之前加载，所以这里可以覆盖 h.modal、h.empty、h.table，并新增 h.pager。
+   只作用于 PC 画板：运行时把当前端写入 W.device（'pc' 或 'mobile'），手机端一律调用原来的组件实现。
+   页面调用方式不变。尺寸和分页规则是本样例自拟的 [AI 假设]，不对应任何公司设计规范。 */
 (function () {
   'use strict';
   var W = window.W;
   var h = W.h;
   var base = { modal: h.modal, table: h.table, empty: h.empty };
-  var DLG_W = { s: 480, m: 640, l: 720, xl: 960 };
+  var DLG_W = { s: 480, m: 640, l: 800, xl: 960 };
   var EMP_ICON = { blank: 'box', info: 'info', system: 'warn' };
   var PAGE_SIZE = 10;
 
   function onPc() { return W.device === 'pc'; }
 
-  /* 对话框四档宽度 [7.1]：h.modal(标题, 正文, 按钮, { size: 's' | 'm' | 'l' | 'xl', fn })。
+  /* 对话框四档宽度：h.modal(标题, 正文, 按钮, { size: 's' | 'm' | 'l' | 'xl', fn })。
      也可以直接用 o.w 指定宽度（如 480）。PC 端不写 size 时为 480。 */
   h.modal = function (title, body, actions, o) {
     if (!onPc()) return base.modal(title, body, actions, o);
@@ -23,20 +23,20 @@
     return base.modal(title, body, actions, o);
   };
 
-  /* 缺省页 [6.3]：图形、标题、副标题、引导按钮。
+  /* 缺省页：图形、标题、副标题、引导按钮。
      h.empty(标题, 副标题, 引导按钮 html, { kind: 'blank' | 'info' | 'system' })
      blank 空白（暂无数据、搜索无结果）；info 信息（内容已删除、无权限）；system 系统（加载失败、网络异常）。 */
   h.empty = function (title, desc, action, o) {
     if (!onPc()) return base.empty(title, desc, action);
     o = o || {};
     var kind = EMP_ICON[o.kind] ? o.kind : 'blank';
-    return '<div class="emp" data-empty="' + kind + '"><div class="emp-ic">' + h.i(EMP_ICON[kind], 40) + '</div>' +
+    return '<div class="emp" data-empty="' + kind + '"><div class="emp-ic">' + h.i(EMP_ICON[kind], 32) + '</div>' +
       '<div class="emp-t">' + title + '</div>' +
       (desc ? '<p class="emp-d">' + desc + '</p>' : '') +
       (action ? '<div class="mt16">' + action + '</div>' : '') + '</div>';
   };
 
-  /* 整表没有数据时用缺省页代替表格 [6.3、6.5]。
+  /* 整表没有数据时用缺省页代替表格。
      h.table(列名, 行, { fn, empty: 标题, emptyDesc, emptyAction, emptyKind }) */
   h.table = function (cols, rows, o) {
     if (!onPc()) return base.table(cols, rows, o);
@@ -46,11 +46,8 @@
       h.empty(o.empty || '暂无数据', o.emptyDesc, o.emptyAction, { kind: o.emptyKind }) + '</div>';
   };
 
-  /* 分页 [6.5]：默认每页 10 行，页码显示规则按规范原文。
-     总行数不足 10 时隐藏页码，保留“共 N 条”；超过 10 行时显示页码和“第 X~Y 条 / 共 N 条”。
-     是否连“共 N 条”一起隐藏，原文未明确，见 CONFLICTS C25（待确认）。
-     h.pager(总行数, { page: 当前页, fn: 功能点 })
-     翻页按钮只作展示，不可点击（AI 假设）；带输入操作的表格用滚动，不用分页。
+  /* 分页：每页 10 行。总行数不足 10 时只显示“共 N 条”；10 行及以上时显示页码和“第 X~Y 条 / 共 N 条”。
+     h.pager(总行数, { page: 当前页, fn: 功能点 })。翻页按钮只作展示，不可点击。
      手机端没有分页组件，返回空串。 */
   h.pager = function (total, o) {
     if (!onPc()) return '';
