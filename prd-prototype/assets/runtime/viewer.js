@@ -967,7 +967,7 @@
       var md = D.markdown({ html: true, changesOnly: only, stats: statsHTML(only) });
       $('#stage-in').innerHTML = '<div class="doc" id="doc"><div class="doc-bar"><span class="l">需求文档与原型同源；改需求请改源文件后重新构建</span>' +
         (D.multiRelease() ? '<button class="vbtn chg' + (only ? ' on' : '') + '" data-tool="chg">只看 ' + h.esc(D.cur()) + ' 变化</button>' : '') +
-        '<button class="vbtn" data-act-doc="print">打印 / 存为 PDF</button><button class="vbtn" data-act-doc="md">导出 Markdown</button><button class="vbtn" data-act-doc="csv" title="功能点、字段、验收条件，CSV，Excel 可直接打开">导出 CSV</button></div><div id="docbody"></div></div>';
+        '<button class="vbtn" data-act-doc="md">导出 Markdown</button></div><div id="docbody"></div></div>';
       W.md.into($('#docbody'), md);
       ui.docKey = key;
       renderDocLeft();
@@ -1004,7 +1004,7 @@
       '<li>画板上的<b>编号圆点</b>对应右侧功能点，点击互相定位；按 <kbd>N</kbd> 显示或隐藏</li>' +
       '<li>按 <kbd>H</kbd> 显示所有可点击区域；画板里的按钮可以直接点</li>' +
       ((W.P.flows || []).length ? '<li>“核心流程”逐步演示，键盘 ← → 切换步骤</li>' : '') +
-      '<li>本文档可导出 Markdown 或打印为 PDF，内容与原型同源</li></ul></div>';
+      '<li>本文档可导出 Markdown，内容与原型同源</li></ul></div>';
     if (pend.length) {
       s += '<div class="np-sec"><h3>待确认与 AI 假设<span>' + pend.length + ' 条</span></h3><div class="pend-l">' + pend.slice(0, 60).map(function (x) {
         return '<a href="' + h.esc(x.href || '#/doc') + '"><span class="bdg ' + (x.type === 'pending' ? 'pending' : 'assumed') + '">' + (x.type === 'pending' ? '待确认' : 'AI 假设') + '</span><code>' + h.esc(x.where) + '</code>' + W.md.inline(x.text.slice(0, 80)) + '</a>';
@@ -1024,7 +1024,7 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
 
-  /* 导出 CSV：文件带 UTF-8 BOM，Excel 双击即可正确显示中文 */
+  /* 导出 CSV（原型阶段顶栏「清单」）：文件带 UTF-8 BOM，Excel 双击即可正确显示中文 */
   function exportCsv() {
     var blob = new Blob(['\uFEFF' + D.csvText()], { type: 'text/csv;charset=utf-8' });
     var a = document.createElement('a');
@@ -1206,8 +1206,6 @@
     var ad = t.closest('[data-act-doc]');
     if (ad) {
       if (ad.dataset.actDoc === 'md') exportMd();
-      if (ad.dataset.actDoc === 'csv') exportCsv();
-      if (ad.dataset.actDoc === 'print') window.print();
       return;
     }
     var tool = t.closest('[data-tool]');

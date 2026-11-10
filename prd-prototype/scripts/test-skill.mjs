@@ -1386,10 +1386,10 @@ console.log('\n14. 导出给开发测试');
     });
   })()`));
 
-  /* A. 默认模式（课程管理）：文档栏的“导出 CSV”、BOM、三张表内容、RFC 转义、removed 不导出 */
+  /* A. 默认模式（课程管理）：需求文档栏只剩「导出 Markdown」（无打印、无导出 CSV），点击仍能导出；CSV 三张表内容、RFC 转义、removed 不导出（数据供原型阶段「清单」与 build.mjs --csv） */
   const cmDir = variant(COURSE, []);
   const cmRes = await build(cmDir, {});
-  ok(cmRes.ok, '课程管理样例构建通过（导出 CSV 的前置）', cmRes.ok ? '' : JSON.stringify(cmRes.report.errors.slice(0, 3)));
+  ok(cmRes.ok, '课程管理样例构建通过（需求文档栏与导出检查的前置）', cmRes.ok ? '' : JSON.stringify(cmRes.report.errors.slice(0, 3)));
   if (cmRes.ok) {
     const bA = await launch();
     try {
@@ -1398,12 +1398,19 @@ console.log('\n14. 导出给开发测试');
       await pg.waitFor('window.__PRD_READY === true', 20000);
       await pg.evaluate('location.hash = "#/doc"; 1');
       await sleep(500);
-      const hasBtn = await pg.evaluate('(function(){ var b = document.querySelector("[data-act-doc=csv]"); return !!b && b.textContent.trim() === "导出 CSV"; })()');
-      ok(hasBtn === true, '默认模式：需求文档栏有「导出 CSV」按钮（与「导出 Markdown」并列）');
-      const d = await downloadFrom(pg, '[data-act-doc=csv]');
-      ok(d.names.length === 1 && d.names[0] === '课程管理-研发测试清单-V1.0.csv', '导出 CSV 的文件名为 (产品名)-研发测试清单-(release).csv', JSON.stringify(d.names));
-      ok(d.bytes[0] === 0xef && d.bytes[1] === 0xbb && d.bytes[2] === 0xbf, '导出的 CSV 以 UTF-8 BOM 开头（Excel 可直接打开）');
-      const rows = parseCsv((d.text || '').replace(/^\uFEFF/, ''));
+      const bar = JSON.parse(await pg.evaluate(`(function () {
+        var bar = document.querySelector('.doc-bar');
+        var acts = Array.from(document.querySelectorAll('[data-act-doc]')).map(function (b) { return b.dataset.actDoc + ':' + b.textContent.trim(); });
+        var tips = (document.querySelector('#right') || {}).textContent || '';
+        return JSON.stringify({ acts: acts, bar: bar ? bar.textContent : '', csvTool: !!document.querySelector('[data-tool=csv]'), tips: tips });
+      })()`));
+      ok(bar.acts.length === 1 && bar.acts[0] === 'md:导出 Markdown', '默认模式：需求文档栏只有「导出 Markdown」一个导出按钮', JSON.stringify(bar.acts));
+      ok(!/打印|PDF|CSV/i.test(bar.bar) && !bar.csvTool, '默认模式：需求文档栏没有「打印 / 存为 PDF」和「导出 CSV」，顶栏也没有「清单」', bar.bar);
+      ok(!/打印|PDF/.test(bar.tips) && bar.tips.includes('本文档可导出 Markdown'), '默认模式：浏览方式提示只写“可导出 Markdown”，不再提打印为 PDF');
+      const dm = await downloadFrom(pg, '[data-act-doc=md]');
+      ok(dm.names.length === 1 && dm.names[0] === '课程管理-需求文档-V1.0.md' && (dm.text || '').indexOf('# 课程管理 · 需求文档') === 0 && /#### P01 /.test(dm.text || '') && (dm.text || '').length > 3000,
+        '默认模式：点「导出 Markdown」仍下载 (产品名)-需求文档-(release).md，含标题和页面章节（' + (dm.text || '').length + ' 字）', JSON.stringify(dm.names));
+      const rows = parseCsv(await pg.evaluate('W.doc.csvText()'));
       const objs = toObjs(rows);
       ok(rows[0][0] === 'sheet' && objs.some((r) => r.sheet === 'fns' && r.pageId === 'P01' && r.fnId === 'table'), 'CSV 含 sheet=fns 的功能点行，能找到已知功能点 P01 / table');
       ok(objs.some((r) => r.sheet === 'fields' && r.fnId === 'table' && r.key === 'no') && objs.some((r) => r.sheet === 'fields'), 'CSV 含字段行（sheet=fields）');
@@ -1456,22 +1463,29 @@ console.log('\n14. 导出给开发测试');
       const d = await downloadFrom(pg, '[data-tool=csv]');
       const rows = d.text ? toObjs(parseCsv(d.text.replace(/^\uFEFF/, ''))) : [];
       ok(d.names[0] === '请假审批-研发测试清单-V1.0.csv' && rows.some((r) => r.sheet === 'fns' && r.fnId === 'submit'), '原型阶段点「清单」：下载同一份 CSV，含功能点行', JSON.stringify(d.names));
+      ok(d.bytes[0] === 0xef && d.bytes[1] === 0xbb && d.bytes[2] === 0xbf, '原型阶段「清单」导出的 CSV 以 UTF-8 BOM 开头（Excel 可直接打开）');
     } finally { await bC.close(); }
   }
 
-  /* D/E. 托管模式：默认和原型都能导出 CSV，并且有功能点行 */
+  /* D/E. 托管模式：默认和原型都能 build --csv；默认模式文档栏只剩「导出 Markdown」且能导出，原型阶段「清单」导出 CSV 有功能点行 */
   const hostD = await build(variant(HOSTFX, []), { csv: true });
   ok(hostD.ok && hostD.csvFiles && hostD.csvFiles.length === 3, '托管模式（默认）build --csv 检查通过，写出三份 CSV', hostD.ok ? '' : JSON.stringify(hostD.report.errors.slice(0, 2)));
   const hostP = await build(variant(HOSTFX, [PROTO_EDIT14]), { csv: true });
   ok(hostP.ok && hostP.csvFiles && hostP.csvFiles.length === 3, '托管模式（原型阶段）build --csv 检查通过，写出三份 CSV', hostP.ok ? '' : JSON.stringify(hostP.report.errors.slice(0, 2)));
-  for (const [r, sel, label] of [[hostD, '[data-act-doc=csv]', '托管默认'], [hostP, '[data-tool=csv]', '托管原型']]) {
+  for (const [r, sel, label] of [[hostD, '[data-act-doc=md]', '托管默认'], [hostP, '[data-tool=csv]', '托管原型']]) {
     if (!r.ok) continue;
     const b = await launch();
     try {
       const pg = await b.newPage({ width: 1600, height: 1000 });
       await pg.goto(fileUrl(r.file));
       await pg.waitFor('window.__PRD_READY === true', 20000);
-      if (sel === '[data-act-doc=csv]') { await pg.evaluate('location.hash = "#/doc"; 1'); await sleep(500); }
+      if (sel === '[data-act-doc=md]') {
+        await pg.evaluate('location.hash = "#/doc"; 1'); await sleep(500);
+        const acts = await pg.evaluate('Array.from(document.querySelectorAll("[data-act-doc]")).map(function (b) { return b.dataset.actDoc; }).join(",")');
+        const dm = await downloadFrom(pg, sel);
+        ok(acts === 'md' && /需求文档-V1\.0\.md$/.test(dm.names[0] || '') && /^# .+ · 需求文档/.test(dm.text || ''), label + '：需求文档栏只有「导出 Markdown」，点击得到 Markdown', acts + ' ' + JSON.stringify(dm.names));
+        continue;
+      }
       const d = await downloadFrom(pg, sel);
       const rows = d.text ? toObjs(parseCsv(d.text.replace(/^\uFEFF/, ''))) : [];
       ok(rows.filter((x) => x.sheet === 'fns').length > 0, label + '：点击导出得到 CSV，含功能点行（' + rows.filter((x) => x.sheet === 'fns').length + ' 行）', JSON.stringify(d.names));
