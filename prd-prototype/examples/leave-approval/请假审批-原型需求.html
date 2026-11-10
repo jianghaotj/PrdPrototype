@@ -301,6 +301,7 @@ body.cmt-on .cmt-panel{display:flex}
 .cmt-item{border:1px solid var(--v-line);border-radius:8px;padding:7px 10px;margin-bottom:6px;line-height:1.6}
 .cmt-m{display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--v-ink3)}
 .cmt-m b{font-weight:600;color:var(--v-ink2)}
+.cmt-m .cmt-v{border:1px solid var(--v-line);border-radius:4px;padding:0 5px}
 .cmt-m .cmt-act{margin-left:auto}
 .cmt-t{white-space:pre-line;color:var(--v-ink)}
 .cmt-empty{margin:6px 0;font-size:12.5px;color:var(--v-ink3)}
@@ -632,7 +633,7 @@ body.cmt-on .cmt-panel{display:flex}
 </head>
 <body>
 <div id="app"><header id="top"></header><aside id="left"></aside><main id="stagewrap"><div id="stage"><div id="stage-in"></div></div><div id="flowbar"></div></main><aside id="right"></aside></div>
-<script type="application/json" id="prd-audit">{"behave":{},"ok":true,"at":"2026-11-10T17:47:00.235Z","release":"V1.0","errors":[],"warns":[{"code":"AC_MISSING","msg":"M01 请假首页 · 核心流程「员工发起请假」中有 3 个功能点未写 ac：「假期余额」、「发起请假」、「最近请假记录」。建议写 ac（前置条件、用户操作、预期结果），测试可直接据此写用例","where":""},{"code":"AC_MISSING","msg":"M02 发起请假 · 核心流程「员工发起请假」中有 3 个功能点未写 ac：「请假信息表单」、「提交申请」、「确认提交」。建议写 ac（前置条件、用户操作、预期结果），测试可直接据此写用例","where":""},{"code":"AC_MISSING","msg":"M03 请假详情 · 核心流程「员工发起请假」中有 3 个功能点未写 ac：「单据信息」、「审批进度」、「撤回申请」。建议写 ac（前置条件、用户操作、预期结果），测试可直接据此写用例","where":""},{"code":"AC_MISSING","msg":"P01 待我审批 · 核心流程「主管审批」中有 2 个功能点未写 ac：「状态筛选与搜索」、「请假单列表」。建议写 ac（前置条件、用户操作、预期结果），测试可直接据此写用例","where":""},{"code":"AC_MISSING","msg":"P02 审批详情 · 核心流程「主管审批」中有 4 个功能点未写 ac：「申请信息」、「申请人本年度请假」、「通过 / 驳回」、「驳回原因」。建议写 ac（前置条件、用户操作、预期结果），测试可直接据此写用例","where":""}],"stats":{"pages":7,"states":15,"fns":22,"fields":37,"pending":6,"assumed":10,"changes":0,"gaps":0,"release":"V1.0","interactive":57,"covered":57,"ignored":0,"renders":60,"errors":0,"warns":5,"netRequests":0,"netBlocked":0},"fnStates":{"M01":{"balance":["list","empty"],"create":["list","empty"],"records":["list","empty"]},"M02":{"form":["form","err"],"submit":["form","err"],"confirm":["confirm"]},"M03":{"info":["pending","approved","rejected"],"progress":["pending","approved","rejected"],"withdraw":["pending","withdraw"],"again":["rejected"]},"M04":{"profile":["me"]},"P01":{"filter":["list","empty"],"table":["list","empty"]},"P02":{"summary":["detail"],"history":["detail"],"decide":["detail"],"reject-form":["reject"]},"P03":{"month-pick":["month"],"export":["month"],"dept-table":["month"]}},"links":{"M02":[{"from":"M01","fromSt":"list","label":"年假5 天另有 1.5 天审批中","st":"form"},{"from":"M01","fromSt":"list","label":"病假8 天","st":"form"},{"from":"M01","fromSt":"list","label":"事假3 天","st":"form"},{"from":"M01","fromSt":"list","label":"发起请假","st":"form"},{"from":"M01","fromSt":"list","label":"年假0 天","st":"form"},{"from":"M03","fromSt":"rejected","label":"重新发起","st":"form"}],"M03":[{"from":"M01","fromSt":"list","label":"年假待审批11/05 上午 – 11","st":"pending"},{"from":"M01","fromSt":"list","label":"病假已通过10/21 全天 · 1 ","st":"approved"},{"from":"M01","fromSt":"list","label":"事假已驳回09/30 下午 · 0.","st":"rejected"},{"from":"M02","fromSt":"confirm","label":"确认提交","st":"pending"}],"M01":[{"from":"M02","fromSt":"form","label":"返回","st":"list"},{"from":"M03","fromSt":"pending","label":"返回","st":"list"},{"from":"M03","fromSt":"withdraw","label":"撤回","st":"list"},{"from":"M04","fromSt":"me","label":"请假","st":"list"}],"M04":[{"from":"M01","fromSt":"list","label":"我的","st":"me"}],"P01":[{"from":"P02","fromSt":"detail","label":"关闭","st":"list"},{"from":"P02","fromSt":"detail","label":"通过","st":"list"},{"from":"P02","fromSt":"reject","label":"确认驳回","st":"list"},{"from":"P03","fromSt":"month","label":"请假审批审批台","st":"list"},{"from":"P03","fromSt":"month","label":"待我审批 3","st":"list"}],"P03":[{"from":"P01","fromSt":"list","label":"请假统计","st":"month"}],"P02":[{"from":"P01","fromSt":"list","label":"审批","st":"detail"}]},"inventory":{"pages":[{"k":"M01","l":"M01 请假首页"},{"k":"M02","l":"M02 发起请假"},{"k":"M03","l":"M03 请假详情"},{"k":"M04","l":"M04 我的"},{"k":"P01","l":"P01 待我审批"},{"k":"P02","l":"P02 审批详情"},{"k":"P03","l":"P03 请假统计"}],"states":[{"k":"M01/list","l":"M01 请假首页 · 状态「有请假记录」"},{"k":"M01/empty","l":"M01 请假首页 · 状态「无请假记录」"},{"k":"M02/form","l":"M02 发起请假 · 状态「填写中」"},{"k":"M02/err","l":"M02 发起请假 · 状态「校验未通过」"},{"k":"M02/confirm","l":"M02 发起请假 · 状态「确认提交」"},{"k":"M03/pending","l":"M03 请假详情 · 状态「待审批」"},{"k":"M03/approved","l":"M03 请假详情 · 状态「已通过」"},{"k":"M03/rejected","l":"M03 请假详情 · 状态「已驳回」"},{"k":"M03/withdraw","l":"M03 请假详情 · 状态「撤回确认」"},{"k":"M04/me","l":"M04 我的 · 状态「默认」"},{"k":"P01/list","l":"P01 待我审批 · 状态「有待审批」"},{"k":"P01/empty","l":"P01 待我审批 · 状态「全部处理完」"},{"k":"P02/detail","l":"P02 审批详情 · 状态「查看详情」"},{"k":"P02/reject","l":"P02 审批详情 · 状态「填写驳回原因」"},{"k":"P03/month","l":"P03 请假统计 · 状态「按月查看」"}],"fns":[{"k":"M01/balance","l":"M01 请假首页 · 功能点「假期余额」"},{"k":"M01/create","l":"M01 请假首页 · 功能点「发起请假」"},{"k":"M01/records","l":"M01 请假首页 · 功能点「最近请假记录」"},{"k":"M02/form","l":"M02 发起请假 · 功能点「请假信息表单」"},{"k":"M02/submit","l":"M02 发起请假 · 功能点「提交申请」"},{"k":"M02/confirm","l":"M02 发起请假 · 功能点「确认提交」"},{"k":"M03/info","l":"M03 请假详情 · 功能点「单据信息」"},{"k":"M03/progress","l":"M03 请假详情 · 功能点「审批进度」"},{"k":"M03/withdraw","l":"M03 请假详情 · 功能点「撤回申请」"},{"k":"M03/again","l":"M03 请假详情 · 功能点「重新发起」"},{"k":"M04/profile","l":"M04 我的 · 功能点「个人信息」"},{"k":"P01/filter","l":"P01 待我审批 · 功能点「状态筛选与搜索」"},{"k":"P01/table","l":"P01 待我审批 · 功能点「请假单列表」"},{"k":"P02/summary","l":"P02 审批详情 · 功能点「申请信息」"},{"k":"P02/history","l":"P02 审批详情 · 功能点「申请人本年度请假」"},{"k":"P02/decide","l":"P02 审批详情 · 功能点「通过 / 驳回」"},{"k":"P02/reject-form","l":"P02 审批详情 · 功能点「驳回原因」"},{"k":"P03/month-pick","l":"P03 请假统计 · 功能点「统计月份」"},{"k":"P03/dept-table","l":"P03 请假统计 · 功能点「部门请假汇总」"},{"k":"P03/export","l":"P03 请假统计 · 功能点「导出明细」"},{"k":"公共/pc-shell/pc-nav","l":"公共组件「PC 顶部导航」 · 功能点「顶部导航与账号菜单」"},{"k":"公共/m-shell/m-tab","l":"公共组件「手机端底部导航」 · 功能点「底部导航」"}]},"scope":null,"needOnline":false}</script>
+<script type="application/json" id="prd-audit">{"behave":{},"ok":true,"at":"2026-11-10T23:30:01.743Z","release":"V1.0","errors":[],"warns":[{"code":"AC_MISSING","msg":"M01 请假首页 · 核心流程「员工发起请假」中有 3 个功能点未写 ac：「假期余额」、「发起请假」、「最近请假记录」。建议写 ac（前置条件、用户操作、预期结果），测试可直接据此写用例","where":""},{"code":"AC_MISSING","msg":"M02 发起请假 · 核心流程「员工发起请假」中有 3 个功能点未写 ac：「请假信息表单」、「提交申请」、「确认提交」。建议写 ac（前置条件、用户操作、预期结果），测试可直接据此写用例","where":""},{"code":"AC_MISSING","msg":"M03 请假详情 · 核心流程「员工发起请假」中有 3 个功能点未写 ac：「单据信息」、「审批进度」、「撤回申请」。建议写 ac（前置条件、用户操作、预期结果），测试可直接据此写用例","where":""},{"code":"AC_MISSING","msg":"P01 待我审批 · 核心流程「主管审批」中有 2 个功能点未写 ac：「状态筛选与搜索」、「请假单列表」。建议写 ac（前置条件、用户操作、预期结果），测试可直接据此写用例","where":""},{"code":"AC_MISSING","msg":"P02 审批详情 · 核心流程「主管审批」中有 4 个功能点未写 ac：「申请信息」、「申请人本年度请假」、「通过 / 驳回」、「驳回原因」。建议写 ac（前置条件、用户操作、预期结果），测试可直接据此写用例","where":""}],"stats":{"pages":7,"states":15,"fns":22,"fields":37,"pending":6,"assumed":10,"changes":0,"gaps":0,"release":"V1.0","interactive":57,"covered":57,"ignored":0,"renders":60,"errors":0,"warns":5,"netRequests":0,"netBlocked":0},"fnStates":{"M01":{"balance":["list","empty"],"create":["list","empty"],"records":["list","empty"]},"M02":{"form":["form","err"],"submit":["form","err"],"confirm":["confirm"]},"M03":{"info":["pending","approved","rejected"],"progress":["pending","approved","rejected"],"withdraw":["pending","withdraw"],"again":["rejected"]},"M04":{"profile":["me"]},"P01":{"filter":["list","empty"],"table":["list","empty"]},"P02":{"summary":["detail"],"history":["detail"],"decide":["detail"],"reject-form":["reject"]},"P03":{"month-pick":["month"],"export":["month"],"dept-table":["month"]}},"links":{"M02":[{"from":"M01","fromSt":"list","label":"年假5 天另有 1.5 天审批中","st":"form"},{"from":"M01","fromSt":"list","label":"病假8 天","st":"form"},{"from":"M01","fromSt":"list","label":"事假3 天","st":"form"},{"from":"M01","fromSt":"list","label":"发起请假","st":"form"},{"from":"M01","fromSt":"list","label":"年假0 天","st":"form"},{"from":"M03","fromSt":"rejected","label":"重新发起","st":"form"}],"M03":[{"from":"M01","fromSt":"list","label":"年假待审批11/05 上午 – 11","st":"pending"},{"from":"M01","fromSt":"list","label":"病假已通过10/21 全天 · 1 ","st":"approved"},{"from":"M01","fromSt":"list","label":"事假已驳回09/30 下午 · 0.","st":"rejected"},{"from":"M02","fromSt":"confirm","label":"确认提交","st":"pending"}],"M01":[{"from":"M02","fromSt":"form","label":"返回","st":"list"},{"from":"M03","fromSt":"pending","label":"返回","st":"list"},{"from":"M03","fromSt":"withdraw","label":"撤回","st":"list"},{"from":"M04","fromSt":"me","label":"请假","st":"list"}],"M04":[{"from":"M01","fromSt":"list","label":"我的","st":"me"}],"P01":[{"from":"P02","fromSt":"detail","label":"关闭","st":"list"},{"from":"P02","fromSt":"detail","label":"通过","st":"list"},{"from":"P02","fromSt":"reject","label":"确认驳回","st":"list"},{"from":"P03","fromSt":"month","label":"请假审批审批台","st":"list"},{"from":"P03","fromSt":"month","label":"待我审批 3","st":"list"}],"P03":[{"from":"P01","fromSt":"list","label":"请假统计","st":"month"}],"P02":[{"from":"P01","fromSt":"list","label":"审批","st":"detail"}]},"inventory":{"pages":[{"k":"M01","l":"M01 请假首页"},{"k":"M02","l":"M02 发起请假"},{"k":"M03","l":"M03 请假详情"},{"k":"M04","l":"M04 我的"},{"k":"P01","l":"P01 待我审批"},{"k":"P02","l":"P02 审批详情"},{"k":"P03","l":"P03 请假统计"}],"states":[{"k":"M01/list","l":"M01 请假首页 · 状态「有请假记录」"},{"k":"M01/empty","l":"M01 请假首页 · 状态「无请假记录」"},{"k":"M02/form","l":"M02 发起请假 · 状态「填写中」"},{"k":"M02/err","l":"M02 发起请假 · 状态「校验未通过」"},{"k":"M02/confirm","l":"M02 发起请假 · 状态「确认提交」"},{"k":"M03/pending","l":"M03 请假详情 · 状态「待审批」"},{"k":"M03/approved","l":"M03 请假详情 · 状态「已通过」"},{"k":"M03/rejected","l":"M03 请假详情 · 状态「已驳回」"},{"k":"M03/withdraw","l":"M03 请假详情 · 状态「撤回确认」"},{"k":"M04/me","l":"M04 我的 · 状态「默认」"},{"k":"P01/list","l":"P01 待我审批 · 状态「有待审批」"},{"k":"P01/empty","l":"P01 待我审批 · 状态「全部处理完」"},{"k":"P02/detail","l":"P02 审批详情 · 状态「查看详情」"},{"k":"P02/reject","l":"P02 审批详情 · 状态「填写驳回原因」"},{"k":"P03/month","l":"P03 请假统计 · 状态「按月查看」"}],"fns":[{"k":"M01/balance","l":"M01 请假首页 · 功能点「假期余额」"},{"k":"M01/create","l":"M01 请假首页 · 功能点「发起请假」"},{"k":"M01/records","l":"M01 请假首页 · 功能点「最近请假记录」"},{"k":"M02/form","l":"M02 发起请假 · 功能点「请假信息表单」"},{"k":"M02/submit","l":"M02 发起请假 · 功能点「提交申请」"},{"k":"M02/confirm","l":"M02 发起请假 · 功能点「确认提交」"},{"k":"M03/info","l":"M03 请假详情 · 功能点「单据信息」"},{"k":"M03/progress","l":"M03 请假详情 · 功能点「审批进度」"},{"k":"M03/withdraw","l":"M03 请假详情 · 功能点「撤回申请」"},{"k":"M03/again","l":"M03 请假详情 · 功能点「重新发起」"},{"k":"M04/profile","l":"M04 我的 · 功能点「个人信息」"},{"k":"P01/filter","l":"P01 待我审批 · 功能点「状态筛选与搜索」"},{"k":"P01/table","l":"P01 待我审批 · 功能点「请假单列表」"},{"k":"P02/summary","l":"P02 审批详情 · 功能点「申请信息」"},{"k":"P02/history","l":"P02 审批详情 · 功能点「申请人本年度请假」"},{"k":"P02/decide","l":"P02 审批详情 · 功能点「通过 / 驳回」"},{"k":"P02/reject-form","l":"P02 审批详情 · 功能点「驳回原因」"},{"k":"P03/month-pick","l":"P03 请假统计 · 功能点「统计月份」"},{"k":"P03/dept-table","l":"P03 请假统计 · 功能点「部门请假汇总」"},{"k":"P03/export","l":"P03 请假统计 · 功能点「导出明细」"},{"k":"公共/pc-shell/pc-nav","l":"公共组件「PC 顶部导航」 · 功能点「顶部导航与账号菜单」"},{"k":"公共/m-shell/m-tab","l":"公共组件「手机端底部导航」 · 功能点「底部导航」"}]},"scope":null,"needOnline":false}</script>
 <script type="application/json" id="prd-scope"></script>
 <script>
 /*! @license DOMPurify 3.2.7 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.2.7/LICENSE */
@@ -1681,7 +1682,7 @@ if(__exports != exports)module.exports = exports;return module.exports}));
     if (HTML && opts.stats) out.push(opts.stats + '\n\n');
     if (!HTML) {
       var sx = D.stats();
-      out.push('页面 ' + sx.pages + ' · 状态 ' + sx.states + ' · 功能点 ' + sx.fns + ' · 字段 ' + sx.fields + ' · 待确认 ' + sx.pending + ' · AI 假设 ' + sx.assumed + (W.audit ? ' · 构建检查' + (W.audit.ok ? '通过' : '未通过') + (W.audit.needOnline ? ' · 需联网' : '') + '（' + D.localTime(W.audit.at).slice(0, 10) + '）' : '') + '\n\n');
+      out.push('页面 ' + sx.pages + ' · 状态 ' + sx.states + ' · 功能点 ' + sx.fns + ' · 字段 ' + sx.fields + ' · 待确认 ' + sx.pending + ' · AI 假设 ' + sx.assumed + (W.audit ? ' · 结构检查' + (W.audit.ok ? '通过' : '未通过') + (W.audit.needOnline ? ' · 需联网' : '') + '（' + D.localTime(W.audit.at).slice(0, 10) + '）' : '') + '\n\n');
     }
 
     var allPages = [];
@@ -3539,7 +3540,8 @@ W.page({
 </script>
 <script>
 /* 评审意见：评审者在功能点上留意见，存在本机浏览器（localStorage）里，可导出 JSON，再由 scripts/merge-comments.mjs 合并。
-   target 格式：功能点 `页面ID/功能点ID`；公共组件 `S:端ID/功能点ID`；页面级 `页面ID`。 */
+   target 格式：功能点 `页面ID/功能点ID`；公共组件 `S:端ID/功能点ID`；页面级 `页面ID`。
+   每条意见记下提出时的版本（release）；1.2.3 之前存下的意见没有这个字段，导出时原样保留，合并时标“版本未知”，不补猜。 */
 (function () {
   'use strict';
   var W = window.W;
@@ -3547,6 +3549,7 @@ W.page({
   var AUTHOR_KEY = 'prd-comments-author';
 
   function product() { return W.P || {}; }
+  function release() { return W.doc && W.doc.cur ? W.doc.cur() : ''; }
   function storeKey() { return 'prd-comments:' + (product().id || product().name || ''); }
   function read() {
     try {
@@ -3595,6 +3598,7 @@ W.page({
       target: target,
       pageId: t.pageId,
       fnId: t.fnId,
+      release: release(),
       text: text,
       author: o.author !== undefined ? String(o.author).trim() : C.author(),
       at: new Date().toISOString(),
@@ -3606,7 +3610,7 @@ W.page({
     return item;
   };
 
-  /* 只允许改正文和是否已处理，其余字段（对象、时间、作者）保持不变 */
+  /* 只允许改正文和是否已处理，其余字段（对象、版本、时间、作者）保持不变 */
   C.update = function (id, patch) {
     var list = read(), item = null;
     list.some(function (c) { if (c.id === id) { item = c; return true; } return false; });
@@ -3646,7 +3650,7 @@ W.page({
       v: 1,
       productId: p.id || p.name || '',
       productName: p.name || '',
-      release: W.doc && W.doc.cur ? W.doc.cur() : '',
+      release: release(),   /* 导出时的版本（本轮）；每条意见自己的 release 是提出时的版本 */
       exportedAt: new Date().toISOString(),
       author: who,
       /* 条目作者空时用本次导出作者兜底，便于流程 C 写 src */
@@ -3904,14 +3908,14 @@ W.page({
     var P = W.P;
     var a = W.audit, badge = '';
     if (a && ui.proto) {
-      badge = '<span class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" style="cursor:default" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '原型阶段 · 检查通过' : '原型阶段 · 检查未通过') + (a.needOnline ? ' · 需联网' : '') + '</span>';
+      badge = '<span class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" style="cursor:default" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '原型阶段 · 结构检查通过' : '原型阶段 · 检查未通过') + (a.needOnline ? ' · 需联网' : '') + '</span>';
     } else if (a) {
       var st0 = D.stats();
       var parts = [];
       if (st0.pending) parts.push('待确认 ' + st0.pending);
       if (st0.assumed) parts.push('AI 假设 ' + st0.assumed);
       if (a.needOnline) parts.unshift('需联网');
-      badge = '<a class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" href="#/doc" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '检查通过' : '检查未通过') + (parts.length ? ' · ' + parts.join(' · ') : '') + '</a>';
+      badge = '<a class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" href="#/doc" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '结构检查通过' : '检查未通过') + (parts.length ? ' · ' + parts.join(' · ') : '') + '</a>';
     }
     $('#top').innerHTML = '<a class="brand" data-tab="doc"><span class="brand-m">' + h.esc((P.name || '原')[0]) + '</span><span class="t">' + h.esc(P.name || '') + '</span><small>' + h.esc([D.cur(), P.date, P.fidelity || '低保真'].filter(Boolean).join(' · ')) + '</small></a>' +
       vswHTML() +
@@ -4338,8 +4342,10 @@ W.page({
       return c.target.indexOf('S:' + p.end + '/') === 0;
     });
   }
+  /* 不是本版提出的意见标出原版本，旧数据没有版本的标“版本未知” */
   function cmtItemHTML(c) {
-    return '<div class="cmt-item"><div class="cmt-m"><b>' + h.esc(c.author || '未署名') + '</b><span>' + h.esc(D.localTime(c.at)) + '</span>' +
+    var v = c.release === D.cur() ? '' : '<span class="cmt-v" title="提出时的版本">' + h.esc(c.release || '版本未知') + '</span>';
+    return '<div class="cmt-item"><div class="cmt-m"><b>' + h.esc(c.author || '未署名') + '</b><span>' + h.esc(D.localTime(c.at)) + '</span>' + v +
       '<button class="cmt-act sm" data-cmt-act="del" data-cid="' + h.esc(c.id) + '">删除</button></div><div class="cmt-t">' + h.esc(c.text) + '</div></div>';
   }
   function cmtGroupsHTML(list) {
@@ -4667,7 +4673,7 @@ W.page({
     var s = '<div class="np"><h2>评审摘要</h2><p class="goal">' + h.esc(W.P.name) + ' · ' + h.esc(st.release) + '</p>' +
       '<div class="np-sec"><div class="sum-k"><div><b>' + st.pages + '</b><span>页面</span></div><div><b>' + st.fns + '</b><span>功能点</span></div><div><b>' + st.pending + '</b><span>待确认</span></div><div><b>' + st.assumed + '</b><span>AI 假设</span></div></div></div>';
     if (a) {
-      s += '<div class="np-sec"><h3>构建检查<span>' + h.esc(D.localTime(a.at)) + '</span></h3>' +
+      s += '<div class="np-sec"><h3>结构检查<span>' + h.esc(D.localTime(a.at)) + '</span></h3>' +
         '<div class="issue ' + (a.ok ? '' : 'e') + '">' + (a.ok ? '通过：原型中 ' + a.stats.interactive + ' 个可交互元素全部对应到需求功能点' + (a.stats.ignored ? '（另有 ' + a.stats.ignored + ' 个标为不纳入本次需求）' : '') + '，需求中的功能点全部在原型中出现' + (st.gaps ? '或已标注“原型未体现”' : '') + '。' : '未通过：' + a.errors.length + ' 个问题') + (a.needOnline ? '本原型标为“需联网”，交付后需联网才能完整使用。' : '') + '</div>' +
         (a.errors || []).slice(0, 10).map(function (x) { return '<div class="issue e">' + h.esc(x.msg) + '</div>'; }).join('') +
         /* “需联网”提醒不参与截断，保证交付方一定能看到 */

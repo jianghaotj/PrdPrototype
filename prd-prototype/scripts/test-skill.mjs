@@ -952,9 +952,9 @@ console.log('\n11. 高保真样例（课程管理）');
   const cmMd = cm.mdFile ? fs.readFileSync(cm.mdFile, 'utf8') : '';
   ok(cm.ok && /【AI 假设】/.test(cmMd) && cm.report.stats.assumed > 0 && cm.report.stats.pending === 0, '课程管理需求文档标出 AI 假设且没有待确认项（AI 假设 ' + (cm.report.stats ? cm.report.stats.assumed : 0) + ' 条）');
   ok(cm.ok && cmMd.includes('课程名称为必填项，为空时不能提交') && cmMd.includes('课程代码长度为 6–12 个字，不在此范围内时不能提交'), '课程管理需求文档由 h.fld 的 req / min / max 生成必填与长度规则');
-  /* 仓库里提交的需求文档与当前源码重新构建的结果一致（产物没有过期）；忽略“构建检查通过（日期）”这一天然随日历变化的戳 */
+  /* 仓库里提交的需求文档与当前源码重新构建的结果一致（产物没有过期）；忽略“结构检查通过（日期）”这一天然随日历变化的戳 */
   const cmCommitted = fs.readFileSync(path.join(COURSE, '课程管理-需求文档.md'), 'utf8');
-  const stripBuildDate = (s) => s.replace(/构建检查通过（\d{4}-\d{2}-\d{2}）/g, '构建检查通过（日期忽略）');
+  const stripBuildDate = (s) => s.replace(/结构检查通过（\d{4}-\d{2}-\d{2}）/g, '结构检查通过（日期忽略）');
   ok(cm.ok && stripBuildDate(cmMd) === stripBuildDate(cmCommitted), '课程管理需求文档与仓库已提交的版本一致（产物未过期，已忽略构建日期戳）');
   /* 分页说明：每页 10 条，少于 10 条写“不足”；搜索计数是原型限制，单独成句 */
   ok(cm.ok && cmMd.includes('课程不足 10 条时只显示“共 N 条”') && !cmMd.includes('不超过 10 条') && cmMd.includes('原型只展示第 1 页，搜索时计数不变'), '课程管理分页说明写作“不足 10 条”，原型限制单独成句');
@@ -1173,7 +1173,7 @@ console.log('\n12. 原型阶段');
       ok(d12.docTab === 0 && d12.needBtn === 0 && d12.rightHTML === 0 && d12.noR, 'T12 顶栏无“需求文档”标签和“需求”按钮；右栏为空；body 带 no-r', JSON.stringify(d12));
       /* T13 */
       const badge = await pg.evaluate(`(document.querySelector('.audit-badge') || {}).textContent || ''`);
-      ok(badge === '原型阶段 · 检查通过' && !/待确认|AI 假设/.test(badge), 'T13 检查标识为“原型阶段 · 检查通过”，不含待确认和 AI 假设（构建统计：AI 假设 ' + (t1a.report.stats.assumed || 0) + '，待确认 ' + (t1a.report.stats.pending || 0) + '）', badge);
+      ok(badge === '原型阶段 · 结构检查通过' && !/待确认|AI 假设/.test(badge), 'T13 检查标识为“原型阶段 · 结构检查通过”，不含待确认和 AI 假设（构建统计：AI 假设 ' + (t1a.report.stats.assumed || 0) + '，待确认 ' + (t1a.report.stats.pending || 0) + '）', badge);
       /* T14 */
       await fresh(pf, '');
       const hid1 = await pg.evaluate(`document.body.classList.contains('no-dots')`);
@@ -1219,7 +1219,7 @@ console.log('\n12. 原型阶段');
       const h23 = JSON.parse(await pg.evaluate(`JSON.stringify({ view: W.viewerDiag().view, page: W.viewerDiag().page, home: W.P.ends[0].home, noDots: document.body.classList.contains('no-dots'), noR: document.body.classList.contains('no-r'), rightLen: document.getElementById('right').innerHTML.length, docTab: document.querySelectorAll('#top .vsw-menu [data-tab="doc"]').length })`));
       ok(h23.view === 'page' && h23.page === h23.home && h23.noDots && h23.noR && h23.rightLen === 0 && h23.docTab === 0, 'T23 托管原型阶段：打开即第一个端的首页（' + h23.home + '），圆点和虚线框隐藏，没有需求栏和需求文档标签', JSON.stringify(h23));
       const badge24 = await pg.evaluate(`(document.querySelector('.audit-badge') || {}).textContent || ''`);
-      ok(badge24 === '原型阶段 · 检查通过', 'T24 托管原型阶段未放行网络：检查标识为“原型阶段 · 检查通过”，不带需联网', badge24);
+      ok(badge24 === '原型阶段 · 结构检查通过', 'T24 托管原型阶段未放行网络：检查标识为“原型阶段 · 结构检查通过”，不带需联网', badge24);
       const h25 = JSON.parse(await pg.evaluate(`JSON.stringify({ ignored: W.viewerDiag().ignoredMarks, hidden: getComputedStyle(document.getElementById('dots')).display === 'none' })`));
       ok(h25.ignored >= 1 && h25.hidden, 'T25 托管原型阶段：“本期不做”虚线框已在 DOM 中（' + h25.ignored + ' 个），#dots 的 display 为 none', JSON.stringify(h25));
       await pressN();
@@ -1231,7 +1231,7 @@ console.log('\n12. 原型阶段');
       if (onFileP) {
         await fresh(onFileP, '');
         const badge29 = await pg.evaluate(`(document.querySelector('.audit-badge') || {}).textContent || ''`);
-        ok(badge29 === '原型阶段 · 检查通过 · 需联网', 'T29 托管原型阶段放行网络：检查标识为“原型阶段 · 检查通过 · 需联网”', badge29);
+        ok(badge29 === '原型阶段 · 结构检查通过 · 需联网', 'T29 托管原型阶段放行网络：检查标识为“原型阶段 · 结构检查通过 · 需联网”', badge29);
       } else ok(false, 'T29 托管原型阶段放行网络：构建失败，无法检查徽标');
     } else {
       ok(false, 'T23 托管原型阶段：构建失败，无法测打开首页与隐藏圆点');
@@ -1321,12 +1321,12 @@ console.log('\n13. 评审意见回收');
     let mergeErr = '';
     try { execFileSync(process.execPath, [MERGE, expFile, fileBPath, '-o', outMd], { stdio: 'pipe' }); } catch (e) { mergeErr = String(e.stderr || e.message); }
     const mdText = fs.existsSync(outMd) ? fs.readFileSync(outMd, 'utf8') : '';
-    ok(!mergeErr && /# 评审意见合并 · 请假审批 · V1\.0/.test(mdText) && mdText.indexOf('## P02/decide') >= 0 && mdText.indexOf('## P01') >= 0 && mdText.indexOf('- #1（测试员，') >= 0 && mdText.indexOf('- #2（李四，2026-11-05）：列表默认按提交时间排序？') >= 0 && mdText.indexOf('驳回时请写明原因') > 0, 'merge-comments.mjs：两份 JSON 合并输出含两条、按 target 分组、带序号', mergeErr || mdText.slice(0, 400));
-    ok(/^## P02\/decide$/m.test(mdText) && /^## P01$/m.test(mdText), 'merge-comments.mjs：无 --prd 时标题只写 target');
+    ok(!mergeErr && /# 评审意见合并 · 请假审批 · V1\.0/.test(mdText) && mdText.indexOf('### P02/decide') >= 0 && mdText.indexOf('### P01') >= 0 && mdText.indexOf('- #1（测试员，') >= 0 && mdText.indexOf('- #2（李四，2026-11-05）：列表默认按提交时间排序？') >= 0 && mdText.indexOf('驳回时请写明原因') > 0, 'merge-comments.mjs：两份 JSON 合并输出含两条、按 target 分组、带序号', mergeErr || mdText.slice(0, 400));
+    ok(/^### P02\/decide$/m.test(mdText) && /^### P01$/m.test(mdText), 'merge-comments.mjs：无 --prd 时标题只写 target');
     const withPrd = path.join(TMP, 'merged-prd.md');
     execFileSync(process.execPath, [MERGE, expFile, fileBPath, '-o', withPrd, '--prd', EXAMPLE], { stdio: 'pipe' });
     const prdText = fs.readFileSync(withPrd, 'utf8');
-    ok(/## P02\/decide · .+/.test(prdText) && /## P01 · 待我审批/.test(prdText), 'merge-comments.mjs --prd：页面功能点标题补上名称');
+    ok(/### P02\/decide · .+/.test(prdText) && /### P01 · 待我审批/.test(prdText), 'merge-comments.mjs --prd：页面功能点标题补上名称');
     /* 公共组件在 kit.js：--prd 应读到 S:pc/pc-nav 名称；条目作者空时用文件级 author 兜底 */
     const fileS = { v: 1, productId: 'leave-approval', productName: '请假审批', release: 'V1.0', exportedAt: '2026-11-05T03:00:00.000Z', author: '王五', comments: [{ id: 'c_s1', target: 'S:pc/pc-nav', pageId: null, fnId: 'pc-nav', text: '菜单数字超过 99 要测一下', author: '', at: '2026-11-05T03:00:00.000Z', resolved: false }] };
     const fileSPath = path.join(TMP, 'cmt-s.json');
@@ -1334,7 +1334,7 @@ console.log('\n13. 评审意见回收');
     const withS = path.join(TMP, 'merged-s.md');
     execFileSync(process.execPath, [MERGE, fileSPath, '-o', withS, '--prd', EXAMPLE], { stdio: 'pipe' });
     const sText = fs.readFileSync(withS, 'utf8');
-    ok(/## S:pc\/pc-nav · 顶部导航与账号菜单/.test(sText) && /- #1（王五，2026-11-05）：菜单数字超过 99 要测一下/.test(sText), 'merge-comments.mjs --prd：公共组件读 kit.js 补名称；条目作者空时用文件级 author', sText.slice(0, 400));
+    ok(/### S:pc\/pc-nav · 顶部导航与账号菜单/.test(sText) && /- #1（王五，2026-11-05）：菜单数字超过 99 要测一下/.test(sText), 'merge-comments.mjs --prd：公共组件读 kit.js 补名称；条目作者空时用文件级 author', sText.slice(0, 400));
     let badErr = 0;
     try { execFileSync(process.execPath, [MERGE, path.join(TMP, 'cmt-bad.json')], { stdio: 'pipe' }); } catch (e) { badErr = e.status; }
     fs.writeFileSync(path.join(TMP, 'cmt-bad.json'), '{"v":2}');
@@ -1994,6 +1994,85 @@ console.log('\n17. 复审 r1 反例');
   const noMatch = await build(variant(HOSTFX, [['prd/pages/C01-customers.js', "match: '#modal-new' }", "match: '#modal-nope' }"]]), {});
   const sm = runSnap(noMatch.failed, ['--view', '#/p/C01/new'], 'snap-nomatch');
   ok(!noMatch.ok && sm.code === 1 && /进入状态失败[^\n]*match/.test(sm.out), 'r1-4 进入步骤执行完但 match 不成立：snap.mjs 报出原因并非零退出', 'exit=' + sm.code + ' ' + sm.out.slice(0, 200));
+}
+
+/* ---------- 18. 1.2.3：评审意见记录版本、“结构检查通过”文案 ---------- */
+console.log('\n18. 评审意见按版本分组、结构检查文案');
+{
+  const MERGE = path.join(SKILL, 'scripts', 'merge-comments.mjs');
+  const LS = 'prd-comments:leave-approval';
+  const v11 = await build(variant(EXAMPLE, [[PROD, "HR 查看月度统计' }", "HR 查看月度统计' },\n    { id: 'V1.1', date: '2026-12-01', summary: '测试用升版' }"]]), {});
+  ok(v11.ok && v11.release === 'V1.1', '18 升到 V1.1 的夹具构建通过', v11.ok ? '' : JSON.stringify(v11.report.errors.slice(0, 3)));
+  const runMerge = (files, out) => { try { execFileSync(process.execPath, [MERGE, ...files, '-o', out], { stdio: 'pipe' }); return { code: 0, md: fs.readFileSync(out, 'utf8'), err: '' }; } catch (e) { return { code: e.status, md: '', err: String(e.stderr || '') }; } };
+  const bv = await launch();
+  try {
+    const pg = await bv.newPage({ width: 1600, height: 1000 });
+    const open = async (file, hash) => { await pg.goto('about:blank'); await pg.goto(fileUrl(file) + (hash || '')); await pg.waitFor('window.__PRD_READY === true', 20000); await sleep(400); };
+    const jev = async (js) => JSON.parse(await pg.evaluate('JSON.stringify(' + js + ')'));
+
+    /* V1.0 里留一条意见，再塞一条 1.2.3 之前格式的旧意见（没有 release） */
+    await open(ex.file, '#/p/P02/detail');
+    await pg.evaluate('localStorage.clear(); 1');
+    const a = await jev(`W.comments.add({ target: 'P02/decide', text: 'V1.0 的意见', author: '甲' })`);
+    ok(a.release === 'V1.0', '18 新意见记下提出时的版本（release: V1.0）', JSON.stringify(a));
+    const OLD = { id: 'c_old1', target: 'P01', pageId: 'P01', fnId: null, text: '旧数据意见', author: '乙', at: '2026-11-01T00:00:00.000Z', resolved: false };
+    const stored = await pg.evaluate(`(function () { var l = JSON.parse(localStorage.getItem('${LS}')); l.push(${JSON.stringify(OLD)}); localStorage.setItem('${LS}', JSON.stringify(l)); return localStorage.getItem('${LS}'); })()`);
+
+    /* 升到 V1.1 后打开（带上同一份本机数据），再留一条 */
+    await open(v11.file, '#/p/P02/detail');
+    await pg.evaluate(`localStorage.setItem('${LS}', ${JSON.stringify(stored)}); 1`);
+    await open(v11.file, '#/p/P02/detail');
+    const b = await jev(`W.comments.add({ target: 'P02/decide', text: 'V1.1 的意见', author: '丙' })`);
+    await jev(`W.comments.update(${JSON.stringify(a.id)}, { text: 'V1.0 的意见（改过）' })`);
+    const exp = await jev(`W.comments.exportJSON('丙')`);
+    const rel = (id) => (exp.comments.find((c) => c.id === id) || {});
+    ok(b.release === 'V1.1' && exp.release === 'V1.1' && exp.comments.length === 3 && rel(a.id).release === 'V1.0' && rel(a.id).text === 'V1.0 的意见（改过）' && !('release' in rel('c_old1')), '18 升版后导出全部 3 条：各带提出时的版本，改正文不改版本；旧意见不补版本', JSON.stringify(exp.comments.map((c) => [c.text, c.release])));
+    await pg.evaluate('document.querySelector("[data-tool=comments]").click(); 1'); await sleep(200);
+    await pg.evaluate('document.querySelector("[data-cmt-act=scope][data-v=all]").click(); 1'); await sleep(200);
+    const tags = await jev(`Array.from(document.querySelectorAll('#cmt-panel .cmt-v')).map(function (x) { return x.textContent; })`);
+    ok(tags.length === 2 && tags.includes('V1.0') && tags.includes('版本未知'), '18 意见抽屉：非本版的意见标原版本，旧数据标“版本未知”，本版意见不标', JSON.stringify(tags));
+
+    /* 合并稿：本轮在前，历史版本其次，版本未知最后；全文连续编号 */
+    const expFile = path.join(TMP, 'cmt18-v11.json');
+    fs.writeFileSync(expFile, JSON.stringify(exp, null, 2));
+    const m = runMerge([expFile, expFile], path.join(TMP, 'cmt18.md'));
+    const iCur = m.md.indexOf('## V1.1（本轮）'), iOld = m.md.indexOf('## V1.0（历史意见）'), iUnk = m.md.indexOf('## 版本未知（提出时没有记录版本，导出时为 V1.1）');
+    ok(m.code === 0 && iCur > 0 && iOld > iCur && iUnk > iOld && /共 3 条意见/.test(m.md) && /不直接当作本版要求/.test(m.md), '18 merge-comments：按版本分组（本轮 → 历史 → 版本未知），重复传同一份文件仍按 id 去重', m.err || m.md.slice(0, 500));
+    ok(/## V1\.1（本轮）\n\n### P02\/decide\n- #1（丙，[^）]+）：V1\.1 的意见/.test(m.md) && /## V1\.0（历史意见）\n\n### P02\/decide\n- #2（甲，/.test(m.md) && /### P01\n- #3（乙，2026-11-01）：旧数据意见/.test(m.md), '18 merge-comments：组内再按对象分组，序号跨组连续', m.md.slice(0, 600));
+  } finally { await bv.close(); }
+
+  /* 旧导出文件（条目没有 release）：仍能合并，全部归入“版本未知”，不按文件版本补猜 */
+  const oldFile = path.join(TMP, 'cmt18-old.json');
+  fs.writeFileSync(oldFile, JSON.stringify({ v: 1, productId: 'leave-approval', productName: '请假审批', release: 'V1.0', exportedAt: '2026-11-05T02:00:00.000Z', author: '李四', comments: [{ id: 'c_o1', target: 'P01', pageId: 'P01', fnId: null, text: '旧文件里的意见', author: '李四', at: '2026-11-05T02:00:00.000Z', resolved: false }] }));
+  const mo = runMerge([oldFile], path.join(TMP, 'cmt18-old.md'));
+  ok(mo.code === 0 && /# 评审意见合并 · 请假审批 · V1\.0/.test(mo.md) && /## 版本未知（提出时没有记录版本，导出时为 V1\.0）\n\n### P01\n- #1（李四，2026-11-05）：旧文件里的意见/.test(mo.md) && !/（本轮）|（历史意见）/.test(mo.md), '18 merge-comments：1.2.2 及更早的导出文件照常合并，意见标“版本未知”', mo.err || mo.md);
+  const mx = runMerge([path.join(TMP, 'cmt18-v11.json'), oldFile], path.join(TMP, 'cmt18-mix.md'));
+  ok(mx.code !== 0 && /导出时的版本不一致/.test(mx.err), '18 merge-comments：导出时版本不同的文件仍拒绝合并', mx.err);
+
+  /* Q3 文案：范围提醒和 --scope-baseline 帮助不再要求“先列给用户确认”，只确认超出已确认范围的部分 */
+  const sd = variant(EXAMPLE, []);
+  await build(sd, { scopeBaseline: true });
+  const sf = path.join(sd, 'prd', 'scope.json');
+  const sj = JSON.parse(fs.readFileSync(sf, 'utf8'));
+  sj.fns = sj.fns.filter((k) => k !== 'M02/submit');
+  fs.writeFileSync(sf, JSON.stringify(sj));
+  const sr = await build(sd, {});
+  const sw = sr.ok ? sr.report.warns.filter((w) => w.code === 'SCOPE_ADDED') : [];
+  ok(sw.length === 1 && /在已确认范围内的直接用 --scope-baseline 刷新基线，超出的才列给用户确认/.test(sw[0].msg) && !/先列给用户确认/.test(sw[0].msg), '18 SCOPE_ADDED 提示：已确认的直接刷新，超出的才列给用户', JSON.stringify(sw.map((w) => w.msg)));
+  const help = execFileSync(process.execPath, [path.join(here, 'build.mjs'), '--help'], { encoding: 'utf8' });
+  ok(/先普通构建核对 SCOPE_ADDED \/ SCOPE_REMOVED/.test(help) && !/用户确认后再加此参数/.test(help), '18 --scope-baseline 帮助：先普通构建核对，再刷新', help.slice(0, 200));
+
+  /* Q2 文案：命令行 ✓ 行、顶部徽标、需求文档统计行都写“结构检查通过” */
+  let cli = '';
+  try { cli = execFileSync(process.execPath, [path.join(here, 'build.mjs'), variant(EXAMPLE, [])], { encoding: 'utf8' }); } catch (e) { cli = String(e.stdout || ''); }
+  ok(/\n✓ 结构检查通过，已生成：/.test(cli) && !/✓ 检查通过/.test(cli), '18 构建命令行的成功行为“✓ 结构检查通过，已生成：…”', cli.slice(-300));
+  const bq = await launch();
+  try {
+    const pg = await bq.newPage({ width: 1600, height: 1000 });
+    await pg.goto(fileUrl(ex.file) + '#/doc'); await pg.waitFor('window.__PRD_READY === true', 20000); await sleep(400);
+    const t = JSON.parse(await pg.evaluate('JSON.stringify({ badge: (document.querySelector(".audit-badge") || {}).textContent || "", sec: Array.from(document.querySelectorAll("#right .np-sec h3")).map(function (x) { return x.firstChild.textContent; }), md: W.doc.markdown({ html: false }).slice(0, 600) })'));
+    ok(/^结构检查通过/.test(t.badge) && t.sec.includes('结构检查') && /· 结构检查通过（\d{4}-\d{2}-\d{2}）/.test(t.md), '18 顶部徽标、需求文档右栏和 Markdown 统计行都写“结构检查通过”', JSON.stringify(t).slice(0, 400));
+  } finally { await bq.close(); }
 }
 
 console.log('\n结果：' + pass + ' 通过，' + failN + ' 失败');

@@ -349,8 +349,8 @@ export async function build(input, opts = {}) {
     buildErrs.forEach((w) => report.errors.push(w));
     /* 范围基线外的增删只提醒，不阻止交付；没有基线时 report.scope 为 null */
     if (report.scope) {
-      report.scope.added.forEach((a) => report.warns.push({ code: 'SCOPE_ADDED', msg: '范围确认后新增：' + a.kind + ' · ' + a.label + '（不在范围基线中；先列给用户确认，确认保留后再用 --scope-baseline 刷新基线）' }));
-      report.scope.removed.forEach((r) => report.warns.push({ code: 'SCOPE_REMOVED', msg: '范围确认后移除：' + r.kind + ' · ' + r.key + '（基线中有，原型里已没有；确认后再用 --scope-baseline 刷新基线）' }));
+      report.scope.added.forEach((a) => report.warns.push({ code: 'SCOPE_ADDED', msg: '范围确认后新增：' + a.kind + ' · ' + a.label + '（不在范围基线中；在已确认范围内的直接用 --scope-baseline 刷新基线，超出的才列给用户确认）' }));
+      report.scope.removed.forEach((r) => report.warns.push({ code: 'SCOPE_REMOVED', msg: '范围确认后移除：' + r.kind + ' · ' + r.key + '（基线中有，原型里已没有；处理同 SCOPE_ADDED）' }));
     }
     /* 断网运行时记录到的网络请求。
      * 脚本和样式按请求类型判定：来自托管端 iframe 且该端写了 online: true 的记为 ONLINE，其余记为 HOST_NET。
@@ -568,7 +568,7 @@ function printReport(r) {
     hardWarns.slice(0, 30).forEach((w) => console.log('  - [' + w.code + '] ' + w.msg));
   }
   if (r.ok) {
-    console.log('\n✓ 检查通过，已生成：' + r.file + '（' + Math.round(r.size / 1024) + ' KB）');
+    console.log('\n✓ 结构检查通过，已生成：' + r.file + '（' + Math.round(r.size / 1024) + ' KB）');
     if (r.mdFile) console.log('  Markdown：' + r.mdFile);
     if (r.archived) console.log('  上一版已归档：' + r.archived);
     if (r.csvFiles) console.log('  CSV：' + r.csvFiles.map((f) => path.basename(f)).join('、'));
@@ -586,7 +586,8 @@ const USAGE = `用法：node scripts/build.mjs <项目目录> [选项]
   --export-pack  检查通过后，导出研发包到 export/<产品名>-研发包-<版本>/：三份 CSV、每页截图 pages/*.png、清单.md（默认不导出）
   --draft     只组装、不检查，输出到 .prd-build/（仅供排查画面，不可交付）
   --scope-baseline  检查通过后，把当前页面、状态、功能点记为范围基线（prd/scope.json）。
-                    只用于刷新：先构建列出 SCOPE_ADDED / SCOPE_REMOVED，用户确认后再加此参数。
+                    只用于刷新：先普通构建核对 SCOPE_ADDED / SCOPE_REMOVED，都在已确认范围内
+                    （确认过的清单或用户明确的修改指令）再加此参数；超出的先请用户确认。
                     首次建基线由 Agent 按确认的范围清单手写 prd/scope.json（格式见 references/spec-format.md）
   --confirmed-at 日期  配合 --scope-baseline，记录用户确认范围的日期（YYYY-MM-DD，默认今天）
 检查未通过时不更新交付文件，在 .prd-build/ 留下 failed 版本供排查。`;

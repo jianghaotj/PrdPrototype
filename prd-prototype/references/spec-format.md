@@ -7,7 +7,7 @@
 ├─ prd/
 │  ├─ product.js        产品级需求（W.product）
 │  ├─ kit.js            公共外壳与公共功能点（W.shared、W.ui、W.MTABS）
-│  ├─ scope.json        可选：范围基线（确认范围后写入，格式见文末）
+│  ├─ scope.json        范围基线：新项目必须写；旧项目没有也能构建（格式见文末）
 │  ├─ theme.css         可选：项目样式（高保真的配色、字阶、组件覆盖，见 hifi.md）
 │  ├─ *.js              可选：共享演示数据、组件扩展（如 theme-kit.js）等，按文件名顺序加载
 │  └─ pages/
@@ -226,14 +226,14 @@ W.shared({
 
 ## 范围基线 prd/scope.json
 
-范围基线记录用户确认范围时的页面、状态、功能点。构建时拿它和当前原型对比：确认之后新增的内容给出 `SCOPE_ADDED`，删掉的给出 `SCOPE_REMOVED`，并列入需求文档“范围确认后新增”一章。两类提醒都不阻止交付。
+范围基线记录用户确认范围时的页面、状态、功能点。构建时拿它和当前原型对比：确认之后新增的内容给出 `SCOPE_ADDED`，删掉的给出 `SCOPE_REMOVED`，并列入需求文档“范围确认后新增”一章。两类提醒都不阻止交付。用 `changes` 标为 `removed` 的条目还留在数据里，不报 `SCOPE_REMOVED`；范围汇报要同时看基线差异和本版 `changes`，标记移除的从 `changes` 统计。
 
 **什么时候写**
 
 - **新建（流程 A）**：用户确认范围清单后，先用 `new.mjs` 建项目（它会生成 `prd/kit.js` 里的公共导航），再在写页面代码之前，Agent 按清单手写 `prd/scope.json`。清单里的每个页面、状态、功能点都要列入，`kit.js` 里的公共功能点（如 `公共/pc-shell/pc-nav`、`公共/m-shell/m-tab`）也要列入。这样，写页面期间多出来的内容会被当作“确认后新增”。
-- **修改、迭代（流程 C、D）**：先构建（不加 `--scope-baseline`），把 `SCOPE_ADDED` / `SCOPE_REMOVED` 逐条列给用户；用户确认后，再执行 `node scripts/build.mjs <项目目录> --scope-baseline` 刷新基线。确认前不刷新。
+- **修改、迭代（流程 C、D）**：增删按 `SKILL.md` 硬性规则“范围确认”处理，用 `node scripts/build.mjs <项目目录> --scope-baseline` 刷新基线。
 - 只改文字、不增删页面、状态或功能点时，不需要动这个文件。
-- 没有这个文件时，构建不做增删对比。
+- 旧项目没有这个文件也能构建，只是不做增删对比。
 
 **格式**
 

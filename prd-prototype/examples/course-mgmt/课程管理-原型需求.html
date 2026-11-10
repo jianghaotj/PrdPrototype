@@ -301,6 +301,7 @@ body.cmt-on .cmt-panel{display:flex}
 .cmt-item{border:1px solid var(--v-line);border-radius:8px;padding:7px 10px;margin-bottom:6px;line-height:1.6}
 .cmt-m{display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--v-ink3)}
 .cmt-m b{font-weight:600;color:var(--v-ink2)}
+.cmt-m .cmt-v{border:1px solid var(--v-line);border-radius:4px;padding:0 5px}
 .cmt-m .cmt-act{margin-left:auto}
 .cmt-t{white-space:pre-line;color:var(--v-ink)}
 .cmt-empty{margin:6px 0;font-size:12.5px;color:var(--v-ink3)}
@@ -791,7 +792,7 @@ body.cmt-on .cmt-panel{display:flex}
 </head>
 <body>
 <div id="app"><header id="top"></header><aside id="left"></aside><main id="stagewrap"><div id="stage"><div id="stage-in"></div></div><div id="flowbar"></div></main><aside id="right"></aside></div>
-<script type="application/json" id="prd-audit">{"behave":{"P01":{"filter":["列表内容随输入实时筛选（匹配列表行中的文字），无匹配项时显示“没有匹配的结果”"],"create-form":["课程代码为必填项，为空时不能提交","课程代码长度为 6–12 个字，不在此范围内时不能提交","课程名称为必填项，为空时不能提交","课程名称长度为 2–30 个字，不在此范围内时不能提交","开课学院为必填项，为空时不能提交","学分为必填项，为空时不能提交","备注最多 200 个字，超出时不能提交"],"submit":["提交前先校验必填项和长度，不通过时在字段下方提示，不发出请求","提交中按钮禁用，重复点击只提交一次","提交失败时保留已填内容并提示，可直接重试（可在数据场景中切换，演示首次提交失败）","提交成功后在「开课课程列表」中新增一条，进入「课程管理」"]}},"ok":true,"at":"2026-11-10T17:46:59.537Z","release":"V1.0","errors":[],"warns":[],"stats":{"pages":1,"states":3,"fns":8,"fields":19,"pending":0,"assumed":31,"changes":0,"gaps":0,"release":"V1.0","interactive":14,"covered":14,"ignored":0,"renders":9,"errors":0,"warns":0,"netRequests":0,"netBlocked":0},"fnStates":{"P01":{"filter":["list"],"create-entry":["list"],"table":["list"],"pager":["list"],"create-form":["create"],"submit":["create"],"detail":["detail"]}},"links":{"P01":[]},"inventory":{"pages":[{"k":"P01","l":"P01 课程管理"}],"states":[{"k":"P01/list","l":"P01 课程管理 · 状态「课程列表」"},{"k":"P01/create","l":"P01 课程管理 · 状态「新建课程弹窗」"},{"k":"P01/detail","l":"P01 课程管理 · 状态「课程详情抽屉」"}],"fns":[{"k":"P01/filter","l":"P01 课程管理 · 功能点「课程搜索」"},{"k":"P01/table","l":"P01 课程管理 · 功能点「开课课程列表」"},{"k":"P01/pager","l":"P01 课程管理 · 功能点「分页计数」"},{"k":"P01/create-entry","l":"P01 课程管理 · 功能点「新建课程入口」"},{"k":"P01/create-form","l":"P01 课程管理 · 功能点「新建课程表单」"},{"k":"P01/submit","l":"P01 课程管理 · 功能点「提交新建课程」"},{"k":"P01/detail","l":"P01 课程管理 · 功能点「课程详情抽屉」"},{"k":"公共/pc-shell/pc-nav","l":"公共组件「教务管理台 顶部导航」 · 功能点「顶部导航与账号菜单」"}]},"scope":null,"needOnline":false}</script>
+<script type="application/json" id="prd-audit">{"behave":{"P01":{"filter":["列表内容随输入实时筛选（匹配列表行中的文字），无匹配项时显示“没有匹配的结果”"],"create-form":["课程代码为必填项，为空时不能提交","课程代码长度为 6–12 个字，不在此范围内时不能提交","课程名称为必填项，为空时不能提交","课程名称长度为 2–30 个字，不在此范围内时不能提交","开课学院为必填项，为空时不能提交","学分为必填项，为空时不能提交","备注最多 200 个字，超出时不能提交"],"submit":["提交前先校验必填项和长度，不通过时在字段下方提示，不发出请求","提交中按钮禁用，重复点击只提交一次","提交失败时保留已填内容并提示，可直接重试（可在数据场景中切换，演示首次提交失败）","提交成功后在「开课课程列表」中新增一条，进入「课程管理」"]}},"ok":true,"at":"2026-11-10T23:30:01.138Z","release":"V1.0","errors":[],"warns":[],"stats":{"pages":1,"states":3,"fns":8,"fields":19,"pending":0,"assumed":31,"changes":0,"gaps":0,"release":"V1.0","interactive":14,"covered":14,"ignored":0,"renders":9,"errors":0,"warns":0,"netRequests":0,"netBlocked":0},"fnStates":{"P01":{"filter":["list"],"create-entry":["list"],"table":["list"],"pager":["list"],"create-form":["create"],"submit":["create"],"detail":["detail"]}},"links":{"P01":[]},"inventory":{"pages":[{"k":"P01","l":"P01 课程管理"}],"states":[{"k":"P01/list","l":"P01 课程管理 · 状态「课程列表」"},{"k":"P01/create","l":"P01 课程管理 · 状态「新建课程弹窗」"},{"k":"P01/detail","l":"P01 课程管理 · 状态「课程详情抽屉」"}],"fns":[{"k":"P01/filter","l":"P01 课程管理 · 功能点「课程搜索」"},{"k":"P01/table","l":"P01 课程管理 · 功能点「开课课程列表」"},{"k":"P01/pager","l":"P01 课程管理 · 功能点「分页计数」"},{"k":"P01/create-entry","l":"P01 课程管理 · 功能点「新建课程入口」"},{"k":"P01/create-form","l":"P01 课程管理 · 功能点「新建课程表单」"},{"k":"P01/submit","l":"P01 课程管理 · 功能点「提交新建课程」"},{"k":"P01/detail","l":"P01 课程管理 · 功能点「课程详情抽屉」"},{"k":"公共/pc-shell/pc-nav","l":"公共组件「教务管理台 顶部导航」 · 功能点「顶部导航与账号菜单」"}]},"scope":null,"needOnline":false}</script>
 <script type="application/json" id="prd-scope"></script>
 <script>
 /*! @license DOMPurify 3.2.7 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.2.7/LICENSE */
@@ -1840,7 +1841,7 @@ if(__exports != exports)module.exports = exports;return module.exports}));
     if (HTML && opts.stats) out.push(opts.stats + '\n\n');
     if (!HTML) {
       var sx = D.stats();
-      out.push('页面 ' + sx.pages + ' · 状态 ' + sx.states + ' · 功能点 ' + sx.fns + ' · 字段 ' + sx.fields + ' · 待确认 ' + sx.pending + ' · AI 假设 ' + sx.assumed + (W.audit ? ' · 构建检查' + (W.audit.ok ? '通过' : '未通过') + (W.audit.needOnline ? ' · 需联网' : '') + '（' + D.localTime(W.audit.at).slice(0, 10) + '）' : '') + '\n\n');
+      out.push('页面 ' + sx.pages + ' · 状态 ' + sx.states + ' · 功能点 ' + sx.fns + ' · 字段 ' + sx.fields + ' · 待确认 ' + sx.pending + ' · AI 假设 ' + sx.assumed + (W.audit ? ' · 结构检查' + (W.audit.ok ? '通过' : '未通过') + (W.audit.needOnline ? ' · 需联网' : '') + '（' + D.localTime(W.audit.at).slice(0, 10) + '）' : '') + '\n\n');
     }
 
     var allPages = [];
@@ -3524,7 +3525,8 @@ W.product({
 </script>
 <script>
 /* 评审意见：评审者在功能点上留意见，存在本机浏览器（localStorage）里，可导出 JSON，再由 scripts/merge-comments.mjs 合并。
-   target 格式：功能点 `页面ID/功能点ID`；公共组件 `S:端ID/功能点ID`；页面级 `页面ID`。 */
+   target 格式：功能点 `页面ID/功能点ID`；公共组件 `S:端ID/功能点ID`；页面级 `页面ID`。
+   每条意见记下提出时的版本（release）；1.2.3 之前存下的意见没有这个字段，导出时原样保留，合并时标“版本未知”，不补猜。 */
 (function () {
   'use strict';
   var W = window.W;
@@ -3532,6 +3534,7 @@ W.product({
   var AUTHOR_KEY = 'prd-comments-author';
 
   function product() { return W.P || {}; }
+  function release() { return W.doc && W.doc.cur ? W.doc.cur() : ''; }
   function storeKey() { return 'prd-comments:' + (product().id || product().name || ''); }
   function read() {
     try {
@@ -3580,6 +3583,7 @@ W.product({
       target: target,
       pageId: t.pageId,
       fnId: t.fnId,
+      release: release(),
       text: text,
       author: o.author !== undefined ? String(o.author).trim() : C.author(),
       at: new Date().toISOString(),
@@ -3591,7 +3595,7 @@ W.product({
     return item;
   };
 
-  /* 只允许改正文和是否已处理，其余字段（对象、时间、作者）保持不变 */
+  /* 只允许改正文和是否已处理，其余字段（对象、版本、时间、作者）保持不变 */
   C.update = function (id, patch) {
     var list = read(), item = null;
     list.some(function (c) { if (c.id === id) { item = c; return true; } return false; });
@@ -3631,7 +3635,7 @@ W.product({
       v: 1,
       productId: p.id || p.name || '',
       productName: p.name || '',
-      release: W.doc && W.doc.cur ? W.doc.cur() : '',
+      release: release(),   /* 导出时的版本（本轮）；每条意见自己的 release 是提出时的版本 */
       exportedAt: new Date().toISOString(),
       author: who,
       /* 条目作者空时用本次导出作者兜底，便于流程 C 写 src */
@@ -3889,14 +3893,14 @@ W.product({
     var P = W.P;
     var a = W.audit, badge = '';
     if (a && ui.proto) {
-      badge = '<span class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" style="cursor:default" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '原型阶段 · 检查通过' : '原型阶段 · 检查未通过') + (a.needOnline ? ' · 需联网' : '') + '</span>';
+      badge = '<span class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" style="cursor:default" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '原型阶段 · 结构检查通过' : '原型阶段 · 检查未通过') + (a.needOnline ? ' · 需联网' : '') + '</span>';
     } else if (a) {
       var st0 = D.stats();
       var parts = [];
       if (st0.pending) parts.push('待确认 ' + st0.pending);
       if (st0.assumed) parts.push('AI 假设 ' + st0.assumed);
       if (a.needOnline) parts.unshift('需联网');
-      badge = '<a class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" href="#/doc" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '检查通过' : '检查未通过') + (parts.length ? ' · ' + parts.join(' · ') : '') + '</a>';
+      badge = '<a class="audit-badge ' + (a.ok ? 'ok' : 'bad') + '" href="#/doc" title="构建检查时间：' + D.localTime(a.at) + '">' + (a.ok ? '结构检查通过' : '检查未通过') + (parts.length ? ' · ' + parts.join(' · ') : '') + '</a>';
     }
     $('#top').innerHTML = '<a class="brand" data-tab="doc"><span class="brand-m">' + h.esc((P.name || '原')[0]) + '</span><span class="t">' + h.esc(P.name || '') + '</span><small>' + h.esc([D.cur(), P.date, P.fidelity || '低保真'].filter(Boolean).join(' · ')) + '</small></a>' +
       vswHTML() +
@@ -4323,8 +4327,10 @@ W.product({
       return c.target.indexOf('S:' + p.end + '/') === 0;
     });
   }
+  /* 不是本版提出的意见标出原版本，旧数据没有版本的标“版本未知” */
   function cmtItemHTML(c) {
-    return '<div class="cmt-item"><div class="cmt-m"><b>' + h.esc(c.author || '未署名') + '</b><span>' + h.esc(D.localTime(c.at)) + '</span>' +
+    var v = c.release === D.cur() ? '' : '<span class="cmt-v" title="提出时的版本">' + h.esc(c.release || '版本未知') + '</span>';
+    return '<div class="cmt-item"><div class="cmt-m"><b>' + h.esc(c.author || '未署名') + '</b><span>' + h.esc(D.localTime(c.at)) + '</span>' + v +
       '<button class="cmt-act sm" data-cmt-act="del" data-cid="' + h.esc(c.id) + '">删除</button></div><div class="cmt-t">' + h.esc(c.text) + '</div></div>';
   }
   function cmtGroupsHTML(list) {
@@ -4652,7 +4658,7 @@ W.product({
     var s = '<div class="np"><h2>评审摘要</h2><p class="goal">' + h.esc(W.P.name) + ' · ' + h.esc(st.release) + '</p>' +
       '<div class="np-sec"><div class="sum-k"><div><b>' + st.pages + '</b><span>页面</span></div><div><b>' + st.fns + '</b><span>功能点</span></div><div><b>' + st.pending + '</b><span>待确认</span></div><div><b>' + st.assumed + '</b><span>AI 假设</span></div></div></div>';
     if (a) {
-      s += '<div class="np-sec"><h3>构建检查<span>' + h.esc(D.localTime(a.at)) + '</span></h3>' +
+      s += '<div class="np-sec"><h3>结构检查<span>' + h.esc(D.localTime(a.at)) + '</span></h3>' +
         '<div class="issue ' + (a.ok ? '' : 'e') + '">' + (a.ok ? '通过：原型中 ' + a.stats.interactive + ' 个可交互元素全部对应到需求功能点' + (a.stats.ignored ? '（另有 ' + a.stats.ignored + ' 个标为不纳入本次需求）' : '') + '，需求中的功能点全部在原型中出现' + (st.gaps ? '或已标注“原型未体现”' : '') + '。' : '未通过：' + a.errors.length + ' 个问题') + (a.needOnline ? '本原型标为“需联网”，交付后需联网才能完整使用。' : '') + '</div>' +
         (a.errors || []).slice(0, 10).map(function (x) { return '<div class="issue e">' + h.esc(x.msg) + '</div>'; }).join('') +
         /* “需联网”提醒不参与截断，保证交付方一定能看到 */

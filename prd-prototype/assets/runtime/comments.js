@@ -1,5 +1,6 @@
 /* 评审意见：评审者在功能点上留意见，存在本机浏览器（localStorage）里，可导出 JSON，再由 scripts/merge-comments.mjs 合并。
-   target 格式：功能点 `页面ID/功能点ID`；公共组件 `S:端ID/功能点ID`；页面级 `页面ID`。 */
+   target 格式：功能点 `页面ID/功能点ID`；公共组件 `S:端ID/功能点ID`；页面级 `页面ID`。
+   每条意见记下提出时的版本（release）；1.2.3 之前存下的意见没有这个字段，导出时原样保留，合并时标“版本未知”，不补猜。 */
 (function () {
   'use strict';
   var W = window.W;
@@ -7,6 +8,7 @@
   var AUTHOR_KEY = 'prd-comments-author';
 
   function product() { return W.P || {}; }
+  function release() { return W.doc && W.doc.cur ? W.doc.cur() : ''; }
   function storeKey() { return 'prd-comments:' + (product().id || product().name || ''); }
   function read() {
     try {
@@ -55,6 +57,7 @@
       target: target,
       pageId: t.pageId,
       fnId: t.fnId,
+      release: release(),
       text: text,
       author: o.author !== undefined ? String(o.author).trim() : C.author(),
       at: new Date().toISOString(),
@@ -66,7 +69,7 @@
     return item;
   };
 
-  /* 只允许改正文和是否已处理，其余字段（对象、时间、作者）保持不变 */
+  /* 只允许改正文和是否已处理，其余字段（对象、版本、时间、作者）保持不变 */
   C.update = function (id, patch) {
     var list = read(), item = null;
     list.some(function (c) { if (c.id === id) { item = c; return true; } return false; });
@@ -106,7 +109,7 @@
       v: 1,
       productId: p.id || p.name || '',
       productName: p.name || '',
-      release: W.doc && W.doc.cur ? W.doc.cur() : '',
+      release: release(),   /* 导出时的版本（本轮）；每条意见自己的 release 是提出时的版本 */
       exportedAt: new Date().toISOString(),
       author: who,
       /* 条目作者空时用本次导出作者兜底，便于流程 C 写 src */

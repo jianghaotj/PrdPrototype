@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// 合并评审意见：把交付 HTML 里导出的意见 JSON（v:1）合并成按功能点分组的 Markdown，供流程 C 作为修改依据。
+// 合并评审意见：把交付 HTML 里导出的意见 JSON（v:1）合并成按版本、再按功能点分组的 Markdown，供流程 C 作为修改依据。
 // 用法：node scripts/merge-comments.mjs 意见A.json [意见B.json ...] [-o 评审意见合并.md] [--prd <项目目录>]
 //   --prd 可选：读取项目的 prd/pages/*.js，在标题里补上功能点名称；读不到时只写 target。
 //   序号按输出顺序编号（全文连续），便于流程 C 写 src: '评审意见 #3（张三）'。
-//   不同产品或不同版本的意见不能混合合并，遇到会报错退出。
+//   不同产品、或导出时版本不同的文件不能混合合并，遇到会报错退出。
+//   每条意见按提出时的版本（release）分组：导出时的版本记为“本轮”，其他为“历史意见”，没有 release 的旧意见记为“版本未知”。
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -38,18 +39,23 @@ const docs = o.files.map((f) => {
 const first = docs[0].obj;
 for (const { file, obj } of docs) {
   if (obj.productId !== first.productId) die('产品不一致，不能合并：' + docs[0].file + '（' + first.productId + '）与 ' + file + '（' + obj.productId + '）');
-  if (obj.release !== first.release) die('版本不一致，不能合并：' + docs[0].file + '（' + first.release + '）与 ' + file + '（' + obj.release + '）');
+  if (obj.release !== first.release) die('导出时的版本不一致，不能合并：' + docs[0].file + '（' + first.release + '）与 ' + file + '（' + obj.release + '）');
 }
 
-/* 同一条意见可能出现在多份文件里（例如同一份文件传了两次），按 id 去重 */
+/* 同一条意见可能出现在多份文件里（例如同一份文件传了两次），按 id 去重。
+   先按提出时的版本分组，再按 target 分组；没有 release 的旧意见归入“版本未知”，不按文件版本补猜 */
+const UNKNOWN = '';
 const seen = new Set();
-const groups = new Map();
+const byVer = new Map();
 let total = 0;
 for (const { obj } of docs) {
   for (const c of obj.comments) {
     if (!c || typeof c.target !== 'string' || typeof c.text !== 'string') continue;
     if (c.id && seen.has(c.id)) continue;
     if (c.id) seen.add(c.id);
+    const ver = typeof c.release === 'string' ? c.release.trim() : UNKNOWN;
+    if (!byVer.has(ver)) byVer.set(ver, new Map());
+    const groups = byVer.get(ver);
     if (!groups.has(c.target)) groups.set(c.target, []);
     groups.get(c.target).push({
       text: c.text.trim(),
@@ -59,6 +65,11 @@ for (const { obj } of docs) {
     total++;
   }
 }
+/* 本轮（导出时的版本）在前，其他版本按出现顺序，版本未知放最后 */
+const cur = first.release || '';
+const vers = [...byVer.keys()].filter((v) => v !== cur && v !== UNKNOWN);
+if (byVer.has(UNKNOWN) && cur !== UNKNOWN) vers.push(UNKNOWN);
+if (byVer.has(cur)) vers.unshift(cur);
 
 /* --prd：按 build.mjs 同样顺序读源文件，失败不影响合并，只用 target 作标题 */
 function walkJs(dir) {
@@ -121,26 +132,36 @@ function heading(target) {
   return target;
 }
 
-/* 输出 Markdown：标题 → 按 target 分组 → 全文连续编号 */
-let n = 0;
+/* 输出 Markdown：标题 → 按版本分组 → 按 target 分组 → 全文连续编号 */
+function verTitle(v) {
+  if (v === UNKNOWN) return '版本未知' + (cur ? '（提出时没有记录版本，导出时为 ' + cur + '）' : '');
+  return v === cur ? v + '（本轮）' : v + '（历史意见）';
+}
+let n = 0, targets = 0;
 const lines = [];
-lines.push('# 评审意见合并 · ' + (first.productName || first.productId || '') + ' · ' + (first.release || ''));
+lines.push('# 评审意见合并 · ' + (first.productName || first.productId || '') + ' · ' + cur);
 lines.push('');
 lines.push('共 ' + total + ' 条意见，来自 ' + docs.length + ' 份文件。序号按本文件顺序编号。');
-for (const [target, items] of groups) {
+if (vers.some((v) => v !== cur)) lines.push('“本轮”是这次要处理的意见；历史意见和版本未知的意见，先确认在 ' + (cur || '当前版本') + ' 里是否仍适用，不直接当作本版要求。');
+for (const v of vers) {
   lines.push('');
-  lines.push('## ' + heading(target));
-  for (const it of items) {
-    n++;
-    const meta = it.date ? it.author + '，' + it.date : it.author;
-    lines.push('- #' + n + '（' + meta + '）：' + it.text.replace(/\n/g, '\n  '));
+  lines.push('## ' + verTitle(v));
+  for (const [target, items] of byVer.get(v)) {
+    targets++;
+    lines.push('');
+    lines.push('### ' + heading(target));
+    for (const it of items) {
+      n++;
+      const meta = it.date ? it.author + '，' + it.date : it.author;
+      lines.push('- #' + n + '（' + meta + '）：' + it.text.replace(/\n/g, '\n  '));
+    }
   }
 }
 const md = lines.join('\n') + '\n';
 
 if (o.out) {
   fs.writeFileSync(o.out, md, 'utf8');
-  console.error('✓ 已写入 ' + o.out + '：' + total + ' 条意见，' + groups.size + ' 个对象');
+  console.error('✓ 已写入 ' + o.out + '：' + total + ' 条意见，' + vers.length + ' 个版本分组，' + targets + ' 个对象');
 } else {
   process.stdout.write(md);
 }

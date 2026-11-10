@@ -204,7 +204,7 @@
     if (HTML && opts.stats) out.push(opts.stats + '\n\n');
     if (!HTML) {
       var sx = D.stats();
-      out.push('页面 ' + sx.pages + ' · 状态 ' + sx.states + ' · 功能点 ' + sx.fns + ' · 字段 ' + sx.fields + ' · 待确认 ' + sx.pending + ' · AI 假设 ' + sx.assumed + (W.audit ? ' · 构建检查' + (W.audit.ok ? '通过' : '未通过') + (W.audit.needOnline ? ' · 需联网' : '') + '（' + D.localTime(W.audit.at).slice(0, 10) + '）' : '') + '\n\n');
+      out.push('页面 ' + sx.pages + ' · 状态 ' + sx.states + ' · 功能点 ' + sx.fns + ' · 字段 ' + sx.fields + ' · 待确认 ' + sx.pending + ' · AI 假设 ' + sx.assumed + (W.audit ? ' · 结构检查' + (W.audit.ok ? '通过' : '未通过') + (W.audit.needOnline ? ' · 需联网' : '') + '（' + D.localTime(W.audit.at).slice(0, 10) + '）' : '') + '\n\n');
     }
 
     var allPages = [];
