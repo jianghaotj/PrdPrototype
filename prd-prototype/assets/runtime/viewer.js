@@ -361,12 +361,20 @@
     if (fromDetect) return true;
     var seq = ++ui.enterSeq;
     $('#dots').innerHTML = '';
-    HOST.enter(frame, e, p, stateObj(p, st), function () { return seq !== ui.enterSeq; }).then(function (ok) {
+    /* 进入状态的进度，截图脚本据此等到状态真正进入完成（或失败）再截 */
+    window.__PRD_HOST = { busy: true, error: '' };
+    var so = stateObj(p, st);
+    HOST.enter(frame, e, p, so, function () { return seq !== ui.enterSeq; }).then(function (ok) {
       if (!ok || seq !== ui.enterSeq) return;
+      /* 进入步骤执行完后核对 match，和构建检查一样：不成立就算进入失败 */
+      var m = HOST.stateMatch(p, so || {});
+      if (m && !HOST.match(frame.contentWindow, m)) throw new Error('执行进入步骤后，match 条件不成立（' + JSON.stringify(m) + '）');
+      window.__PRD_HOST = { busy: false, error: '' };
       hookFrame(frame);
       afterPaint();
     }).catch(function (err) {
       if (seq !== ui.enterSeq) return;
+      window.__PRD_HOST = { busy: false, error: String(err && err.message || err) };
       $('.cap').innerHTML = capHTML(p, st) + '<div style="color:#c4322a;margin-top:6px">进入该状态失败：' + h.esc(err.message) + '</div>';
       hookFrame(frame);
       afterPaint();
@@ -486,7 +494,8 @@
     res.list.forEach(function (x) {
       if (x.shared && !showShared) return;
       if (!fnVisibleForRole(x.f, ui.role)) return;
-      var c = D.chg(x.f);
+      /* 只改了字段、规则或异常时，圆点按“本版修改”显示 */
+      var c = D.chg(x.f) || (D.fnChanged(x.f) ? { type: 'modified' } : null);
       if (only && !c) return;
       var el = x.els[0];
       var r = rectIn(el, hosted);
@@ -540,42 +549,30 @@
     if (!P.roles || !P.roles.length) return;
     var p = ui.cur.p;
     var isHosted = W.host.isHosted(p);
-    (p.fns || []).forEach(function (f) {
-      var visible = fnVisibleForRole(f, ui.role);
-      if (isHosted) {
-        if (!f.sel) return;
-        var frame = $('#hostf');
-        if (!frame || !frame.contentDocument) return;
-        Array.prototype.forEach.call(frame.contentDocument.querySelectorAll(f.sel), function (el) {
-          if (visible) {
-            if (el.hasAttribute('data-display-backup')) {
-              el.style.display = el.getAttribute('data-display-backup');
-              el.removeAttribute('data-display-backup');
-            }
-          } else {
-            if (!el.hasAttribute('data-display-backup')) {
-              el.setAttribute('data-display-backup', el.style.display);
-            }
-            el.style.display = 'none';
-          }
-        });
+    var root = isHosted ? ($('#hostf') && $('#hostf').contentDocument) : $('#ab');
+    if (!root) return;
+    /* 本页功能点和本端公共组件一起过滤；元素按与构建检查相同的绑定找：托管用 sel + text 和 data-fn，原生用 data-fn。
+       先收齐元素，再按构建检查的归属（W.host.owner）定每个元素属于哪个功能点，避免多个功能点的选择器重叠时后处理的覆盖前面的结果 */
+    var els = [], vis = [];
+    (p.fns || []).concat(W.sharedFns(p.end).map(function (x) { return x.fn; })).forEach(function (f) {
+      var list = isHosted ? W.host.fnEls(root, f, false) : $$('[data-fn="' + String(f.id).replace(/"/g, '') + '"]', root);
+      list.forEach(function (el) {
+        if (els.indexOf(el) >= 0) return;
+        var o = isHosted ? W.host.owner(el, p) : null;
+        els.push(el);
+        vis.push(fnVisibleForRole(o ? o.fn : f, ui.role));
+      });
+    });
+    els.forEach(function (el, i) {
+      var visible = vis[i];
+      if (visible) {
+        if (el.hasAttribute('data-display-backup')) {
+          el.style.display = el.getAttribute('data-display-backup');
+          el.removeAttribute('data-display-backup');
+        }
       } else {
-        /* 原生：只动画板 #ab，不动需求卡片 */
-        var ab = $('#ab');
-        if (!ab) return;
-        $$('[data-fn="' + String(f.id).replace(/"/g, '') + '"]', ab).forEach(function (el) {
-          if (visible) {
-            if (el.hasAttribute('data-display-backup')) {
-              el.style.display = el.getAttribute('data-display-backup');
-              el.removeAttribute('data-display-backup');
-            }
-          } else {
-            if (!el.hasAttribute('data-display-backup')) {
-              el.setAttribute('data-display-backup', el.style.display);
-            }
-            el.style.display = 'none';
-          }
-        });
+        if (!el.hasAttribute('data-display-backup')) el.setAttribute('data-display-backup', el.style.display);
+        el.style.display = 'none';
       }
     });
   }
@@ -854,7 +851,7 @@
       }).join('') + '</div></div>';
     }
     var fns = p.fns.filter(function (f) { return only || !D.removed(f); });
-    var cnt = only ? fns.filter(function (f) { return D.chg(f); }).length : fns.length;
+    var cnt = only ? fns.filter(function (f) { return D.fnChanged(f); }).length : fns.length;
     s += '<div class="np-sec"><h3>功能点<span class="r"><span>' + (only ? '本版变化 ' : '') + cnt + ' 个</span><span class="mini-sw' + (document.body.classList.contains('no-dots') ? '' : ' on') + '" data-tool="dots" title="显示或隐藏标注圆点"><i></i>圆点</span></span></h3>';
     s += fns.length ? fns.map(function (f) { return cardHTML(f, p.fns.indexOf(f), p, fs[f.id], false); }).join('') : '<p class="hintline">本页没有功能点。</p>';
     s += '<div class="legend"><span><i></i>已确认</span><span><i class="p"></i>待确认</span><span><i class="a"></i>AI 假设</span>' + (D.multiRelease() ? '<span><i class="add"></i>本版新增</span><span><i class="mod"></i>本版修改</span>' : '') + '</div></div>';
@@ -872,7 +869,7 @@
     var shared = W.sharedFns(p.end);
     if (shared.length) {
       s += '<div class="np-sec"><h3>公共组件<span class="r"><span class="mini-sw' + (pref('sharedDots') ? ' on' : '') + '" data-tool="sdots" title="在画板上显示公共组件的标注"><i></i>圆点</span></span></h3>' +
-        shared.filter(function (x) { return only || !D.removed(x.fn); }).map(function (x, i) { return cardHTML(x.fn, i, null, null, true).replace('class="fc', 'class="fc fold'); }).join('') + '</div>';
+        shared.filter(function (x) { return only || !D.removed(x.fn); }).map(function (x, i) { var c = cardHTML(x.fn, i, null, null, true); return only && D.fnChanged(x.fn) ? c : c.replace('class="fc', 'class="fc fold'); }).join('') + '</div>';
     }
     s += '<a class="tolink" href="#/doc/d-pg-' + h.esc(p.id) + '">在需求文档中查看本页 →</a></div>';
     $('#right').innerHTML = s;
@@ -902,7 +899,7 @@
       if (/^S:/.test(key)) return;
       var vis = !!ui.visible[key];
       var f = ui.cur && ui.cur.p.fns.find(function (x) { return x.id === key; });
-      var changed = f && D.chg(f);
+      var changed = f && D.fnChanged(f);
       var wasOff = c.classList.contains('off');
       c.classList.toggle('off', !vis && !(f && D.removed(f)));
       if (c.dataset.init !== '1' || wasOff !== c.classList.contains('off')) {

@@ -46,9 +46,15 @@
     });
   };
   D.removed = function (x) { return !!(x && x.changes && x.changes.some(function (c) { return c.type === 'removed'; })); };
+  /* 功能点自身或它的字段、规则、异常在本版有变化 */
+  D.fnChanged = function (f, ver) {
+    if (D.chg(f, ver)) return true;
+    return [f.fields, D.items(f.rules), D.items(f.errors)].some(function (l) { return (l || []).some(function (x) { return D.chg(x, ver); }); });
+  };
   D.pageChanged = function (p, ver) {
     if (D.chg(p, ver)) return true;
-    if ((p.fns || []).some(function (f) { return D.chg(f, ver) || (f.fields || []).some(function (x) { return D.chg(x, ver); }); })) return true;
+    if ((p.states || []).some(function (s) { return D.chg(s, ver); })) return true;
+    if ((p.fns || []).some(function (f) { return D.fnChanged(f, ver); })) return true;
     return D.items(p.rules).some(function (r) { return D.chg(r, ver); });
   };
   D.localTime = function (iso) {
@@ -185,6 +191,8 @@
       return ch;
     }
     function keep(x) { return only ? !!D.chg(x, ver) : !D.removed(x); }
+    /* 功能点下的字段、规则、异常：平时不列已移除的；只看本版变化时，本版移除的也列出（带“移除”标记） */
+    function sub_keep(x) { return !D.removed(x) || (only && !!D.chg(x, ver)); }
     function bullets(arr) {
       var it = D.items(arr).filter(keep);
       return it.length ? it.map(function (x) { return '- ' + T(x.text) + B(x, ver) + (x.src ? '（来源：' + T(joinSrc(x.src)) + '）' : ''); }).join('\n') + '\n\n' : '';
@@ -260,7 +268,7 @@
 
     /* 只看本版变化：先列产品级变化（目标、范围、角色、全局规则、数据字典、流程、待确认） */
     if (only) {
-      var glog = D.changelog().filter(function (x) { return x.ver === ver && !/^#\/p\//.test(x.href || '') && !/公共组件/.test(x.name); });
+      var glog = D.changelog().filter(function (x) { return x.ver === ver && !/^#\/p\//.test(x.href || '') && !x.shared; });
       chapter(ver + ' 本版变化 · 产品级');
       if (glog.length) {
         var gr2 = D.items(P.rules).filter(function (r) { return D.chg(r, ver); });
@@ -287,13 +295,14 @@
         if (p.entry) meta.push('- **入口与前置**：' + T(p.entry));
         if (p.perm) meta.push('- **角色权限**：' + T(p.perm));
         if (meta.length) out.push(meta.join('\n') + '\n\n');
-        if (p.states.length && !only) {
-          out.push('**页面状态**\n\n' + table(['状态', '出现条件'], p.states.map(function (s) {
-            return [HTML ? '[' + s.label + '](#/p/' + p.id + '/' + s.id + ')' : s.label, T(s.when || '')];
+        var sts = only ? p.states.filter(function (s) { return D.chg(s, ver); }) : p.states;
+        if (sts.length) {
+          out.push('**页面状态**\n\n' + table(['状态', '出现条件'], sts.map(function (s) {
+            return [(HTML ? '[' + s.label + '](#/p/' + p.id + '/' + s.id + ')' : s.label) + (only ? B(s, ver) : ''), T(s.when || '')];
           })));
         }
         var fs = D.fnStates(p) || {};
-        var fns = p.fns.filter(function (f) { return only ? (D.chg(f, ver) || (f.fields || []).some(function (x) { return D.chg(x, ver); })) : !D.removed(f); });
+        var fns = p.fns.filter(function (f) { return only ? D.fnChanged(f, ver) : !D.removed(f); });
         if (fns.length) {
           out.push('**功能点**\n\n');
           fns.forEach(function (f) {
@@ -312,9 +321,9 @@
               })));
             }
             var sub = [];
-            var rl = D.items(f.rules).concat(D.items(f.auto)).filter(function (x) { return !D.removed(x); });
+            var rl = D.items(f.rules).concat(D.items(f.auto)).filter(sub_keep);
             if (rl.length) sub.push('**规则**\n\n' + rl.map(function (x) { return '- ' + T(x.text) + B(x, ver); }).join('\n'));
-            var er = D.items(f.errors).filter(function (x) { return !D.removed(x); });
+            var er = D.items(f.errors).filter(sub_keep);
             if (er.length) sub.push('**异常与边界**\n\n' + er.map(function (x) { return '- ' + T(x.text) + B(x, ver); }).join('\n'));
             if (f.empty) sub.push('**空数据**：' + T(f.empty));
             if (f.perm) sub.push('**权限**：' + T(f.perm));
@@ -333,20 +342,21 @@
     if (!anyPage) out.push(only ? '本版没有页面级变化。\n\n' : '尚未登记页面。\n\n');
 
     /* 公共组件 */
-    var groups = W.sharedGroups.filter(function (g) { return g.fns.some(function (f) { return only ? D.chg(f, ver) : !D.removed(f); }); });
+    var groups = W.sharedGroups.filter(function (g) { return g.fns.some(function (f) { return only ? D.fnChanged(f, ver) : !D.removed(f); }); });
     if (groups.length) {
       chapter('公共组件');
       groups.forEach(function (g) {
         var e = W.end(g.end);
         out.push(anchor('d-sh-' + g.id) + '### ' + g.title + (e ? '（' + e.name + '）' : '') + '\n\n' + (g.desc ? T(g.desc) + '\n\n' : ''));
-        g.fns.filter(function (f) { return only ? D.chg(f, ver) : !D.removed(f); }).forEach(function (f, i) {
+        g.fns.filter(function (f) { return only ? D.fnChanged(f, ver) : !D.removed(f); }).forEach(function (f, i) {
           out.push('##### ' + D.letter(i) + ' ' + f.name + ' ' + (HTML ? '<span class="fid">' + f.id + '</span>' : '`' + f.id + '`') + B(f, ver) + '\n\n');
           if (f.desc) out.push(T(f.desc) + '\n\n');
-          if (f.fields && f.fields.length) out.push(table(['字段', '类型', '必填', '规则与口径'], f.fields.map(function (x) { return [T(x.name || x.key), x.type || '', x.required ? '是' : '否', T(x.rule || '')]; })));
-          var rl = D.items(f.rules).concat(D.items(f.auto));
+          var sfl = (f.fields || []).filter(sub_keep);
+          if (sfl.length) out.push(table(['字段', '类型', '必填', '规则与口径'], sfl.map(function (x) { return [T(x.name || x.key) + B(x, ver), x.type || '', x.required ? '是' : '否', T(x.rule || '')]; })));
+          var rl = D.items(f.rules).concat(D.items(f.auto)).filter(sub_keep);
           if (rl.length) out.push(rl.map(function (x) { return '- ' + T(x.text) + B(x, ver); }).join('\n') + '\n\n');
-          var er = D.items(f.errors);
-          if (er.length) out.push('**异常与边界**\n\n' + er.map(function (x) { return '- ' + T(x.text); }).join('\n') + '\n\n');
+          var er = D.items(f.errors).filter(sub_keep);
+          if (er.length) out.push('**异常与边界**\n\n' + er.map(function (x) { return '- ' + T(x.text) + B(x, ver); }).join('\n') + '\n\n');
           if (f.src) out.push('<small>来源：' + T(joinSrc(f.src)) + '</small>\n\n');
         });
       });
@@ -453,9 +463,9 @@
   function csvSheet(cols, rows) {
     return [cols.join(',')].concat(rows.map(function (r) { return csvLine(cols, r); })).join('\r\n') + '\r\n';
   }
-  /* 待确认 / AI 假设 标记写进状态列；已确认留空 */
+  /* 待确认 / AI 假设 标记写进状态列；已确认留空。按语义判断（文字里的 [待确认] 也算），不用徽标去重的 ownStatus */
   function csvStatus(x) {
-    var s = ownStatus(x);
+    var s = D.status(x);
     return s === 'pending' ? '待确认' : s === 'assumed' ? 'AI 假设' : '';
   }
   /* 行对象：fns / fields / ac 三组，已删除（removed）的功能点和字段不导出 */
@@ -576,8 +586,8 @@
   };
   D.changelog = function () {
     var out = [];
-    function push(x, where, name, href) {
-      (x && x.changes || []).forEach(function (c) { if (!c.inherited) out.push({ ver: c.ver, type: c.type, where: where, name: name, note: c.note || '', href: href }); });
+    function push(x, where, name, href, sh) {
+      (x && x.changes || []).forEach(function (c) { if (!c.inherited) out.push({ ver: c.ver, type: c.type, where: where, name: name, note: c.note || '', href: href, shared: !!sh }); });
     }
     function short(t) { t = D.strip(t); return t.length > 60 ? t.slice(0, 60) + '…' : t; }
     var P = W.P;
@@ -600,7 +610,14 @@
       D.items(p.rules).forEach(function (r) { push(r, id + ' ' + p.title + ' · 页面规则', short(r.text), '#/p/' + id); });
       (p.states || []).forEach(function (s) { push(s, id + ' ' + p.title, '状态「' + s.label + '」', '#/p/' + id + '/' + s.id); });
     });
-    W.sharedGroups.forEach(function (g) { g.fns.forEach(function (f) { push(f, g.title, '公共组件「' + f.name + '」'); }); });
+    W.sharedGroups.forEach(function (g) {
+      g.fns.forEach(function (f) {
+        push(f, g.title, '公共组件「' + f.name + '」', null, 1);
+        D.items(f.rules).forEach(function (r) { push(r, g.title + ' · ' + f.name + ' · 规则', short(r.text), null, 1); });
+        D.items(f.errors).forEach(function (r) { push(r, g.title + ' · ' + f.name + ' · 异常', short(r.text), null, 1); });
+        (f.fields || []).forEach(function (x) { push(x, g.title + ' · ' + f.name, '字段「' + (x.name || x.key) + '」', null, 1); });
+      });
+    });
     D.items(W.P.rules).forEach(function (r) { push(r, '全局规则', short(r.text)); });
     return out;
   };

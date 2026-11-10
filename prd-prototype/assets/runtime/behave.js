@@ -33,13 +33,13 @@
   };
 
   /* 可筛选列表：h.rows('list', [rowHtml, ...], { fn, empty })。搜索框用 h.search(ph, { filter: 'list' }) 与之配对。
-     items 为空时直接返回 empty（由页面给出空状态）。 */
+     容器始终输出（带 data-fn、data-list），items 为空时容器里放 empty（由页面给出空状态）。 */
   h.rows = function (id, items, o) {
     o = o || {};
-    if (!items || !items.length) return o.empty || '';
-    return '<div data-fscope="' + h.esc(id) + '"' + h.attrs({ fn: o.fn }) + '>' +
-      items.map(function (x) { return '<div data-frow>' + x + '</div>'; }).join('') +
-      '<div data-fnomatch style="display:none">' + h.empty('没有匹配的结果', o.nomatch || '换个关键词试试') + '</div></div>';
+    var has = items && items.length;
+    return '<div data-fscope="' + h.esc(id) + '" data-list' + h.attrs({ fn: o.fn }) + '>' +
+      (has ? items.map(function (x) { return '<div data-frow>' + x + '</div>'; }).join('') +
+        '<div data-fnomatch style="display:none">' + h.empty('没有匹配的结果', o.nomatch || '换个关键词试试') + '</div>' : (o.empty || '')) + '</div>';
   };
 
   /* ---------- 校验 ---------- */
@@ -48,10 +48,21 @@
     var l = fld.querySelector('.lbl');
     return ((l ? l.textContent : '') || '').replace(/\*/g, '').trim() || '该字段';
   }
+  /* 一个字段里的控件分两类：输入框、下拉、多行文本各自独立；复选框、单选、开关、按钮组算一个选择组（选中任意一项即有值）。 */
+  var CHOICE = '.opt,.pill,.ck,.sw,input[type=checkbox],input[type=radio]';
+  function textCtls(fld) {
+    return Array.prototype.filter.call(fld.querySelectorAll('input:not([type=hidden]),textarea,select'), function (c) { return !c.matches(CHOICE); });
+  }
+  function choiceOn(fld) {
+    return Array.prototype.filter.call(fld.querySelectorAll(CHOICE), function (c) { return c.tagName === 'INPUT' ? c.checked : c.classList.contains('on'); });
+  }
+  /* 提交时的字段值：各控件的值依次拼接，不丢后面的控件；复选框、开关、按钮组只取选中的项 */
   function fldValue(fld) {
-    var c = fld.querySelector('input,textarea,select');
-    if (c) return String(c.value || '').trim();
-    return Array.prototype.map.call(fld.querySelectorAll('.opt.on,.pill.on'), function (t) { return t.textContent.trim(); }).join('、');
+    var out = textCtls(fld).map(function (c) { return String(c.value || '').trim(); });
+    choiceOn(fld).forEach(function (c) {
+      out.push(c.tagName === 'INPUT' ? (c.value && c.value !== 'on' ? c.value : '是') : (c.textContent.trim() || '是'));
+    });
+    return out.filter(Boolean).join('、');
   }
   function fldKey(fld) {
     var k = fld.getAttribute('data-field');
@@ -60,11 +71,15 @@
     return c ? c.getAttribute('data-field') : '';
   }
   /* 返回本字段的错误文字，没有错误返回空串 */
+  /* 必填按控件逐个判断：每个输入控件都要有值，有选择组时至少选中一项；长度只算文字输入，逐个控件判断 */
   function checkFld(fld) {
-    var v = fldValue(fld), min = fld.getAttribute('data-min'), max = fld.getAttribute('data-max');
-    if (fld.hasAttribute('data-req') && !v) return '请填写' + fldName(fld);
-    if (v && min != null && v.length < +min) return fldName(fld) + '至少 ' + min + ' 个字';
-    if (v && max != null && v.length > +max) return fldName(fld) + '最多 ' + max + ' 个字';
+    var min = fld.getAttribute('data-min'), max = fld.getAttribute('data-max');
+    var texts = textCtls(fld).map(function (c) { return String(c.value || '').trim(); });
+    var hasChoice = !!fld.querySelector(CHOICE);
+    if (fld.hasAttribute('data-req') && ((!texts.length && !hasChoice) || texts.some(function (v) { return !v; }) || (hasChoice && !choiceOn(fld).length))) return '请填写' + fldName(fld);
+    var lens = textCtls(fld).filter(function (c) { return c.tagName !== 'SELECT' && !/^(?:date|time|datetime-local|month|week|number)$/i.test(c.type || ''); }).map(function (c) { return String(c.value || '').trim(); }).filter(Boolean);
+    if (min != null && lens.some(function (v) { return v.length < +min; })) return fldName(fld) + '至少 ' + min + ' 个字';
+    if (max != null && lens.some(function (v) { return v.length > +max; })) return fldName(fld) + '最多 ' + max + ' 个字';
     return '';
   }
   function setErr(fld, msg) {
@@ -204,7 +219,11 @@
       var s = JSON.stringify(p.set || '');
       return s.indexOf(FAIL_KEY) >= 0 && s.indexOf('true') >= 0;
     });
+    /* 只对能配上的组件生成规则：提交按钮要找得到表单，搜索框要找得到列表（配不上的由构建检查报 BEHAVE） */
+    var root = (scope.closest && scope.closest('.ab')) || scope;
+    function one(sel) { return root.querySelectorAll(sel).length === 1; }
     Array.prototype.forEach.call(scope.querySelectorAll('[data-act="form-submit"]'), function (el) {
+      if (!one('.wb-form[data-form="' + attrVal(el.getAttribute('data-form')) + '"]')) return;
       add(el, '提交前先校验必填项和长度，不通过时在字段下方提示，不发出请求');
       add(el, '提交中按钮禁用，重复点击只提交一次');
       add(el, '提交失败时保留已填内容并提示，可直接重试' + (canFail ? '（可在数据场景中切换，演示首次提交失败）' : ''));
@@ -215,6 +234,7 @@
       add(el, acts.length ? '提交成功后' + acts.join('，') : '提交成功后刷新当前页面');
     });
     Array.prototype.forEach.call(scope.querySelectorAll('[data-filter]'), function (el) {
+      if (!one('[data-fscope="' + attrVal(el.getAttribute('data-filter')) + '"]')) return;
       add(el, '列表内容随输入实时筛选（匹配列表行中的文字），无匹配项时显示“没有匹配的结果”');
     });
     return out;

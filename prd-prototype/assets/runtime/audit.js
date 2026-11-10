@@ -9,7 +9,8 @@
   W.SUBMIT_WORDS = SUBMIT.source;
   var CONTROL = 'input,select,textarea,[data-ctl],[contenteditable=""],[contenteditable="true"]';
   var LAYER_ORDER = ['drawer', 'sheet', 'modal', 'popover', 'alert'];
-  var NATIVE_INTERACTIVE = '[data-go],[data-act],button,a,input,select,textarea,[data-ctl]';
+  /* 原生页面的可交互元素：组件属性 + 与托管模式相同的通用识别（onclick、role、summary、可编辑等），避免自定义控件漏扫 */
+  var NATIVE_INTERACTIVE = '[data-go],[data-act],button,a,input,select,textarea,[data-ctl],' + W.host.INTERACTIVE;
 
   function label(el) {
     var t = (el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || '').trim();
@@ -385,6 +386,19 @@
         var m = R.behave[p.id] = R.behave[p.id] || {};
         var l = m[x.fn] = m[x.fn] || [];
         if (l.indexOf(x.text) < 0) l.push(x.text);
+      });
+      /* 组件配对：提交按钮要找到唯一的 h.form，搜索框要找到唯一的 h.rows，提交成功的跳转目标要存在 */
+      function pairCount(sel, v) { return ab.querySelectorAll(sel + '="' + CSS.escape(v || '') + '"]').length; }
+      scope.querySelectorAll('[data-act="form-submit"]').forEach(function (el) {
+        var id = el.getAttribute('data-form'), n = pairCount('.wb-form[data-form', id);
+        if (n !== 1) E('BEHAVE', where + '：' + label(el) + ' 的 form「' + id + '」' + (n ? '对应了 ' + n + ' 个 h.form，表单 id 在页面内要唯一' : '找不到同 id 的 h.form'));
+        var go = el.getAttribute('data-ok-go'), ost = el.getAttribute('data-ok-st') || '';
+        if (go && !W.pages[go]) E('GO_TARGET', where + '：' + label(el) + ' 提交成功后跳转到不存在的页面「' + go + '」');
+        else if (go && ost && !W.pages[go].states.some(function (x) { return x.id === ost; })) E('GO_TARGET', where + '：' + label(el) + ' 提交成功后跳转到 ' + go + ' 不存在的状态「' + ost + '」');
+      });
+      scope.querySelectorAll('[data-filter]').forEach(function (el) {
+        var id = el.getAttribute('data-filter'), n = pairCount('[data-fscope', id);
+        if (n !== 1) E('BEHAVE', where + '：搜索框的 filter「' + id + '」' + (n ? '对应了 ' + n + ' 个 h.rows，列表 id 在页面内要唯一' : '找不到同 id 的 h.rows'));
       });
       /* 跳转目标 */
       scope.querySelectorAll('[data-go]').forEach(function (el) {

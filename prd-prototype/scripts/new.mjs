@@ -64,8 +64,9 @@ const ends = o.ends.map((s) => {
   let n = 2;
   while (used[eid]) eid = (device === 'mobile' ? 'm' : 'pc') + n++;
   used[eid] = 1;
-  const prefix = device === 'mobile' ? 'M' : 'P';
-  return { id: eid, device, name, pid: (Object.keys(used).length > 2 ? eid.toUpperCase() : prefix) + '01' };
+  /* 同类第一个端的首页为 P01 / M01，同类再加的端用端 ID 作前缀（PC201、M201），保证页面 ID 和文件名不重复 */
+  const first = eid === 'pc' || eid === 'm';
+  return { id: eid, device, name, pid: (first ? (device === 'mobile' ? 'M' : 'P') : eid.toUpperCase()) + '01', first };
 });
 const fill = (s, v) => s.replace(/\{\{(\w+)\}\}/g, (m, k) => (v[k] != null ? v[k] : m));
 const read = (f) => fs.readFileSync(path.join(TPL, f), 'utf8');
@@ -112,7 +113,8 @@ if (!o.host) {
         "  W.shared({ id: '" + e.id + "-shell', end: '" + e.id + "', title: '" + q(e.name) + " 底部导航', fns: [",
         "    { id: '" + e.id + "-tab', name: '底部导航', desc: '', src: '' }",
         '  ] });',
-        "  W.MTABS = { fn: '" + e.id + "-tab', items: [{ key: 'home', label: '首页', ic: 'home', go: '" + e.pid + "' }] };"
+        /* 第一个手机端用 W.MTABS（h.m 默认取它）；其他手机端各用一份，由页面模板显式传 tabs */
+        '  ' + (e.first ? 'W.MTABS' : 'W.ui.' + e.id + 'Tabs') + " = { fn: '" + e.id + "-tab', items: [{ key: 'home', label: '首页', ic: 'home', go: '" + e.pid + "' }] };"
       );
     }
   });
@@ -123,7 +125,7 @@ if (!o.host) {
 ends.forEach((e) => {
   const tpl = o.host ? 'page-host.js.tpl' : e.device === 'mobile' ? 'page-mobile.js.tpl' : 'page-pc.js.tpl';
   const f = path.join(prd, 'pages', e.pid + '-page.js');
-  fs.writeFileSync(f, fill(read(tpl), { pid: e.pid, end: e.id }));
+  fs.writeFileSync(f, fill(read(tpl), { pid: e.pid, end: e.id, tabs: e.first ? '' : ', tabs: W.ui.' + e.id + 'Tabs' }));
   created.push(f);
 });
 const gi = path.join(project, '.gitignore');

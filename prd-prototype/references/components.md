@@ -87,7 +87,8 @@ h.search('搜索单号或事由', { fn: 'search', field: 'kw', filter: 'list' })
 - 提交：先校验必填和长度，不通过不发请求。通过后按钮进入“提交中”并禁用，重复点击只提交一次。
 - 提交结果由演示数据顶层的 `submitFail` 决定。为 `true` 时，表单每次渲染后的第一次提交失败，失败保留已填内容，再点即成功。数据场景（`scenarios`）里设 `submitFail=true` 即可在界面上演示。
 - 成功时 `append` 指向的演示数据新增一条（值来自表单字段，表单没有的字段用 `appendDefaults: {...}` 补上），然后跳转到 `ok`。
-- 搜索：按列表行的文字实时筛选，没有匹配时显示 `nomatch` 的“没有匹配的结果”。`h.rows` 的 `items` 为空时直接显示 `empty`。
+- 搜索：按列表行的文字实时筛选，没有匹配时显示 `nomatch` 的“没有匹配的结果”。`h.rows` 是列表（带 `data-list`），所属功能点要写 `fields` 和 `empty`；`items` 为空时在列表位置显示 `empty`。`h.submit` 的 `form` 和 `h.search` 的 `filter` 找不到对应组件时构建报错（`BEHAVE`）。
+- 必填按控件判断：一个 `h.fld` 里的每个输入框、下拉都要有值；复选框、开关、按钮组算一组，至少选中一项。长度只算文字输入框。
 - `fields` 中输入字段的 `required` 必须和 `h.fld` 的 `req` 一致，否则构建报错（`FIELD_REQ`）。只检查放在 `h.fld` 里的控件。
 
 ### 列表与表格
@@ -133,16 +134,17 @@ render: function (c) {
 }
 ```
 
-### 表单页（含校验失败状态）
+### 表单页（校验、提交由组件实现）
 
 ```js
 render: function (c) {
-  var err = c.st === 'err';
   return h.m({ title: '发起请假', back: ['M01', 'list'],
-    body: h.fn('form', h.fld('事由', h.inp(err ? '' : '回老家', { area: 1, field: 'reason', bad: err }), { req: 1, err: err ? '请填写事由' : '' })),
-    foot: h.btn('提交', { k: 'pri', go: 'M02', st: 'confirm', fn: 'submit' }) });
+    body: h.form(h.fld('事由', h.inp('', { area: 1, field: 'reason', fn: 'form' }), { req: 1, min: 5, max: 200, field: 'reason', fn: 'form' }), { id: 'leave', fn: 'form' }),
+    foot: h.submit('提交', { form: 'leave', fn: 'submit', ok: { go: 'M01', st: 'list' }, append: 'list.items', appendName: '请假列表' }) });
 }
 ```
+
+不要用 `h.btn({ go })` 直接跳到“提交成功”，那样清空必填也能跳过去，画面和需求对不上。完整写法见 `tests/fixtures/behave/prd/` 和 `examples/course-mgmt/prd/`。
 
 ### 抽屉/弹窗叠在另一个页面上
 

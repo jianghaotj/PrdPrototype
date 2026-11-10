@@ -8,8 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import vm from 'node:vm';
-import { build, auditSingleFile } from './build.mjs';
-import { launch, fileUrl, sleep } from './lib/browser.mjs';
+import { build, auditSingleFile, inlineHost } from './build.mjs';
+import { launch, fileUrl, sleep, waitHost } from './lib/browser.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SKILL = path.resolve(here, '..');
@@ -61,7 +61,7 @@ ok(ex.ok && ex.report.stats.interactive > 40 && ex.report.stats.covered === ex.r
 ok(ex.ok && ex.report.stats.renders >= 15 * 4, '每个状态在默认数据和每个数据场景下都渲染过（' + (ex.report && ex.report.stats.renders) + ' 次）');
 const exHtml = ex.ok ? fs.readFileSync(ex.file, 'utf8') : '';
 ok(ex.ok && auditSingleFile(exHtml).length === 0 && !/<script[^>]+src=/i.test(exHtml) && !/<link[^>]+href=/i.test(exHtml), '交付文件为自包含单 HTML，无外部资源');
-ok(ex.ok && !/mermaid/i.test(exHtml.slice(0, 200000)) || exHtml.indexOf('Mermaid 11') < 0, '未使用流程图时不内嵌 Mermaid（体积 ' + Math.round((ex.size || 0) / 1024) + ' KB）');
+ok(ex.ok && !/Mermaid \d[\d.]*（MIT）/.test(exHtml), '未使用流程图时不内嵌 Mermaid（体积 ' + Math.round((ex.size || 0) / 1024) + ' KB）');
 ok(ex.ok && /id="prd-audit"[^>]*>\{/.test(exHtml), '检查结果写入交付文件');
 {
   const d = variant(EXAMPLE, [[P03, "desc: '选择要统计的自然月，切换后表格和合计同时刷新。',", "desc: '',"]]);
@@ -1779,6 +1779,222 @@ console.log('\n15. 按角色看原型');
   }
 }
 
+
+/* ---------- 16. 1.2.2 复核反例（每条对应一个已修的问题） ---------- */
+console.log('\n16. 1.2.2 复核反例');
+{
+  const BM01 = 'prd/pages/M01-list.js', BM02 = 'prd/pages/M02-apply.js', BPROD = 'prd/product.js';
+  /* 01 原生页面里自定义的可点元素（role=button + onclick）也要登记 */
+  const r01 = await build(variant(BEH, [[BM01, "body: '<div class=\"col g12\">' +", "body: '<div class=\"col g12\"><div role=\"button\" onclick=\"void 0\">额外操作</div>' +"]]), {});
+  ok(!r01.ok && r01.report.errors.some((e) => e.code === 'UNREGISTERED' && /额外操作/.test(e.msg)), '16-01 原生页面的 role=button / onclick 元素未登记 → UNREGISTERED', JSON.stringify(codes(r01)));
+  /* 02 h.submit 配不上表单、成功跳转目标不存在、搜索框配不上列表，都要拦住 */
+  const r02a = await build(variant(BEH, [[BM02, "h.submit('提交申请', { form: 'leave'", "h.submit('提交申请', { form: 'missing'"]]), { md: true });
+  ok(!r02a.ok && hasCode(r02a, 'BEHAVE'), '16-02 h.submit 的 form 找不到 h.form → BEHAVE', JSON.stringify(codes(r02a)));
+  const r02b = await build(variant(BEH, [[BM02, "ok: { go: 'M01', st: 'list' }", "ok: { go: 'P404' }"]]), {});
+  ok(!r02b.ok && r02b.report.errors.some((e) => e.code === 'GO_TARGET' && /P404/.test(e.msg)), '16-02 h.submit 成功后跳到不存在的页面 → GO_TARGET', JSON.stringify(codes(r02b)));
+  const r02c = await build(variant(BEH, [[BM01, "filter: 'list' })", "filter: 'nolist' })"]]), {});
+  ok(!r02c.ok && hasCode(r02c, 'BEHAVE'), '16-02 h.search 的 filter 找不到 h.rows → BEHAVE', JSON.stringify(codes(r02c)));
+  /* 03 h.rows 是列表：有数据时要求 empty；没有数据时功能点仍算出现 */
+  const r03a = await build(variant(BEH, [[BM01, "      empty: '还没有请假单时显示“暂无请假单”，提示点击下方按钮发起请假',\n", '']]), {});
+  ok(!r03a.ok && hasCode(r03a, 'LIST_EMPTY'), '16-03 h.rows 所属功能点没写 empty → LIST_EMPTY', JSON.stringify(codes(r03a)));
+  const r03b = await build(variant(BEH, [[BPROD, 'list: { items: [', 'list: { items: [] }, unused: { items: ['], [BM01, "h.rows('list', rows, { fn: 'search'", "h.rows('list', rows, { fn: 'rows'"], [BM01, "    {\n      id: 'create', name: '新建请假',", "    {\n      id: 'rows', name: '请假单列表', desc: '按提交时间倒序列出本人的请假单，每行显示单号、类型和事由。',\n      fields: [{ key: 'no', name: '单号', type: '文本', rule: '系统生成' }], empty: '没有请假单时显示“暂无请假单”', src: '夹具'\n    },\n    {\n      id: 'create', name: '新建请假',"]]), {});
+  ok(r03b.ok && !hasCode(r03b, 'FN_UNUSED'), '16-03 h.rows 没有数据时功能点仍绑定在列表上（不误报 FN_UNUSED）', JSON.stringify(codes(r03b)));
+  /* 04 同类端脚手架：页面不互相覆盖，每个手机端用自己的底部导航 */
+  const sc2 = path.join(TMP, 'scaffold-pc2');
+  execFileSync(process.execPath, [path.join(here, 'new.mjs'), sc2, '--name', '两个后台', '--end', 'pc:甲', '--end', 'pc:乙'], { stdio: 'pipe' });
+  ok(fs.readdirSync(path.join(sc2, 'prd', 'pages')).length === 2, '16-04 两个 PC 端生成两个首页模板，不互相覆盖', fs.readdirSync(path.join(sc2, 'prd', 'pages')).join(','));
+  const sc3 = path.join(TMP, 'scaffold-m2');
+  execFileSync(process.execPath, [path.join(here, 'new.mjs'), sc3, '--name', '两个手机端', '--end', 'pc:后台', '--end', 'mobile:甲', '--end', 'mobile:乙'], { stdio: 'pipe' });
+  const r04 = await build(sc3, {});
+  ok(fs.readdirSync(path.join(sc3, 'prd', 'pages')).length === 3 && !r04.report.errors.some((e) => /FN_UNKNOWN|FN_UNUSED/.test(e.code) && /tab|底部导航/.test(e.msg)), '16-04 两个手机端各用自己的底部导航（不报 FN_UNKNOWN / FN_UNUSED）', JSON.stringify(r04.report.errors.filter((e) => /FN_U/.test(e.code)).slice(0, 3)));
+
+  /* 05 复选框、开关参与必填校验；08 CSV 状态按文字里的 [待确认] 判断 */
+  const fx05 = await build(variant(BEH, [
+    [BM02, "fields: [{ key: 'reason', name: '请假事由', type: '文本', required: true, rule: '5–200 字' }],", "fields: [{ key: 'reason', name: '请假事由', type: '文本', required: true, rule: '5–200 字' }, { key: 'agree', name: '承诺', type: '布尔', required: true, rule: '勾选后才能提交' }, { key: 'notify', name: '通知主管', type: '布尔', required: true, rule: '开启后才能提交' }],"],
+    [BM02, "{ req: 1, min: 5, max: 200, fn: 'form', field: 'reason' }),", "{ req: 1, min: 5, max: 200, fn: 'form', field: 'reason' }) + h.fld('承诺', h.ck('信息属实', true, { field: 'agree', fn: 'form' }), { req: 1, fn: 'form', field: 'agree' }) + h.fld('通知主管', h.sw(true, { field: 'notify', fn: 'form' }), { req: 1, fn: 'form', field: 'notify' }),"],
+    [BM01, "desc: '点击“新建请假”进入发起页面。',", "desc: '点击“新建请假”进入发起页面。[待确认]',"]
+  ]), { csv: true });
+  ok(fx05.ok, '16-05 复选框、开关必填夹具构建通过', fx05.ok ? '' : JSON.stringify(fx05.report.errors.slice(0, 3)));
+  const fnCsv = fx05.ok ? fs.readFileSync(fx05.csvFiles[0], 'utf8') : '';
+  ok(/M01,[^\n]*,create,新建请假,[^\n]*,待确认\r?\n/.test(fnCsv), '16-08 desc 里写了 [待确认] 的功能点，CSV 状态列为“待确认”', fnCsv.split('\n').filter((l) => /create/.test(l)).join(' | '));
+  /* 08 命令行 Markdown 用最终报告：端写 online: true 时标“需联网” */
+  const onMd = await build(variant(HOSTFX, [['existing/crm.html', '</head>', '<script src="https://cdn.example.com/lib.js"></script>\n</head>'], [PROD, "host: '../existing/crm.html', width", "host: '../existing/crm.html', online: true, width"]]), { md: true });
+  ok(onMd.ok && /需联网/.test(fs.readFileSync(onMd.mdFile, 'utf8')), '16-08 命令行导出的 Markdown 也标“需联网”，与交付 HTML 一致');
+
+  /* 07 只改了状态或功能点里的规则，也算本版变化 */
+  const r07 = await build(variant(BEH, [
+    [BPROD, "releases: [{ id: 'V1.0', date: '2026-11-04', summary: '回归夹具' }],", "releases: [{ id: 'V1.0', date: '2026-11-04', summary: '回归夹具' }, { id: 'V1.1', date: '2026-11-11', summary: '调整' }],"],
+    [BM01, "{ id: 'list', label: '列表', when: '进入页面时，演示数据中已有请假单' }", "{ id: 'list', label: '列表', when: '进入页面时，演示数据中已有请假单，按提交时间倒序', changes: [{ ver: 'V1.1', type: 'modified', note: '补充排序' }] }"],
+    [BM02, "errors: ['必填或长度不通过：不发出请求，字段下方提示原因', '提交失败：保留已填内容，提示后可重试'],", "errors: ['必填或长度不通过：不发出请求，字段下方提示原因', { text: '提交失败：保留已填内容，提示后可重试，最多重试 3 次', changes: [{ ver: 'V1.1', type: 'modified', note: '限制重试次数' }] }],"]
+  ]), {});
+
+  /* 06 角色过滤：公共组件的画板元素、托管页面同选择器按 text 区分 */
+  const shDir = path.join(TMP, 'role-shared');
+  fs.mkdirSync(path.join(shDir, 'prd', 'pages'), { recursive: true });
+  fs.writeFileSync(path.join(shDir, 'prd', 'product.js'), `W.product({
+  id: 'role-shared', name: '公共组件角色', date: '2026-11-11',
+  releases: [{ id: 'V1.0', date: '2026-11-11', summary: '首版' }],
+  background: '验证公共组件的功能点按角色过滤时，画板上的元素同样隐藏。',
+  scope: { out: ['不做其他端'] },
+  roles: [{ id: 'admin', name: '管理员' }, { id: 'secretary', name: '秘书' }],
+  ends: [{ id: 'pc', name: 'PC', device: 'pc', home: 'P01' }]
+});
+`);
+  fs.writeFileSync(path.join(shDir, 'prd', 'kit.js'), `W.shared({ id: 'nav', end: 'pc', title: '导航', fns: [
+  { id: 'nav-admin', name: '管理入口', desc: '仅管理员可见：点击后提示进入管理后台。', src: '测试', roles: ['admin'] }
+] });
+`);
+  fs.writeFileSync(path.join(shDir, 'prd', 'pages', 'P01.js'), `W.page({
+  id: 'P01', end: 'pc', title: '首页', goal: '验证公共导航按角色隐藏',
+  states: [{ id: 's1', label: '默认', when: '打开本页时显示导航' }],
+  fns: [],
+  render: function (c) { return '<div style="padding:24px"><div data-fn="nav-admin"><a class="lnk" data-act="toast" data-msg="演示">管理</a></div></div>'; }
+});
+`);
+  const shB = await build(shDir, {});
+  const hostTxt = await build(variant(HOSTFX, [['prd/pages/C01-customers.js', "id: 'create', name: '新建客户入口', sel: '#btn-new',", "id: 'create', name: '新建客户入口', sel: 'button.btn', text: '新建客户', roles: ['leader'],"]]), {});
+  /* 12 截图等托管状态真正进入完成；进入失败时 snap 非零退出 */
+  const slow = await build(variant(HOSTFX, [['prd/pages/C01-customers.js', "enter: [{ click: '#btn-new' }]", "enter: [{ wait: 2500 }, { click: '#btn-new' }]"]]), {});
+  const badEnter = await build(variant(HOSTFX, [['prd/pages/C01-customers.js', "enter: [{ click: '#btn-new' }]", "enter: [{ click: '#nope' }]"]]), {});
+  const bq = await launch();
+  try {
+    const pg = await bq.newPage({ width: 1600, height: 1000 });
+    const open = async (file, hash) => { await pg.goto('about:blank'); await pg.goto(fileUrl(file) + (hash || '')); await pg.waitFor('window.__PRD_READY === true', 20000); await sleep(400); };
+    if (fx05.ok) {
+      await open(fx05.file, '#/p/M02/form');
+      const base = await pg.evaluate('W.get("list.items").length');
+      const fill = '(function(){var t=document.querySelector("#ab textarea");t.value="家中有事需回老家处理";t.dispatchEvent(new Event("input",{bubbles:true}));document.querySelector("#ab button[data-form]").click();return 1})()';
+      await pg.evaluate(fill);
+      await sleep(1100);
+      ok((await pg.evaluate('W.get("list.items").length')) === base + 1 && (await pg.evaluate('W.get("list.items")[0].agree')) === '信息属实', '16-05 已勾选的必填复选框、已开启的开关通过校验，提交写入勾选的值');
+      await open(fx05.file, '#/p/M02/form');
+      await pg.evaluate('document.querySelector("#ab .ck").click(); 1');
+      await pg.evaluate(fill);
+      await sleep(900);
+      ok(/请填写承诺/.test(await pg.evaluate('document.querySelector("#ab").textContent')) && (await pg.evaluate('W.get("list.items").length')) === base + 1, '16-05 取消勾选必填复选框后提交被拦，提示“请填写承诺”');
+    }
+    if (r07.ok) {
+      await open(r07.file, '#/doc');
+      const v = JSON.parse(await pg.evaluate('JSON.stringify({ m01: W.doc.pageChanged(W.pages.M01), m02: W.doc.pageChanged(W.pages.M02), md: W.doc.markdown({ html: false, changesOnly: true }) })'));
+      ok(v.m01 && v.m02 && /已有请假单，按提交时间倒序/.test(v.md) && /最多重试 3 次/.test(v.md) && !/本版没有页面级变化/.test(v.md), '16-07 只改了状态或功能点的异常，也算页面变化，“只看本版变化”列出改后的正文', JSON.stringify({ m01: v.m01, m02: v.m02 }));
+    } else ok(false, '16-07 版本变化夹具构建失败', JSON.stringify(r07.report.errors.slice(0, 3)));
+    if (shB.ok) {
+      await open(shB.file, '#/p/P01/s1');
+      await pg.evaluate("W.setRole('secretary')");
+      await sleep(400);
+      ok(await pg.evaluate('getComputedStyle(document.querySelector(\'#ab [data-fn="nav-admin"]\')).display === "none"'), '16-06 公共组件的功能点按角色过滤时，画板元素也隐藏');
+    } else ok(false, '16-06 公共组件角色夹具构建失败', JSON.stringify(shB.report.errors.slice(0, 3)));
+    if (hostTxt.ok) {
+      await open(hostTxt.file, '#/p/C01/list');
+      await pg.evaluate("W.setRole('sales')");
+      await sleep(600);
+      const vis = JSON.parse(await pg.evaluate('(function(){var d=document.getElementById("hostf").contentDocument;var s=function(id){return d.defaultView.getComputedStyle(d.getElementById(id)).display};return JSON.stringify({ add: s("btn-new"), exp: s("btn-export") })})()'));
+      ok(vis.add === 'none' && vis.exp !== 'none', '16-06 托管页面 sel 相同、用 text 区分时，只隐藏文字匹配的元素', JSON.stringify(vis));
+    } else ok(false, '16-06 托管 text 夹具构建失败', JSON.stringify(hostTxt.report.errors.slice(0, 3)));
+    if (slow.ok) {
+      await open(slow.file, '');
+      await pg.evaluate('location.hash = "#/p/C01/new"; 1');
+      await sleep(450);
+      const err = await waitHost(pg);
+      ok(!err && await pg.evaluate('(function(){var d=document.getElementById("hostf").contentDocument;var m=d.getElementById("modal-new");return d.defaultView.getComputedStyle(m).display !== "none"})()'), '16-12 waitHost 等到进入步骤（含 2.5 秒等待）执行完，再截图', err);
+    } else ok(false, '16-12 慢进入夹具构建失败', JSON.stringify(slow.report.errors.slice(0, 3)));
+  } finally { await bq.close(); }
+  let snapCode = 0, snapOut = '';
+  try { snapOut = execFileSync(process.execPath, [path.join(here, 'snap.mjs'), badEnter.failed, '--only', '--view', '#/p/C01/new', '--out', path.join(TMP, 'snap-bad')], { encoding: 'utf8', timeout: 120000 }); }
+  catch (e) { snapCode = e.status; snapOut = String(e.stdout || ''); }
+  ok(!badEnter.ok && snapCode === 1 && /进入状态失败/.test(snapOut), '16-12 托管状态进入失败时 snap.mjs 报出原因并非零退出', 'exit=' + snapCode + ' ' + snapOut.slice(0, 200));
+
+  /* 10 托管 CSS 内联保留 media 条件；带 layer() 的导入无法保持，明确报错 */
+  const cssDir = path.join(TMP, 'host-css');
+  fs.mkdirSync(cssDir, { recursive: true });
+  fs.writeFileSync(path.join(cssDir, 'p.css'), 'body{color:red}');
+  fs.writeFileSync(path.join(cssDir, 'wide.css'), '.w{width:1px}');
+  fs.writeFileSync(path.join(cssDir, 'a.html'), '<html><head><link rel="stylesheet" href="p.css" media="print"><style>@import "wide.css" screen and (min-width:1800px);</style></head><body><div>x</div></body></html>');
+  fs.writeFileSync(path.join(cssDir, 'b.html'), '<html><head><style>@import "wide.css" layer(base);</style></head><body><div>x</div></body></html>');
+  const ca = inlineHost(path.join(cssDir, 'a.html')), cb = inlineHost(path.join(cssDir, 'b.html'));
+  ok(/<style media="print">\s*body\{color:red\}/.test(ca.html) && /@media screen and \(min-width:1800px\) \{\s*\.w\{width:1px\}\s*\}/.test(ca.html) && !(ca.bad || []).length, '16-10 内联本地样式时保留 link 的 media 和 @import 的媒体条件');
+  ok((cb.bad || []).length === 1 && /layer\(base\)/.test(cb.bad[0]), '16-10 带 layer() 的 @import 无法原样内联，给出错误');
+
+  /* 11 刷新范围基线时第二次构建抛异常：恢复原来的 scope.json（这里原来没有，应删除） */
+  const d11 = variant(BEH, [[BPROD, 'W.product({', "var __n = (Math.__kv11 = (Math.__kv11 || 0) + 1);\nW.product({\n  out: __n > 1 && typeof document === 'undefined' ? 123 : undefined,"]]);
+  let threw = null;
+  try { await build(d11, { scopeBaseline: true }); } catch (e) { threw = e; }
+  ok(!!threw && !fs.existsSync(path.join(d11, 'prd', 'scope.json')), '16-11 --scope-baseline 第二次构建抛异常时恢复原基线（不留下新写的 scope.json）', threw ? String(threw.message).slice(0, 120) : '没有抛异常');
+}
+
+/* ---------- 17. 复审 r1 反例 ---------- */
+console.log('\n17. 复审 r1 反例');
+{
+  const BM01 = 'prd/pages/M01-list.js', BM02 = 'prd/pages/M02-apply.js', BPROD = 'prd/product.js';
+  /* r1-1 一个字段里有日期和时段：日期为空、时段已选，必填仍要拦住 */
+  const fx1 = await build(variant(BEH, [
+    [BM02, "fields: [{ key: 'reason', name: '请假事由', type: '文本', required: true, rule: '5–200 字' }],", "fields: [{ key: 'reason', name: '请假事由', type: '文本', required: true, rule: '5–200 字' }, { key: 'start', name: '开始时间', type: '日期', required: true, rule: '日期加上午或下午' }],"],
+    [BM02, "{ req: 1, min: 5, max: 200, fn: 'form', field: 'reason' }),", "{ req: 1, min: 5, max: 200, fn: 'form', field: 'reason' }) + h.fld('开始时间', h.inp('', { date: 1, e: 1, field: 'start', fn: 'form' }) + h.sel('上午', ['上午', '下午'], { field: 'start', fn: 'form' }), { req: 1, fn: 'form', field: 'start' }),"]
+  ]), {});
+  ok(fx1.ok, 'r1-1 日期加时段的复合字段夹具构建通过', fx1.ok ? '' : JSON.stringify(fx1.report.errors.slice(0, 3)));
+
+  /* r1-2 托管页面：页面功能点（仅 leader）和公共功能点（所有人）的选择器重叠，元素按归属过滤 */
+  const ovDir = variant(HOSTFX, [['prd/pages/C01-customers.js', "id: 'create', name: '新建客户入口', sel: '#btn-new',", "id: 'create', name: '新建客户入口', sel: '#btn-new', roles: ['leader'],"]]);
+  fs.writeFileSync(path.join(ovDir, 'prd', 'shared.js'), "W.shared({ id: 'tb', end: 'web', title: '工具栏', fns: [\n  { id: 'toolbar', name: '列表工具栏按钮', sel: '.toolbar button', desc: '列表上方的工具栏按钮，所有角色都能看到工具栏。', src: '测试' }\n] });\n");
+  const ov = await build(ovDir, {});
+
+  /* r1-3 只看本版变化：本版移除的规则要列出正文；公共组件的字段、异常变化要有标记并进入变更记录 */
+  const r3 = await build(variant(BEH, [
+    [BPROD, "releases: [{ id: 'V1.0', date: '2026-11-04', summary: '回归夹具' }],", "releases: [{ id: 'V1.0', date: '2026-11-04', summary: '回归夹具' }, { id: 'V1.1', date: '2026-11-11', summary: '调整' }],"],
+    [BPROD, "W.product({", "W.shared({ id: 'tip', end: 'm', title: '顶部提示', fns: [{ id: 'tip', name: '顶部提示条', desc: '页面顶部显示一条固定提示，说明请假规则。', src: '夹具',\n  fields: [{ key: 'msg', name: '提示文字', type: '文本', rule: '最多 30 字，超出截断', changes: [{ ver: 'V1.1', type: 'modified', note: '上限改为 30 字' }] }],\n  errors: [{ text: '提示文字取不到时整条隐藏', changes: [{ ver: 'V1.1', type: 'added' }] }] }] });\nW.product({"],
+    [BM01, "body: '<div class=\"col g12\">' +", "body: '<div class=\"col g12\"><div data-fn=\"tip\">请假需提前一天提交</div>' +"],
+    [BM01, "      empty: '还没有请假单时显示“暂无请假单”，提示点击下方按钮发起请假',", "      empty: '还没有请假单时显示“暂无请假单”，提示点击下方按钮发起请假',\n      rules: [{ text: '搜索结果按单号排序展示', changes: [{ ver: 'V1.1', type: 'removed', note: '改为按提交时间' }] }],"]
+  ]), {});
+
+  const bq = await launch();
+  try {
+    const pg = await bq.newPage({ width: 1600, height: 1000 });
+    const open = async (file, hash) => { await pg.goto('about:blank'); await pg.goto(fileUrl(file) + (hash || '')); await pg.waitFor('window.__PRD_READY === true', 20000); await sleep(400); };
+    if (fx1.ok) {
+      await open(fx1.file, '#/p/M02/form');
+      const base = await pg.evaluate('W.get("list.items").length');
+      await pg.evaluate('(function(){var t=document.querySelector("#ab textarea");t.value="家中有事需回老家处理";t.dispatchEvent(new Event("input",{bubbles:true}));document.querySelector("#ab button[data-form]").click();return 1})()');
+      await sleep(1100);
+      ok(/请填写开始时间/.test(await pg.evaluate('document.querySelector("#ab").textContent')) && (await pg.evaluate('W.get("list.items").length')) === base, 'r1-1 日期为空、时段已选时提交被拦，提示“请填写开始时间”，不写入数据');
+      await open(fx1.file, '#/p/M02/form');
+      const base2 = await pg.evaluate('W.get("list.items").length');
+      await pg.evaluate('(function(){var t=document.querySelector("#ab textarea");t.value="家中有事需回老家处理";var d=document.querySelector("#ab input[type=date]");d.value="2026-11-20";d.dispatchEvent(new Event("input",{bubbles:true}));document.querySelector("#ab button[data-form]").click();return 1})()');
+      await sleep(1100);
+      ok((await pg.evaluate('W.get("list.items").length')) === base2 + 1 && (await pg.evaluate('W.get("list.items")[0].start')) === '2026-11-20、上午', 'r1-1 补上日期后提交成功，字段值包含日期和时段');
+    }
+    if (ov.ok) {
+      const btn = '(function(){var d=document.getElementById("hostf").contentDocument;return d.defaultView.getComputedStyle(d.getElementById("btn-new")).display})()';
+      await open(ov.file, '#/p/C01/list');
+      await pg.evaluate("W.setRole('sales')");
+      await sleep(600);
+      const hid = await pg.evaluate(btn);
+      await pg.evaluate("W.setRole('all')");
+      await sleep(600);
+      const back = await pg.evaluate(btn);
+      ok(hid === 'none' && back !== 'none', 'r1-2 选择器重叠时按归属过滤：销售角色下“新建客户”隐藏，不被公共功能点恢复；切回全部角色后恢复', JSON.stringify({ hid, back }));
+    } else ok(false, 'r1-2 选择器重叠夹具构建失败', JSON.stringify(ov.report.errors.slice(0, 3)));
+    if (r3.ok) {
+      await open(r3.file, '#/doc');
+      const v = JSON.parse(await pg.evaluate('JSON.stringify({ only: W.doc.markdown({ html: false, changesOnly: true }), full: W.doc.markdown({ html: false }) })'));
+      ok(/搜索结果按单号排序展示【V1\.1 移除】/.test(v.only), 'r1-3 只看本版变化时列出本版移除的规则正文和“移除”标记');
+      ok(/提示文字[^\n]*【V1\.1 修改】/.test(v.only) && /提示文字取不到时整条隐藏【V1\.1 新增】/.test(v.only), 'r1-3 公共组件的字段、异常变化在本版变化里带标记');
+      ok(/### V1\.1 变化明细[\s\S]*顶部提示 · 顶部提示条[\s\S]*字段「提示文字」/.test(v.full) && !/本版变化 · 产品级[\s\S]{0,200}字段「提示文字」/.test(v.only), 'r1-3 公共组件的字段变化进入变更记录，且不算作产品级变化');
+      await open(r3.file, '#/p/M01/list');
+      await pg.evaluate('document.querySelector("[data-tool=chg]").click(); 1');
+      await sleep(500);
+      ok(await pg.evaluate('(function(){var c=document.querySelector(\'#right .fc[data-fid="S:tip"]\');return !!c && !c.classList.contains("fold")})()'), 'r1-3 本版变化视图里，有变化的公共组件卡片默认展开');
+    } else ok(false, 'r1-3 本版变化夹具构建失败', JSON.stringify(r3.report.errors.slice(0, 3)));
+  } finally { await bq.close(); }
+
+  /* r1-4 snap --click 切到慢进入的托管状态：等进入完成后再截；match 不成立时算失败 */
+  const slow = await build(variant(HOSTFX, [['prd/pages/C01-customers.js', "enter: [{ click: '#btn-new' }]", "enter: [{ wait: 2500 }, { click: '#btn-new' }]"]]), {});
+  const runSnap = (file, args, out) => { try { return { code: 0, out: execFileSync(process.execPath, [path.join(here, 'snap.mjs'), file, '--only', ...args, '--out', path.join(TMP, out)], { encoding: 'utf8', timeout: 120000 }) }; } catch (e) { return { code: e.status, out: String(e.stdout || '') }; } };
+  const sc = slow.ok ? runSnap(slow.file, ['--view', '#/p/C01/list', '--click', '#right .chip[data-nav="C01|new"]'], 'snap-click') : { code: -1, out: '' };
+  ok(sc.code === 0 && /C01 \/ new · 圆点 \d+ · 当前可见功能点 1(?!\d)(?!（另有)/.test(sc.out), 'r1-4 --click 切到需要 2.5 秒进入的弹窗状态：截图时弹窗已打开（只剩弹窗里的功能点）', sc.out.slice(0, 300));
+  const noMatch = await build(variant(HOSTFX, [['prd/pages/C01-customers.js', "match: '#modal-new' }", "match: '#modal-nope' }"]]), {});
+  const sm = runSnap(noMatch.failed, ['--view', '#/p/C01/new'], 'snap-nomatch');
+  ok(!noMatch.ok && sm.code === 1 && /进入状态失败[^\n]*match/.test(sm.out), 'r1-4 进入步骤执行完但 match 不成立：snap.mjs 报出原因并非零退出', 'exit=' + sm.code + ' ' + sm.out.slice(0, 200));
+}
 
 console.log('\n结果：' + pass + ' 通过，' + failN + ' 失败');
 if (failN) console.log('失败项：\n  - ' + fails.join('\n  - '));

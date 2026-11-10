@@ -31,14 +31,15 @@
 | `FN_DUP` | 功能点 ID 在本页重复，或与本端公共组件重名 | 改成唯一 ID |
 | `FN_ROOT` | 功能点绑定在整个页面外壳上 | 绑定到具体区域 |
 | `FN_REMOVED` | 标记为 `removed` 的功能点还在原型里 | 从 render 中删除 |
-| `GO_TARGET` | `data-go` 跳转到不存在的页面或状态 | 改正目标 |
+| `GO_TARGET` | `data-go` 或 `h.submit` 的 `ok` 跳转到不存在的页面或状态 | 改正目标 |
+| `BEHAVE` | `h.submit` 的 `form` 找不到唯一的 `h.form`，或 `h.search` 的 `filter` 找不到唯一的 `h.rows` | 两边的 id 写成一致，且在页面内唯一 |
 | `FLOW` | 流程步骤引用的页面或状态不存在 | 改正 |
 | `PRESET` | `set` 引用了未登记的数据场景 | 在 `scenarios.presets` 中登记 |
 | `RELEASE` | `changes` 引用了未登记的版本，或修改/移除没写 `note` | 按提示修改 |
 | `RENDER` | 页面 `render` 或 `after` 抛出异常 | 修复代码；常见原因是读了不存在的演示数据 |
 | `JS` | 浏览器运行时报错 | 打开 failed 文件看控制台 |
 | `BOOT` | 注册阶段出错：页面 ID 重复、end 未声明 | 按提示修改 |
-| `HOST` | 托管配置错误：找不到原型、`ignore` 没写原因 | 按提示修改 |
+| `HOST` | 托管配置错误：找不到原型、`ignore` 没写原因；或本地样式的 `@import` 带 `layer()` / `supports()`，内联后无法保持原样 | 按提示修改 |
 | `HOST_SEL` | 托管页面的功能点没有 `sel` | 给功能点补上 `sel`（CSS 选择器），绑定到原型里的对应元素 |
 | `HOST_ENTER` | 进入步骤执行失败，或执行后 `match` 不成立 | 用 `probe-host.mjs --steps` 复现并修正 |
 | `IMG_SRC` | 需求文字里的图片引用了本地路径或网址 | 改成 `data:image/...;base64,` 内嵌 |

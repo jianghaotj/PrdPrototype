@@ -5,7 +5,7 @@
 //   --chg 打开“本版变化”视图后再截图（多版本时）。每次运行会先清掉输出目录里上次生成的截图。
 import fs from 'node:fs';
 import path from 'node:path';
-import { launch, fileUrl, sleep } from './lib/browser.mjs';
+import { launch, fileUrl, sleep, waitHost } from './lib/browser.mjs';
 
 const argv = process.argv.slice(2);
 const o = { views: [], clicks: [], width: 1600, height: 1000 };
@@ -52,11 +52,15 @@ try {
     const v = views[i];
     await page.evaluate('location.hash = ' + JSON.stringify(v) + ';1');
     await sleep(450);
-    try { await page.waitFor('!document.querySelector("#hostf") || (document.querySelector("#hostf").contentDocument && document.querySelector("#hostf").contentDocument.readyState === "complete")', 8000); } catch (e) {}
+    const hostErr = await waitHost(page);
+    if (hostErr) { failed = true; console.log(v + ' 托管原型进入状态失败：' + hostErr); }
     await sleep(v.indexOf('/p/') >= 0 || v.indexOf('/end/') >= 0 ? 700 : 200);
     for (const c of o.clicks) {
       await page.evaluate('(function(){var el=document.querySelector(' + JSON.stringify(c) + ');if(el)el.click();return !!el})()');
       await sleep(500);
+      /* 点击可能切到另一个托管状态，重新等它进入完成 */
+      const clickErr = await waitHost(page);
+      if (clickErr) { failed = true; console.log(v + ' 点击 ' + c + ' 后托管原型进入状态失败：' + clickErr); }
     }
     const diag = await page.evaluate('W.viewerDiag()');
     const name = String(i + 1).padStart(2, '0') + '-' + v.replace(/^#\/?/, '').replace(/[^\w\u4e00-\u9fa5-]+/g, '_').slice(0, 60) + '.png';

@@ -11,6 +11,6 @@ W.page({
     // { id: 'list', name: '', desc: '', fields: [], empty: '', src: '' }
   ],
   render: function (c) {
-    return h.m({ title: '页面标题', tab: 'home', body: '' });
+    return h.m({ title: '页面标题', tab: 'home'{{tabs}}, body: '' });
   }
 });

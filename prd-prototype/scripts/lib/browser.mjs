@@ -206,3 +206,9 @@ export async function launch() {
 }
 
 export function fileUrl(p) { return pathToFileURL(path.resolve(p)).href; }
+/* 等托管原型进入当前状态（enter 步骤全部执行完、match 成立）。返回失败原因，成功或不是托管页面时返回空串。截图前用。
+   1.2.2 之前构建的 HTML 没有 __PRD_HOST，退回到只等 iframe 加载完成（重新构建后才能等到进入完成） */
+export async function waitHost(page, timeout = 30000) {
+  try { await page.waitFor('!document.querySelector("#hostf") || (window.__PRD_HOST ? !window.__PRD_HOST.busy : !!(document.querySelector("#hostf").contentDocument && document.querySelector("#hostf").contentDocument.readyState === "complete"))', timeout); } catch (e) { return '进入状态超时（' + timeout / 1000 + ' 秒）'; }
+  return await page.evaluate('(document.querySelector("#hostf") && window.__PRD_HOST && window.__PRD_HOST.error) || ""');
+}

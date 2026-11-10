@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
-import { launch, fileUrl, sleep } from './lib/browser.mjs';
+import { launch, fileUrl, sleep, waitHost } from './lib/browser.mjs';
 import { HINTS } from './lib/hints.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -80,19 +80,26 @@ function attr(tag, name) { const m = new RegExp('\\b' + name + '\\s*=\\s*(["\'])
 function localPath(base, u) { try { return path.resolve(base, decodeURI(u.split(/[?#]/)[0])); } catch (e) { return path.resolve(base, u.split(/[?#]/)[0]); } }
 /* 处理 CSS 中的 @import 和 url()。
  * @import 远程样式交给 onStyle（按样式阻止或放行）；@import 本地文件则内联进来，保证交付仍是单文件。
+ * 带媒体条件的本地 @import（如 screen and (min-width:1800px)）内联后包进同样条件的 @media；
+ * 带 layer() / supports() 的无法原样保持，交给 onBad 报错。
  * url() 里的远程地址只作为图片、字体提醒，不在这里阻止。 */
-function inlineCssUrls(css, base, warns, src, remote, onStyle, depth = 0) {
-  const re = /@import\s+(?:url\(\s*(["']?)([^"')]+)\1\s*\)|(["'])([^"']+)\3)[^;]*;|url\(\s*(["']?)([^"')]+)\5\s*\)/gi;
-  return css.replace(re, (m, q1, u1, q3, u3, q5, u5) => {
+function inlineCssUrls(css, base, warns, src, remote, onStyle, onBad, depth = 0) {
+  const re = /@import\s+(?:url\(\s*(["']?)([^"')]+)\1\s*\)|(["'])([^"']+)\3)([^;]*);|url\(\s*(["']?)([^"')]+)\6\s*\)/gi;
+  return css.replace(re, (m, q1, u1, q3, u3, cond, q6, u6) => {
     if (/^@import/i.test(m)) {
       const u = u1 || u3;
       if (isInline(u)) return m;
       if (isRemote(u)) { onStyle(u); return m; }
       const f = localPath(base, u);
       if (!fs.existsSync(f) || depth > 5) { warns.push('托管原型引用的样式文件不存在：' + u + '（' + src + '）'); return ''; }
-      return inlineCssUrls(read(f), path.dirname(f), warns, src, remote, onStyle, depth + 1);
+      const inner = inlineCssUrls(read(f), path.dirname(f), warns, src, remote, onStyle, onBad, depth + 1);
+      const c = (cond || '').trim();
+      if (!c) return inner;
+      if (/\b(?:layer|supports)\s*\(|^layer\b/i.test(c)) { onBad('样式 ' + u + ' 的 @import 带有 ' + c + '，内联后无法保持原样（' + src + '）。请改成不带 layer / supports 的写法'); return m; }
+      if (/@import/i.test(inner)) { onBad('样式 ' + u + ' 带媒体条件 ' + c + '，其中还有无法内联的 @import，内联后条件无法保持（' + src + '）'); return m; }
+      return '@media ' + c + ' {\n' + inner.replace(/@charset[^;]*;/gi, '') + '\n}';
     }
-    const u = u5;
+    const u = u6;
     if (isInline(u)) return m;
     if (isRemote(u)) { remote.push(u); warns.push('托管原型引用了网络资源 ' + u + '（' + src + '），断网时可能显示异常'); return m; }
     const f = localPath(base, u);
@@ -119,6 +126,8 @@ export function inlineHost(file, opts = {}) {
     }
   };
   const onStyle = (u) => remoteCode('样式', u);
+  const bad = [];
+  const onBad = (m) => bad.push(m);
   let html = read(file);
   if (!/<html|<body|<div|<main/i.test(html)) die('托管原型不像 HTML 文件：' + file);
   html = html.replace(/<link\b[^>]*>/gi, (tag) => {
@@ -134,7 +143,9 @@ export function inlineHost(file, opts = {}) {
     const f = localPath(base, href);
     if (!fs.existsSync(f)) { warns.push('托管原型引用的文件不存在：' + href); return ''; }
     if (/icon/i.test(rel)) return tag.replace(href, dataUri(f));
-    return '<style>\n' + inlineCssUrls(read(f), path.dirname(f), warns, href, remote, onStyle) + '\n</style>';
+    /* 保留 media 条件（如 media="print"），否则打印样式会在屏幕上生效 */
+    const media = (attr(tag, 'media') || '').trim();
+    return '<style' + (media && media !== 'all' ? ' media="' + media.replace(/"/g, '&quot;') + '"' : '') + '>\n' + inlineCssUrls(read(f), path.dirname(f), warns, href, remote, onStyle, onBad) + '\n</style>';
   });
   html = html.replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi, (m, attrs, body) => {
     const src = attr('<x ' + attrs + '>', 'src');
@@ -152,9 +163,9 @@ export function inlineHost(file, opts = {}) {
     if (!fs.existsSync(f)) { warns.push('托管原型引用的图片不存在：' + u); return m; }
     return pre + q + dataUri(f) + q;
   });
-  html = html.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (m, a, css) => '<style' + a + '>' + inlineCssUrls(css, base, warns, '内联样式', remote, onStyle) + '</style>');
+  html = html.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (m, a, css) => '<style' + a + '>' + inlineCssUrls(css, base, warns, '内联样式', remote, onStyle, onBad) + '</style>');
   const uniq = (a) => Array.from(new Set(a));
-  return { html, warns: uniq(warns), blocks: uniq(blocks), online: uniq(online), remote: uniq(remote), netCodes };
+  return { html, warns: uniq(warns), blocks: uniq(blocks), online: uniq(online), remote: uniq(remote), netCodes, bad: uniq(bad) };
 }
 /* 交付文件不允许引用外部或相对资源（托管原型的 JSON 字符串除外，已单独检查） */
 export function auditSingleFile(html) {
@@ -263,6 +274,7 @@ export async function build(input, opts = {}) {
     const who = '端「' + e.name + '」：';
     r.warns.forEach((w) => buildWarns.push({ code: 'HOST_RES', msg: who + w }));
     r.blocks.forEach((m) => buildErrs.push({ code: 'HOST_NET', msg: who + m }));
+    r.bad.forEach((m) => buildErrs.push({ code: 'HOST', msg: who + m }));
     r.online.forEach((m) => buildWarns.push({ code: 'ONLINE', msg: who + m }));
     r.remote.forEach((u) => hostRemote.add(u));
     r.netCodes.forEach((x) => netSeen.add(x.code + '|' + x.url));
@@ -325,6 +337,52 @@ export async function build(input, opts = {}) {
   const browser = await launch();
   let report, markdown = null, jsErrors = [], netReqs = [];
   let csvSheets = null, csvRows = null, pageList = null;
+  /* 资源加载失败（原型引用的图片、字体不存在）不阻止交付，作为提醒；脚本错误仍阻止 */
+  const addJsErr = (m) => {
+    if (/Failed to load resource|ERR_FILE_NOT_FOUND|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|net::ERR_/.test(m)) report.warns.push({ code: 'RES', msg: '有资源加载失败：' + m.replace(/^浏览器错误：/, '').replace(/（?file:\/\/\S*）?/g, '').trim() + '。托管原型请检查原文件引用的图片/字体是否存在' });
+    else report.errors.push({ code: 'JS', msg: m });
+  };
+  /* 汇总浏览器之外的检查结果（构建期提醒、范围基线、断网请求），得到最终报告；导出 Markdown、CSV 前完成 */
+  const summarize = () => {
+    jsErrors.forEach(addJsErr);
+    buildWarns.forEach((w) => report.warns.push(w));
+    buildErrs.forEach((w) => report.errors.push(w));
+    /* 范围基线外的增删只提醒，不阻止交付；没有基线时 report.scope 为 null */
+    if (report.scope) {
+      report.scope.added.forEach((a) => report.warns.push({ code: 'SCOPE_ADDED', msg: '范围确认后新增：' + a.kind + ' · ' + a.label + '（不在范围基线中；先列给用户确认，确认保留后再用 --scope-baseline 刷新基线）' }));
+      report.scope.removed.forEach((r) => report.warns.push({ code: 'SCOPE_REMOVED', msg: '范围确认后移除：' + r.kind + ' · ' + r.key + '（基线中有，原型里已没有；确认后再用 --scope-baseline 刷新基线）' }));
+    }
+    /* 断网运行时记录到的网络请求。
+     * 脚本和样式按请求类型判定：来自托管端 iframe 且该端写了 online: true 的记为 ONLINE，其余记为 HOST_NET。
+     * 同一地址同一代码只报告一次；静态检查已报告过的不再重复。图片、字体等只作为 RES 提醒。 */
+    const isNet = (q) => /^(?:https?|wss?):\/\//i.test(q.url);
+    const seenRes = new Set(hostRemote);
+    netReqs.forEach((q) => {
+      if (!isNet(q)) return;
+      if (q.type === 'Script' || q.type === 'Stylesheet') {
+        const what = q.type === 'Script' ? '脚本 ' : '样式 ';
+        /* 检查 iframe（prd-host-audit-<端>）和查看器里的托管 iframe（prd-host-view-<端>）都能归到对应端 */
+        const hosted = /^prd-host-(?:audit|view)-(.+)$/.exec(q.frameName || '');
+        const allowed = !!hosted && endOnline[hosted[1]] === true;
+        const code = allowed ? 'ONLINE' : 'HOST_NET';
+        if (netSeen.has(code + '|' + q.url)) return;
+        netSeen.add(code + '|' + q.url);
+        if (allowed) report.warns.push({ code, msg: '需联网：托管原型运行时加载了网络' + what + q.url + '（该端已写 online: true 显式放行，交付后需联网）' });
+        else if (hosted) report.errors.push({ code, msg: '托管原型运行时加载了网络' + what + q.url + '（断网检查时发出）。改为本地文件，或在该端写 online: true 显式放行' });
+        else report.errors.push({ code, msg: '原型运行时加载了网络' + what + q.url + '（断网检查时发出）。改为本地文件' });
+      } else {
+        if (seenRes.has(q.url)) return;
+        seenRes.add(q.url);
+        report.warns.push({ code: 'RES', msg: '断网检查时原型请求了网络资源（' + (q.type || '未知类型') + '）' + q.url + '，断网时可能显示异常' });
+      }
+    });
+    report.needOnline = report.warns.some((w) => w.code === 'ONLINE');
+    report.ok = report.errors.length === 0;
+    report.stats.errors = report.errors.length;
+    report.stats.warns = report.warns.length;
+    report.stats.netRequests = netReqs.filter(isNet).length;
+    report.stats.netBlocked = netReqs.filter((q) => isNet(q) && q.failed).length;
+  };
   try {
     const page = await browser.newPage({ width: 1600, height: 1000, offline: true });
     await page.goto(fileUrl(tmp));
@@ -332,61 +390,27 @@ export async function build(input, opts = {}) {
     const hasAudit = await page.evaluate('!!(window.W && W.runAudit)');
     if (!hasAudit) throw new Error('页面没有正常启动（W.runAudit 不存在）：\n' + page.errors.join('\n'));
     report = await page.evaluate('W.runAudit().then(function (r) { W.audit = r; return r; })');
+    jsErrors = page.errors.slice();
+    netReqs = page.requests.slice();
+    summarize();
+    /* 最终报告（含“需联网”等）同步回页面，导出内容与交付 HTML 用同一份 */
+    await page.evaluate('W.audit = ' + escJson(report) + '; 1');
     if (opts.md) markdown = await page.evaluate('W.doc.markdown({ html: false })');
     if (opts.csv || opts.exportPack) {
       csvSheets = JSON.parse(await page.evaluate('JSON.stringify(W.doc.csvSheets())'));
       csvRows = JSON.parse(await page.evaluate('JSON.stringify(W.doc.csvRows())'));
       pageList = JSON.parse(await page.evaluate('JSON.stringify((W.P.ends || []).reduce(function (a, e) { return a.concat(W.order[e.id] || []); }, []).map(function (id) { var p = W.pages[id]; return { id: id, title: p.title || "", st: p.states[0] ? p.states[0].id : "" }; }))'));
     }
-    jsErrors = page.errors.slice();
-    netReqs = page.requests.slice();
+    /* 导出过程中新出现的浏览器错误 */
+    page.errors.slice(jsErrors.length).forEach(addJsErr);
+    report.ok = report.errors.length === 0;
+    report.stats.errors = report.errors.length;
+    report.stats.warns = report.warns.length;
     await page.close();
   } finally {
     await browser.close();
     try { fs.rmSync(offlineDir, { recursive: true, force: true }); } catch (e) {}
   }
-  jsErrors.forEach((m) => {
-    /* 资源加载失败（原型引用的图片、字体不存在）不阻止交付，作为提醒；脚本错误仍阻止 */
-    if (/Failed to load resource|ERR_FILE_NOT_FOUND|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|net::ERR_/.test(m)) report.warns.push({ code: 'RES', msg: '有资源加载失败：' + m.replace(/^浏览器错误：/, '').replace(/（?file:\/\/\S*）?/g, '').trim() + '。托管原型请检查原文件引用的图片/字体是否存在' });
-    else report.errors.push({ code: 'JS', msg: m });
-  });
-  buildWarns.forEach((w) => report.warns.push(w));
-  buildErrs.forEach((w) => report.errors.push(w));
-  /* 范围基线外的增删只提醒，不阻止交付；没有基线时 report.scope 为 null */
-  if (report.scope) {
-    report.scope.added.forEach((a) => report.warns.push({ code: 'SCOPE_ADDED', msg: '范围确认后新增：' + a.kind + ' · ' + a.label + '（不在范围基线中；先列给用户确认，确认保留后再用 --scope-baseline 刷新基线）' }));
-    report.scope.removed.forEach((r) => report.warns.push({ code: 'SCOPE_REMOVED', msg: '范围确认后移除：' + r.kind + ' · ' + r.key + '（基线中有，原型里已没有；确认后再用 --scope-baseline 刷新基线）' }));
-  }
-  /* 断网运行时记录到的网络请求。
-   * 脚本和样式按请求类型判定：来自托管端 iframe 且该端写了 online: true 的记为 ONLINE，其余记为 HOST_NET。
-   * 同一地址同一代码只报告一次；静态检查已报告过的不再重复。图片、字体等只作为 RES 提醒。 */
-  const isNet = (q) => /^(?:https?|wss?):\/\//i.test(q.url);
-  const seenRes = new Set(hostRemote);
-  netReqs.forEach((q) => {
-    if (!isNet(q)) return;
-    if (q.type === 'Script' || q.type === 'Stylesheet') {
-      const what = q.type === 'Script' ? '脚本 ' : '样式 ';
-      /* 检查 iframe（prd-host-audit-<端>）和查看器里的托管 iframe（prd-host-view-<端>）都能归到对应端 */
-      const hosted = /^prd-host-(?:audit|view)-(.+)$/.exec(q.frameName || '');
-      const allowed = !!hosted && endOnline[hosted[1]] === true;
-      const code = allowed ? 'ONLINE' : 'HOST_NET';
-      if (netSeen.has(code + '|' + q.url)) return;
-      netSeen.add(code + '|' + q.url);
-      if (allowed) report.warns.push({ code, msg: '需联网：托管原型运行时加载了网络' + what + q.url + '（该端已写 online: true 显式放行，交付后需联网）' });
-      else if (hosted) report.errors.push({ code, msg: '托管原型运行时加载了网络' + what + q.url + '（断网检查时发出）。改为本地文件，或在该端写 online: true 显式放行' });
-      else report.errors.push({ code, msg: '原型运行时加载了网络' + what + q.url + '（断网检查时发出）。改为本地文件' });
-    } else {
-      if (seenRes.has(q.url)) return;
-      seenRes.add(q.url);
-      report.warns.push({ code: 'RES', msg: '断网检查时原型请求了网络资源（' + (q.type || '未知类型') + '）' + q.url + '，断网时可能显示异常' });
-    }
-  });
-  report.needOnline = report.warns.some((w) => w.code === 'ONLINE');
-  report.ok = report.errors.length === 0;
-  report.stats.errors = report.errors.length;
-  report.stats.warns = report.warns.length;
-  report.stats.netRequests = netReqs.filter(isNet).length;
-  report.stats.netBlocked = netReqs.filter((q) => isNet(q) && q.failed).length;
   const html = assemble(report);
   const single = auditSingleFile(html);
   single.forEach((m) => report.errors.push({ code: 'SINGLE_FILE', msg: '交付文件引用了外部或相对资源：' + m }));
@@ -398,14 +422,16 @@ export async function build(input, opts = {}) {
     return { ok: false, report, failed, release, name: cfg.name, outFile, legacyTheme };
   }
   /* --scope-baseline：检查通过后用当前清单覆盖基线，再完整构建一次，让交付文件和需求文档都按新基线生成。
-     第二次构建失败时恢复原来的 scope.json，避免留下没有对应交付的基线。 */
+     第二次构建未通过或抛出异常时，都恢复原来的 scope.json，避免留下没有对应交付的基线。 */
   if (opts.scopeBaseline) {
     const scopeFile = path.join(prd, 'scope.json');
     const prev = fs.existsSync(scopeFile) ? read(scopeFile) : null;
     const baseline = writeScopeBaseline(prd, report.inventory, release, opts.confirmedAt);
-    const again = await build(input, { ...opts, scopeBaseline: false, confirmedAt: undefined });
+    const restore = () => { if (prev == null) fs.rmSync(scopeFile, { force: true }); else fs.writeFileSync(scopeFile, prev); };
+    let again;
+    try { again = await build(input, { ...opts, scopeBaseline: false, confirmedAt: undefined }); } catch (e) { restore(); throw e; }
     if (!again.ok) {
-      if (prev == null) fs.rmSync(scopeFile, { force: true }); else fs.writeFileSync(scopeFile, prev);
+      restore();
       return again;
     }
     again.baseline = baseline;
@@ -455,7 +481,7 @@ function writeCsvSet(dir, cfg, release, sheets) {
     return f;
   });
 }
-/* 打开已写好的交付文件，逐页截默认状态的首页（与 snap.mjs 的等待方式一致） */
+/* 打开已写好的交付文件，逐页截默认状态的首页（与 snap.mjs 共用 waitHost 等待） */
 async function shotPages(file, pages, dir) {
   const browser = await launch();
   const shots = [];
@@ -467,7 +493,8 @@ async function shotPages(file, pages, dir) {
       const hash = '#/p/' + encodeURIComponent(p.id) + (p.st ? '/' + encodeURIComponent(p.st) : '');
       await page.evaluate('location.hash = ' + JSON.stringify(hash) + ';1');
       await sleep(450);
-      try { await page.waitFor('!document.querySelector("#hostf") || (document.querySelector("#hostf").contentDocument && document.querySelector("#hostf").contentDocument.readyState === "complete")', 8000); } catch (e) {}
+      const hostErr = await waitHost(page);
+      if (hostErr) throw new Error('研发包截图失败：' + p.id + ' 托管原型进入状态失败：' + hostErr);
       await sleep(700);
       const img = safeFile(p.id) + '.png';
       await page.screenshot(path.join(dir, img));

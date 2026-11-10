@@ -4,7 +4,7 @@
 
 ![原型需求：线框原型与需求文档同源](docs/images/prd-prototype-cover.png)
 
-[![Version](https://img.shields.io/badge/version-1.2.1-8f7650)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.2.2-8f7650)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1f1a14)](LICENSE)
 [![Output](https://img.shields.io/badge/output-Single_HTML-315d93)](#交付物长什么样)
 [![Node](https://img.shields.io/badge/node-18%2B-2e6b4f)](#安装)
@@ -152,7 +152,7 @@ node prd-prototype/scripts/test-skill.mjs
 
 ## 样例
 
-`prd-prototype/examples/leave-approval/` 是线框基线样例。员工在手机端发起请假，主管在 PC 端审批，HR 查看统计。样例包括表单、校验失败状态、确认底部弹层、列表、抽屉叠弹窗、数据场景切换、两条核心流程，以及待确认和 AI 假设标记。直接打开 `请假审批-原型需求.html` 即可。
+`prd-prototype/examples/leave-approval/` 是线框基线样例。员工在手机端发起请假，主管在 PC 端审批，HR 查看统计。样例包括表单和静态画出的校验失败状态、确认底部弹层、列表、抽屉叠弹窗、数据场景切换、两条核心流程，以及待确认和 AI 假设标记。直接打开 `请假审批-原型需求.html` 即可。表单校验、提交和搜索要用组件声明时，照课程管理样例写。
 
 `prd-prototype/examples/course-mgmt/` 是 PC 高保真样例，视觉由 AI 自拟（`prd/theme.css`、`prd/theme-kit.js`）。它是课程管理后台，包含列表搜索与分页、新建课程弹窗（校验、提交失败后重试、列表更新）和课程详情抽屉。业务内容都是 AI 假设，并在文档中标出。直接打开 `课程管理-原型需求.html` 即可。
 
@@ -165,12 +165,12 @@ node prd-prototype/scripts/test-skill.mjs
 - 托管模式反例。
 - 断网门槛：`HOST_NET` 拦截，`online: true` 放行。
 - 范围基线：`SCOPE_ADDED`、`SCOPE_REMOVED` 和 `--scope-baseline`。
-- 声明式交互：校验、提交、搜索筛选、`FIELD_REQ`。
+- 声明式交互：校验（含复选框、开关）、提交、搜索筛选、`FIELD_REQ`，以及提交按钮、搜索框配不上表单或列表时的 `BEHAVE`。
 - 高保真：`--hifi` 骨架、`--theme` 已移除的提示、旧项目自带 `theme.css` / `theme-kit.js` 照常纳入、PC 作用域、对话框、分页、缺省页。
 - 版本迭代与归档。
 - 评审意见：留意见、刷新后保留、导出 JSON、原型阶段和托管原型阶段的面板，以及多份意见的合并。
 - 研发测试导出：需求文档栏只剩「导出 Markdown」且能导出、CSV 内容与转义、`--csv` 三份文件、原型阶段「清单」、托管模式、`--export-pack` 研发包，以及检查失败时不写出。
-- 按角色看原型：`ROLE_ID` 校验、顶栏角色下拉、秘书角色隐藏新建、原型阶段与托管按 `sel` 过滤、刷新后记住角色。
+- 按角色看原型：`ROLE_ID` 校验、顶栏角色下拉、秘书角色隐藏新建、公共组件、原型阶段与托管按 `sel` + `text` 过滤、刷新后记住角色。
 - 浏览器端交互：顶部切换下拉框（1600、1024、390 宽，点选、键盘、点外面收起，选完后快捷键仍可用）、圆点定位、状态切换、弹层层级、流程演示、快捷键、窄屏、托管状态识别、sandbox。
 - 内容安全：DOMPurify 清洗。
 - 脚手架。
