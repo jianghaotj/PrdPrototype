@@ -8,6 +8,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { launch, fileUrl, sleep, waitHost } from './lib/browser.mjs';
+import { walkFlows, seeLine } from './lib/flows.mjs';
 import { HINTS } from './lib/hints.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -416,6 +417,16 @@ export async function build(input, opts = {}) {
     }
     /* 导出过程中新出现的浏览器错误 */
     page.errors.slice(jsErrors.length).forEach(addJsErr);
+    /* 按核心流程真点一遍（结构检查通过后才走，避免同一个问题报两遍）：see 没看到是错误，其余不一致只提醒。
+       走查时页面抛出的脚本错误照常算 JS 错误 */
+    if (report.errors.length === 0 && Array.isArray(cfg.flows) && cfg.flows.length) {
+      const before = page.errors.length;
+      const w = await walkFlows(page);
+      w.errors.forEach((e) => report.errors.push(e));
+      w.warns.forEach((e) => report.warns.push(e));
+      page.errors.slice(before).forEach((m) => addJsErr('按核心流程走查时：' + m));
+      report.stats.flowWalk = w.stats;
+    }
     report.ok = report.errors.length === 0;
     report.stats.errors = report.errors.length;
     report.stats.warns = report.warns.length;
@@ -554,6 +565,10 @@ function printReport(r) {
   console.log((proto ? '原型构建（原型阶段）：' : '原型需求构建：') + r.name + ' ' + r.release);
   console.log('  页面 ' + s.pages + ' · 状态 ' + s.states + ' · 功能点 ' + s.fns + ' · 字段 ' + s.fields + ' · 渲染 ' + s.renders + ' 次 · 交互元素 ' + s.interactive + '（归属到功能点 ' + cov + (s.ignored ? '；另有 ' + s.ignored + ' 个按 ignore 不纳入' : '') + '）');
   console.log('  待确认 ' + s.pending + ' · AI 假设 ' + s.assumed + (s.gaps ? ' · 原型未体现 ' + s.gaps : '') + (s.changes ? ' · 本版变化 ' + s.changes : ''));
+  if (s.flowWalk) {
+    const fw = s.flowWalk;
+    console.log('  按核心流程走查：' + fw.flows + ' 条流程 ' + fw.steps + ' 步，真点 ' + fw.clicked + ' 步' + (fw.jumped ? '，' + fw.jumped + ' 步按流程直接到达' : '') + ' · ' + seeLine(fw));
+  }
   if (!r.ok) {
     console.log('\n✗ 检查未通过：' + r.report.errors.length + ' 个问题。交付文件未更新' + (fs.existsSync(r.outFile) ? '（' + path.basename(r.outFile) + ' 仍是上一次通过检查的版本）' : ''));
     const byCode = {};
@@ -570,7 +585,8 @@ function printReport(r) {
       '\n  以后要换成模型自拟的高保真样式，按 references/hifi.md 改写即可；不需要时可以删掉，回到线框样式（删 theme-kit.js 前先确认页面没有调用它新增的组件，如 h.pager）。');
   }
   const softWarns = r.report.warns.filter((w) => w.soft);
-  const hardWarns = r.report.warns.filter((w) => !w.soft);
+  const walkWarns = r.report.warns.filter((w) => w.code === 'FLOW_WALK');
+  const hardWarns = r.report.warns.filter((w) => !w.soft && w.code !== 'FLOW_WALK');
   if (softWarns.length) {
     const byCode = {};
     softWarns.forEach((w) => { byCode[w.code] = (byCode[w.code] || 0) + 1; });
@@ -579,6 +595,12 @@ function printReport(r) {
   if (hardWarns.length) {
     console.log('\n提醒 ' + hardWarns.length + ' 条（不阻止交付）：');
     hardWarns.slice(0, 30).forEach((w) => console.log('  - [' + w.code + '] ' + w.msg));
+    if (hardWarns.length > 30) console.log('  …另有 ' + (hardWarns.length - 30) + ' 条，加 --json 可看全部');
+  }
+  if (walkWarns.length) {
+    console.log('\n按核心流程走查提醒 ' + walkWarns.length + ' 条（不阻止交付；逐条看是原型的问题还是流程写法的问题）：');
+    walkWarns.slice(0, 30).forEach((w) => console.log('  - [' + w.code + '] ' + w.msg));
+    if (walkWarns.length > 30) console.log('  …另有 ' + (walkWarns.length - 30) + ' 条，用 snap.mjs --flows 看全部');
   }
   if (r.ok) {
     console.log('\n✓ 结构检查通过，已生成：' + r.file + '（' + Math.round(r.size / 1024) + ' KB）');
@@ -587,6 +609,7 @@ function printReport(r) {
     if (r.csvFiles) console.log('  CSV：' + r.csvFiles.map((f) => path.basename(f)).join('、'));
     if (r.pack) console.log('  研发包：' + r.pack.dir + '（CSV 3 份，页面截图 ' + r.pack.shots.length + ' 张，清单.md）');
     if (r.baseline) console.log('  已刷新范围基线 prd/scope.json：页面 ' + r.baseline.pages.length + ' · 状态 ' + r.baseline.states.length + ' · 功能点 ' + r.baseline.fns.length + '（' + r.baseline.confirmedAt + '）');
+    if (s.flowWalk) console.log('  交付前按流程截图，逐张看：node "' + path.join(SKILL, 'scripts', 'snap.mjs') + '" "' + r.file + '" --flows');
   }
 }
 
@@ -603,7 +626,9 @@ const USAGE = `用法：node scripts/build.mjs <项目目录> [选项]
                     （确认过的清单或用户明确的修改指令）再加此参数；超出的先请用户确认。
                     首次建基线由 Agent 按确认的范围清单手写 prd/scope.json（格式见 references/spec-format.md）
   --confirmed-at 日期  配合 --scope-baseline，记录用户确认范围的日期（YYYY-MM-DD，默认今天）
-检查未通过时不更新交付文件，在 .prd-build/ 留下 failed 版本供排查。`;
+检查未通过时不更新交付文件，在 .prd-build/ 留下 failed 版本供排查。
+结构检查通过后，按 product.flows 在浏览器里真点一遍：步骤写了 see 却没看到、或这一步没真点到时阻止交付（FLOW_SEE），
+其余对不上的地方只提醒（FLOW_WALK）。交付前再用 snap.mjs --flows 逐步截图看一遍。`;
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--help') || process.argv.includes('-h')) { console.log(USAGE); process.exit(0); }
   const o = parseArgs(process.argv.slice(2));

@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // 截图与画面诊断：打开构建好的 HTML，逐个视图截图，并输出圆点、功能点和控制台错误。
-// 用法：node scripts/snap.mjs <原型.html> [--view "#/p/P01/list"]... [--only] [--out 目录] [--width 1600] [--height 1000] [--click "选择器"]
+// 用法：node scripts/snap.mjs <原型.html> [--flows] [--view "#/p/P01/list"]... [--only] [--out 目录] [--width 1600] [--height 1000] [--click "选择器"]
 //   默认截“需求文档”和每个端首页（原型阶段不截需求文档），--view 追加视图；加 --only 只截 --view 指定的视图。
+//   --flows 按每条核心流程从第 1 步真点到最后一步，每步截一张（交付前必跑），并报告和流程对不上的地方。
 //   --chg 打开“本版变化”视图后再截图（多版本时）。每次运行会先清掉输出目录里上次生成的截图。
 import fs from 'node:fs';
 import path from 'node:path';
 import { launch, fileUrl, sleep, waitHost } from './lib/browser.mjs';
+import { walkFlows, seeLine } from './lib/flows.mjs';
 
 const argv = process.argv.slice(2);
 const o = { views: [], clicks: [], width: 1600, height: 1000 };
@@ -17,21 +19,28 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--height') o.height = +argv[++i];
   else if (a === '--click') o.clicks.push(argv[++i]);
   else if (a === '--only') o.only = true;
+  else if (a === '--flows') o.flows = true;
   else if (a === '--chg') o.chg = true;
   else if (a === '--help' || a === '-h') o.help = true;
   else if (!o.file) o.file = a;
 }
 const USAGE = `用法：node scripts/snap.mjs <原型.html> [选项]
   默认截“需求文档”和每个端的首页（原型阶段只截各端首页，圆点默认隐藏时标注“已隐藏”）
+  --flows                  按每条核心流程从第 1 步真点到最后一步，每步截一张（f<流程>-<步>-页面_状态.png）。
+                           交付前必跑：逐张看做完一页回到另一页时，进度、完成标记、按钮有没有跟着变。
+                           写了 see 的步骤没看到对应文字、或没真点到时退出码为 1
   --view "#/p/P02/reject"  追加要截的视图（可重复）；页面状态用 #/p/<页面ID>/<状态ID>
-  --only                   只截 --view 指定的视图
+  --only                   只截 --view 指定的视图（和 --flows 一起用时只截流程）
   --chg                    打开“本版变化”视图后再截
   --click "选择器"          每个视图打开后先点击该元素
   --out 目录               截图目录（默认 <项目>/.prd-build/snap）
   --width 1600 --height 1000  浏览器窗口尺寸`;
 if (o.help) { console.log(USAGE); process.exit(0); }
 if (!o.file || !fs.existsSync(o.file)) { console.error(USAGE); process.exit(2); }
-const out = path.resolve(o.out || path.join(path.dirname(o.file), '.prd-build', 'snap'));
+/* 默认截图目录是项目的 .prd-build/snap。检查未通过的 failed 文件、--draft 草稿本身就在 .prd-build/ 里，不再多套一层 */
+const htmlDir = path.dirname(path.resolve(o.file));
+const projDir = path.basename(htmlDir) === '.prd-build' ? path.dirname(htmlDir) : htmlDir;
+const out = path.resolve(o.out || path.join(projDir, '.prd-build', 'snap'));
 fs.mkdirSync(out, { recursive: true });
 for (const n of fs.readdirSync(out)) if (/^\d{2}-.*\.png$/.test(n)) fs.unlinkSync(path.join(out, n));
 
@@ -47,7 +56,7 @@ try {
   }
   /* 原型阶段没有需求文档，默认只截各端首页 */
   let views = o.only ? o.views : (await page.evaluate('(W.P.stage === "prototype" ? [] : ["#/doc"]).concat(W.P.ends.map(function(e){return "#/end/"+e.id}))')).concat(o.views);
-  if (!views.length) { console.error('没有要截的视图'); process.exit(2); }
+  if (!views.length && !o.flows) { console.error('没有要截的视图'); process.exit(2); }
   for (let i = 0; i < views.length; i++) {
     const v = views[i];
     await page.evaluate('location.hash = ' + JSON.stringify(v) + ';1');
@@ -70,6 +79,19 @@ try {
     /* 圆点数来自 DOM，圆点层被隐藏时仍会计数，所以这里单独标注“已隐藏” */
     const dotsHidden = await page.evaluate('(function(){var d=document.getElementById("dots");return !!d&&getComputedStyle(d).display==="none"})()');
     if (diag.view === 'page') console.log('  页面 ' + diag.page + ' / ' + diag.state + ' · 圆点 ' + diag.dots.length + (dotsHidden ? '（已隐藏）' : '') + ' · 当前可见功能点 ' + (diag.visibleFns.length - diag.sharedVisible) + (diag.sharedVisible ? '（另有公共组件 ' + diag.sharedVisible + ' 个，圆点默认隐藏）' : '') + (diag.ignoredMarks ? ' · 不纳入标记 ' + diag.ignoredMarks + (dotsHidden ? '（已隐藏）' : '') : '') + (diag.unknown ? ' · 当前画面未登记' : ''));
+  }
+  if (o.flows) {
+    const nFlows = await page.evaluate('(W.P.flows || []).length');
+    if (!nFlows) console.log('\n没有核心流程（product.flows），--flows 没有可走的');
+    else {
+      console.log('\n按核心流程真点并截图（每条流程从默认演示数据开始）：');
+      const w = await walkFlows(page, { shots: out, log: (s) => console.log(s) });
+      const fw = w.stats;
+      console.log('\n' + fw.flows + ' 条流程 ' + fw.steps + ' 步，截图 ' + fw.shots + ' 张，在 ' + out + '\n真点 ' + fw.clicked + ' 步' + (fw.jumped ? '，' + fw.jumped + ' 步按流程直接到达（原因写在上面每一行后面）' : '') + '；' + seeLine(fw));
+      if (w.errors.length) { failed = true; console.log('\n错误（写了 see 却没看到，或没真点到、see 没法核对）：'); w.errors.forEach((e) => console.log('  - [' + e.code + '] ' + e.msg)); }
+      if (w.warns.length) { console.log('\n提醒（和流程对不上，逐条看是原型的问题还是流程写法的问题）：'); w.warns.forEach((e) => console.log('  - [' + e.code + '] ' + e.msg)); }
+      console.log('\n逐张看截图：做完一页回到另一页时，进度、完成标记、按钮有没有跟着变。');
+    }
   }
   if (page.errors.length) { failed = true; console.log('\n控制台错误：'); page.errors.forEach((e) => console.log('  - ' + e)); }
 } finally {

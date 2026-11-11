@@ -119,7 +119,7 @@
       field: 'key name type required def options rule status statusNote changes',
       product: 'id name date fidelity version current releases background goals scope roles ends groups rules nfr dict flows flowMap sections todo demo scenarios clarify out demoNote outOfScope stage',
       flow: 'id name ends preset set desc steps changes',
-      step: 'p st tip label set branch'
+      step: 'p st tip label set branch see'
     };
     function unknown(obj, kind, where) {
       if (!obj || typeof obj !== 'object') return;
@@ -235,8 +235,10 @@
         var p = W.pages[s.p];
         unknown(s, 'step', '流程「' + f.name + '」第 ' + (i + 1) + ' 步');
         /* branch：分支条件，标在总流程图里进入这一步的箭头上 */
-        if (s.branch != null && (typeof s.branch !== 'string' || !s.branch.trim())) E('FLOW', '流程「' + f.name + '」第 ' + (i + 1) + ' 步的 branch 要写成一小段文字（分支条件，如“未诊断”）');
+        if (s.branch != null && (typeof s.branch !== 'string' || !s.branch.trim())) E('FLOW', '流程「' + f.name + '」第 ' + (i + 1) + ' 步的 branch 要写成一小段文字（分支条件，如“余额不足”）');
         else if (s.branch && s.branch.trim().length > 12) Wn('FLOW', '流程「' + f.name + '」第 ' + (i + 1) + ' 步的 branch 有 ' + s.branch.trim().length + ' 个字，总流程图的箭头上放不下，建议 12 字以内');
+        /* see：按流程真点到这一步时，画面上应该有的文字（构建时走查核对） */
+        if (s.see != null && !(typeof s.see === 'string' ? s.see.trim() : Array.isArray(s.see) && s.see.length && s.see.every(function (x) { return typeof x === 'string' && x.trim(); }))) E('FLOW', '流程「' + f.name + '」第 ' + (i + 1) + ' 步的 see 要写成画面上应该出现的文字，如 \'待审批\'，多段写成数组');
         if (!p) E('FLOW', '流程「' + f.name + '」第 ' + (i + 1) + ' 步的页面「' + s.p + '」不存在');
         else if (s.st && !p.states.some(function (x) { return x.id === s.st; })) E('FLOW', '流程「' + f.name + '」第 ' + (i + 1) + ' 步的状态「' + s.st + '」在 ' + s.p + ' 中不存在');
         if (!s.tip) Wn('FLOW', '流程「' + f.name + '」第 ' + (i + 1) + ' 步没有 tip，演示时不知道下一步点哪里');
@@ -244,6 +246,10 @@
       });
       if (f.preset) checkSet('preset=' + f.preset, '流程「' + f.name + '」');
     });
+    /* 有核心流程、一条 see 都没写：跨页的结果构建拦不住，只提醒一次（复核 r5 Q5） */
+    if ((P.flows || []).length && !(P.flows || []).some(function (f) { return (f.steps || []).some(function (s) { return s.see != null; }); })) {
+      Wn('SEE_MISSING', '核心流程（' + P.flows.length + ' 条）一条 see 都没写：做完一页回到另一页的结果（进度、完成标记、按钮），构建只核对到了哪个状态，内容对不对拦不住，只能靠 snap.mjs --flows 的截图人工看。建议在这类步骤写 see，如提交后回到详情 see: \'待审批\'');
+    }
 
     /* 需求文字中的图片必须内嵌，交付文件才能离线打开 */
     (function scanText() {

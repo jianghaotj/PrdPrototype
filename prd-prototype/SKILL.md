@@ -35,11 +35,11 @@ description: "一站式产出“交互原型 + 需求文档”的单 HTML：从�
 6. **逐页写页面。** 读 `references/components.md`。每个页面一个文件 `prd/pages/<编号>-<名称>.js`；脚手架生成的 `*-page.js` 是模板，改名后填写，页面 ID 不能重复。**先写 states 和 fns，再按 fns 写 render**，render 只画 fns 里登记的东西，用 `data-fn` 把元素挂到功能点上。
    - 表单的必填和长度校验、提交、搜索筛选用 `h.form`、`h.fld` 的 `req`/`min`/`max`、`h.submit`、`h.search`、`h.rows` 声明，行为由组件实现；不要在页面里另写校验，也不要用跳转按钮代替提交。`fields` 里的 `required` 要与 `h.fld` 的 `req` 一致。
    - 写法参考 `examples/course-mgmt/prd/`（列表搜索、新建弹窗的校验与提交、详情抽屉，高保真）和 `examples/leave-approval/prd/`（手机端 + PC 端、多状态、流程、数据场景，线框）。
-   - 核心流程涉及的功能点建议写 `ac`（前置条件、用户操作、预期结果），没写只给 `AC_MISSING` 提醒。流程里的关键分支在那一步写 `branch`（如 `'未诊断'`），会标在总流程图的箭头上。
+   - 核心流程涉及的功能点建议写 `ac`（前置条件、用户操作、预期结果），没写只给 `AC_MISSING` 提醒。流程里的关键分支在那一步写 `branch`（如 `'余额不足'`），会标在总流程图的箭头上。跨页面的关键结果（如提交后回到详情显示“待审批”）在那一步写 `see`，构建按流程真点过去，没看到就不通过。
    - 出高保真时，先按 `references/hifi.md` 在 `prd/theme.css` 写下视觉方向和设计变量，把一条代表流程画完并截图看一眼，确认方向后再写其余页面。
    - 写作中新补的规则级假设直接标 `[AI 假设]`，不必停下来再问，汇报时列出。
 7. **构建并修到通过。** `node scripts/build.mjs <项目目录>`，按输出修改，代码含义见 `references/audit-codes.md`。不要为了通过检查而删掉真实需求，也不要把真实功能塞进 `h.demo()`。`SCOPE_ADDED` / `SCOPE_REMOVED` 按硬性规则“范围确认”处理；提醒的是脚手架生成的公共导航（`公共/pc-shell/…`、`公共/m-shell/…`）时，说明基线漏写了，补进 `scope.json`，不要删导航。
-8. **验证一条核心流程和一个失败分支，再检查截图。** 在交付 HTML 里实际操作，确认行为和需求一致（如必填为空时提交被拦、提交失败后可重试、成功后列表更新），结构检查通过不代表交互成立。截图用 `node scripts/snap.mjs <产物.html> --view "#/p/P02/reject"`：默认截需求文档和各端首页，`--view` 追加复杂页面或弹层状态（`#/p/<页面ID>/<状态ID>` 会应用该状态的演示数据）。修掉重叠、溢出、圆点压字（用功能点的 `dot` 调整位置）。
+8. **按流程截图逐张看，再验证一个失败分支。** 交付前必跑 `node scripts/snap.mjs <产物.html> --flows`：按每条核心流程从第 1 步真点到最后一步，每步一张截图。逐张看做完一页回到另一页时，进度、完成标记、按钮有没有跟着变；`FLOW_WALK` 提醒逐条判断是原型的问题还是流程写法的问题。失败分支（如必填为空时提交被拦、提交失败后可重试）在交付 HTML 里手动点一遍。`--view "#/p/P02/reject"` 追加截复杂页面或弹层状态。修掉重叠、溢出、圆点压字（用功能点的 `dot` 调整位置）。
 9. **汇报。** 见下方“交付汇报”。
 
 ## 流程 B：已有 HTML 补需求
@@ -83,7 +83,7 @@ description: "一站式产出“交互原型 + 需求文档”的单 HTML：从�
 - 原型只画范围清单里的功能。演示用的切换控件（如“以新用户登录”）放进 `h.demo()`，它们不进需求。
 - 没有依据的规则、口径、字段校验，写成“… [AI 假设]”或标 `status: "assumed"`；需要业务方拍板的写“… [待确认]”或 `status: "pending"`。不得把推测写成已确认。每个功能点要么有 `src`（依据），要么是 `assumed` / `pending`。
 - **范围确认。** 用户确认过的范围清单、明确的修改指令（如“加一个导出按钮”）都算已确认，不再重复问。构建后逐条核对 `SCOPE_ADDED` / `SCOPE_REMOVED`：都在已确认范围内的，直接 `--scope-baseline --confirmed-at <确认日期>` 刷新基线；超出的，误加的删掉，想保留的在汇报里列给用户，确认后再刷新（确认前它们留在需求文档“范围确认后新增”一章）。只改文字不用刷新。新项目必须写 `scope.json`，没有它的旧项目照常构建，只是不做增删对比。
-- 检查未通过不交付。`--draft` 只用于排查画面，产物不可交给用户。
+- 检查未通过不交付。`--draft` 只用于排查画面，产物不可交给用户。每次交付前（含流程 B–E）跑 `snap.mjs <产物.html> --flows`，逐张看截图。
 - 页面代码不写色值，内联样式只用于尺寸、字号和字距。线框用 `h.*` 组件和 `wire.css` 工具类；高保真的视觉写在项目的 `prd/theme.css`（可选 `prd/theme-kit.js`），按 `references/hifi.md` 设计，不套用任何公司规范。
 - 托管模式下不修改用户的原 HTML 文件。
 - 原型阶段（`stage: 'prototype'`）不是绕过检查的开关，完整需求项目不要写这一行。
@@ -108,7 +108,7 @@ node scripts/new.mjs <项目目录> --name "产品名" [--id 英文短名] --end
 node scripts/probe-host.mjs <已有原型.html> [--steps '[{"js":"showPage(\"x\")"}]'] [--boot '[...]'] [--shot a.png]
 node scripts/build.mjs <项目目录> [--md] [--csv] [--export-pack] [--out 文件名.html] [--draft]
 node scripts/build.mjs <项目目录> --scope-baseline [--confirmed-at 2026-11-04]   # 增删都已确认后刷新 prd/scope.json
-node scripts/snap.mjs <产物.html> [--view "#/p/P01/list"]... [--only] [--out 截图目录]
+node scripts/snap.mjs <产物.html> [--flows] [--view "#/p/P01/list"]... [--only] [--out 截图目录]   # --flows 按核心流程真点并逐步截图，交付前必跑
 node scripts/merge-comments.mjs <意见1.json> [意见2.json ...] [-o 评审意见合并.md] [--prd <项目目录>]
 node scripts/test-skill.mjs                                                        # 技能自身回归测试
 ```

@@ -2153,6 +2153,104 @@ console.log('\n19. 1.3.0 总流程图');
   ok(noFlow.ok && !/总流程图|核心流程/.test(nfMd) && !/id="prd-mermaid"/.test(fs.readFileSync(noFlow.file, 'utf8')), '19 没有核心流程时不画总流程图，也不内嵌 Mermaid', noFlow.ok ? '' : JSON.stringify(noFlow.report.errors.slice(0, 2)));
 }
 
+/* ---------- 20. 1.4.0 跨页状态检查 / 流程截图 ---------- */
+console.log('\n20. 1.4.0 跨页状态检查 / 流程截图');
+{
+  const fwOf = (r) => (r.report && r.report.stats.flowWalk) || null;
+  const walkW = (r) => r.report.warns.filter((w) => w.code === 'FLOW_WALK');
+  /* 旧写法不写 see：两个样例照常通过，构建时按流程真点一遍，没有任何走查提醒 */
+  const base = await build(variant(EXAMPLE, []), {});
+  const bw = fwOf(base);
+  ok(base.ok && bw && bw.flows === 2 && bw.steps === 9 && bw.clicked === 7 && bw.see === 0 && !walkW(base).length, '20 请假审批（没写 see）：照常通过，2 条流程 9 步，7 步真点按钮到达，没有走查提醒', JSON.stringify(bw) + JSON.stringify(walkW(base)));
+  const cm = await build(variant(path.join(SKILL, 'examples', 'course-mgmt'), []), {});
+  const cw = fwOf(cm);
+  ok(cm.ok && cw && cw.steps === 5 && cw.clicked === 2 && cw.jumped === 2 && !walkW(cm).length, '20 课程管理：要先填表的“提交”点了不跳转时按流程直接到达，不报错', JSON.stringify(cw) + JSON.stringify(walkW(cm)));
+  const hw = fwOf(hr);
+  ok(hr.ok && hw && hw.steps === 3 && hw.clicked === 0 && hw.jumped === 2, '20 托管页面：不进 iframe 点击，按流程直接到达', JSON.stringify(hw));
+  /* see 写对：通过并计数；写错：FLOW_SEE 阻止交付 */
+  const seeOk = await build(variant(EXAMPLE, [[PROD, "{ p: 'M03', st: 'pending', tip:", "{ p: 'M03', st: 'pending', see: ['待审批', '1.5'], tip:"]]), {});
+  ok(seeOk.ok && fwOf(seeOk).see === 2 && fwOf(seeOk).seeFailed === 0, '20 see 写的文字真点过来能看到：通过（忽略空格换行）', JSON.stringify(fwOf(seeOk)) + JSON.stringify(seeOk.report.errors.slice(0, 2)));
+  const seeBadDir = variant(EXAMPLE, [[PROD, "{ p: 'M03', st: 'pending', tip:", "{ p: 'M03', st: 'pending', see: '已通过', tip:"]]);
+  const seeBad = await build(seeBadDir, {});
+  ok(!seeBad.ok && seeBad.report.errors.some((e) => e.code === 'FLOW_SEE' && /第 4 步/.test(e.msg) && /点“确认提交”/.test(e.msg) && /“已通过”/.test(e.msg)) && !outputs(seeBadDir).length, '20 see 没看到：FLOW_SEE 错误，写明哪条流程第几步、点了哪个按钮、缺哪段文字，不生成交付文件', JSON.stringify(seeBad.report.errors.slice(0, 2)));
+  /* 跨页状态不一致：按钮去的状态和流程写的不一样。没写 see 只提醒；写了 see 且看不到就是错误 */
+  const brk = [M02, "h.btn('确认提交', { k: 'pri', go: 'M03', st: 'pending'", "h.btn('确认提交', { k: 'pri', go: 'M03', st: 'approved'"];
+  const xs = await build(variant(EXAMPLE, [brk]), {});
+  ok(xs.ok && walkW(xs).some((w) => /第 4 步/.test(w.msg) && /到的是 M03\/approved，流程写的是 M03\/pending/.test(w.msg)), '20 按钮去的状态和流程不一致（没写 see）：FLOW_WALK 提醒，不阻止交付', JSON.stringify(walkW(xs)));
+  const xs2 = await build(variant(EXAMPLE, [brk, [PROD, "{ p: 'M03', st: 'pending', tip:", "{ p: 'M03', st: 'pending', see: '待审批', tip:"]]), {});
+  ok(!xs2.ok && xs2.report.errors.some((e) => e.code === 'FLOW_SEE' && /实际到的是 M03\/approved/.test(e.msg)), '20 同样的不一致、这一步写了 see：FLOW_SEE 错误', JSON.stringify(xs2.report.errors.slice(0, 2)));
+  /* 状态对了但画面不同：流程 set 改了余额，真点的按钮没改 → 提醒，指出两边哪里不一样 */
+  const extra = "label: '撤回确认' }\n      ]\n    },\n    { id: 'f3', name: '回首页看余额', preset: 'normal', steps: [\n      { p: 'M04', st: 'me', tip: '点底部“请假”。' },\n      { p: 'M01', st: 'list', TIPX set: 'balance.annual=0' }\n    ] }";
+  const df = await build(variant(EXAMPLE, [[PROD, "label: '撤回确认' }\n      ]\n    }", extra.replace('TIPX', "tip: '年假余额 0 天。',")]]), {});
+  ok(df.ok && walkW(df).some((w) => /回首页看余额」第 2 步/.test(w.msg) && /画面和按“下一步”看到的不一样/.test(w.msg) && /真点：“[^”]*5/.test(w.msg)), '20 状态对了、画面和“下一步”不一样（按钮没带上流程 set 的数据）：FLOW_WALK 提醒并给出两边的文字', JSON.stringify(walkW(df)));
+  const jp = await build(variant(EXAMPLE, [[PROD, "label: '撤回确认' }\n      ]\n    }", extra.replace("tip: '点底部“请假”。'", "tip: '切换演示数据。'").replace('TIPX', "tip: '年假余额 0 天。',")]]), {});
+  ok(jp.ok && fwOf(jp).jumped === 1 && !walkW(jp).length, '20 tip 没点名按钮、这一步写了 set（演示切换）：按流程直接到达，不去点碰巧同去向的按钮', JSON.stringify(fwOf(jp)) + JSON.stringify(walkW(jp)));
+  /* see 类型不对：FLOW；拼写错的 see 字段名照旧 UNKNOWN_KEY */
+  const st1 = await build(variant(EXAMPLE, [[PROD, "{ p: 'M03', st: 'pending', tip:", "{ p: 'M03', st: 'pending', see: 1, tip:"]]), {});
+  ok(!st1.ok && st1.report.errors.some((e) => e.code === 'FLOW' && /see 要写成画面上应该出现的文字/.test(e.msg)), '20 see 不是文字：报 FLOW');
+  const st2 = await build(variant(EXAMPLE, [[PROD, "{ p: 'M03', st: 'pending', tip:", "{ p: 'M03', st: 'pending', sees: '待审批', tip:"]]), {});
+  ok(st2.ok && st2.report.warns.some((w) => w.code === 'UNKNOWN_KEY' && /sees/.test(w.msg)), '20 see 拼错成 sees：UNKNOWN_KEY 提醒');
+  /* snap.mjs --flows：每步一张截图；see 没看到时退出码 1 */
+  const SNAP = path.join(SKILL, 'scripts', 'snap.mjs');
+  const runSnap = (args) => { try { return { code: 0, out: execFileSync('node', [SNAP, ...args], { encoding: 'utf8' }) }; } catch (e) { return { code: e.status, out: String(e.stdout || '') }; } };
+  const shotDir = path.join(TMP, 'flow-shots');
+  const s1 = runSnap([base.file, '--flows', '--only', '--out', shotDir]);
+  const pngs = fs.existsSync(shotDir) ? fs.readdirSync(shotDir).filter((n) => /^f\d+-\d+-.*\.png$/.test(n)) : [];
+  ok(s1.code === 0 && pngs.length === 9 && pngs.includes('f1-01-M01_list.png') && pngs.includes('f2-04-P01_list.png') && /点“确认提交”/.test(s1.out) && /截图 9 张/.test(s1.out), '20 snap.mjs --flows：按流程逐步截图（f<流程>-<步>-页面_状态.png），逐步打印点了哪个按钮', s1.out.slice(-600) + pngs.join(','));
+  const s2 = runSnap([seeBad.failed, '--flows', '--only', '--out', path.join(TMP, 'flow-shots-bad')]);
+  ok(s2.code === 1 && /FLOW_SEE/.test(s2.out) && /没看到 “已通过”/.test(s2.out), '20 snap.mjs --flows：see 没看到时列出错误，退出码 1', s2.out.slice(-600));
+  /* 复核 r5-r1 必须修改 3：先放一张旧的流程截图和一张别的图，重跑后旧流程截图被清掉、别的图留着 */
+  fs.writeFileSync(path.join(shotDir, 'f9-99-old.png'), 'x');
+  fs.writeFileSync(path.join(shotDir, 'note.png'), 'x');
+  const s3 = runSnap([base.file, '--flows', '--only', '--out', shotDir]);
+  const left = fs.readdirSync(shotDir);
+  ok(s3.code === 0 && !left.includes('f9-99-old.png') && left.includes('note.png') && left.filter((n) => /^f\d+-\d+-.*\.png$/.test(n)).length === 9, '20 再跑一次会先清掉上次的流程截图（f9-99-old.png 被清，note.png 保留，流程截图仍是 9 张）', left.join(','));
+  /* 复核 r5-r1 必须修改 1：写了 see 的这一步没真点到，不能拿流程 set 的演示数据充数 */
+  const SEE4 = [PROD, "{ p: 'M03', st: 'pending', tip:", "{ p: 'M03', st: 'pending', see: '待审批', tip:"];
+  const stale = await build(variant(EXAMPLE, [SEE4, [PROD, "点“确认提交”。', label: '确认提交' }", "点“确定申请”。', label: '确认提交' }"]]), {});
+  ok(!stale.ok && stale.report.errors.some((e) => e.code === 'FLOW_SEE' && /第 4 步/.test(e.msg) && /tip 写的“确定申请”在画面上找不到/.test(e.msg) && /没法核对/.test(e.msg)) && fwOf(stale).seeUnchecked === 1, '20 上一步 tip 点名的按钮找不到（按钮改名、tip 没改）、这一步写了 see：FLOW_SEE，写明 see 没法核对', JSON.stringify(stale.report.errors.slice(0, 2)));
+  const dead = await build(variant(EXAMPLE, [SEE4, [M02, "h.btn('确认提交', { k: 'pri', go: 'M03', st: 'pending'", "h.btn('确认提交', { k: 'pri', act: 'toast'"]]), {});
+  const s4 = dead.ok ? { out: '' } : runSnap([dead.failed, '--flows', '--only', '--out', path.join(TMP, 'flow-shots-dead')]);
+  const line4 = (s4.out.split('\n').find((l) => /^\s+4 M03\/pending/.test(l)) || '');
+  ok(!dead.ok && dead.report.errors.some((e) => e.code === 'FLOW_SEE' && /第 4 步/.test(e.msg) && /点“确认提交”没有跳转/.test(e.msg)) && /✗/.test(line4) && !/✓/.test(line4), '20 上一步的按钮点了没跳转、这一步写了 see：FLOW_SEE；snap.mjs --flows 这一步标 ✗', JSON.stringify(dead.report.errors.slice(0, 2)) + ' | ' + line4);
+  /* 复核 r5-r1 Q5：有流程、一条 see 都没写，提醒一次，不阻止交付；写了 see 就不提醒 */
+  const seeMiss = (r) => r.report.warns.filter((w) => w.code === 'SEE_MISSING');
+  ok(base.ok && seeMiss(base).length === 1 && /2 条/.test(seeMiss(base)[0].msg) && seeOk.ok && !seeMiss(seeOk).length, '20 有流程但一条 see 都没写：SEE_MISSING 提醒一次，不阻止交付；写了 see 不提醒', JSON.stringify(seeMiss(base)) + JSON.stringify(seeMiss(seeOk)));
+  /* 复核 r5-r2 必须修改 1：上一步 tip 没用 点“X” 点名按钮，写了 see 的跨页步骤也要真点；按钮去错了地方照实报 */
+  const NOTIP = [PROD, "点“确认提交”。', label: '确认提交' }", "确认后提交。', label: '确认提交' }"];
+  const hole = await build(variant(EXAMPLE, [SEE4, brk, NOTIP]), {});
+  ok(!hole.ok && hole.report.errors.some((e) => e.code === 'FLOW_SEE' && /第 4 步/.test(e.msg) && /实际到的是 M03\/approved/.test(e.msg)), '20 上一步 tip 没点名按钮、按钮去错了状态、这一步写了 see：照样真点，FLOW_SEE', JSON.stringify(hole.report.errors.slice(0, 2)));
+  const holeSet = await build(variant(EXAMPLE, [[PROD, "{ p: 'M03', st: 'pending', tip:", "{ p: 'M03', st: 'pending', see: '待审批', set: 'balance.annual=3.5', tip:"], brk, NOTIP]), {});
+  ok(!holeSet.ok && holeSet.report.errors.some((e) => e.code === 'FLOW_SEE' && /第 4 步/.test(e.msg)), '20 同上、这一步还写了 set（不只是 preset=）：不当演示切换，FLOW_SEE', JSON.stringify(holeSet.report.errors.slice(0, 2)));
+  /* 复核 r5-r2 必须修改 2：tip 点名的是一张大卡片（前面有图标字、后面一长串说明），去向正确时算真点到，写了 see 不误报 */
+  const card = await build(variant(EXAMPLE, [
+    ['prd/pages/M01-home.js', "h.btn(h.i('plus', 16) + '发起请假', { k: 'pri blk lg', go: 'M02', st: 'form', fn: 'create' })", "h.btn('<b>假</b> 发起请假 <small>年假、事假、病假都在这里申请，提交后由直属主管审批，结果会通知你</small>', { k: 'pri blk lg', go: 'M02', st: 'form', fn: 'create' })"],
+    [PROD, "{ p: 'M02', st: 'form', tip:", "{ p: 'M02', st: 'form', see: '提交申请', tip:"]]), {});
+  ok(card.ok && fwOf(card).clicked === 7 && fwOf(card).seeUnchecked === 0 && fwOf(card).seeFailed === 0, '20 tip 点名的是大卡片（图标字 + 点名文字 + 一长串说明）、去向正确：算真点到，see 不误报', JSON.stringify(fwOf(card)) + JSON.stringify((card.report || {}).errors));
+  /* 复核 r5-r3 可选建议 1：“确认提交”不跳转、第 3 步 tip 不点名，画面上也没有去 M03 的按钮（nopick 分支）→ see 没法核对 */
+  const DEADBTN = [M02, "h.btn('确认提交', { k: 'pri', go: 'M03', st: 'pending'", "h.btn('确认提交', { k: 'pri', act: 'toast'"];
+  const nopickR = await build(variant(EXAMPLE, [SEE4, DEADBTN, NOTIP]), {});
+  ok(!nopickR.ok && nopickR.report.errors.some((e) => e.code === 'FLOW_SEE' && /第 4 步/.test(e.msg) && /上一步 tip 没写要点哪个按钮/.test(e.msg) && /画面上也没有直接去 M03\/pending 的按钮/.test(e.msg) && /没法核对/.test(e.msg)) && fwOf(nopickR).seeUnchecked === 1, '20 上一步 tip 没点名按钮、画面上也没有去这一步的按钮、这一步写了 see：FLOW_SEE，写明 see 没法核对', JSON.stringify((nopickR.report || {}).errors));
+  /* 同上，第 4 步只写 set: 'preset=normal'（只切数据场景，例外 4）：按流程直接到达，see 按演示画面核对，构建通过；snap 写明“切换数据场景” */
+  const presetR = await build(variant(EXAMPLE, [[PROD, "{ p: 'M03', st: 'pending', tip:", "{ p: 'M03', st: 'pending', see: '待审批', set: 'preset=normal', tip:"], DEADBTN, NOTIP]), {});
+  const s5 = presetR.ok ? runSnap([presetR.file, '--flows', '--only', '--out', path.join(TMP, 'flow-shots-preset')]) : { code: -1, out: '' };
+  const line5 = (s5.out.split('\n').find((l) => /^\s+4 M03\/pending/.test(l)) || '');
+  const pw = fwOf(presetR) || {};
+  ok(presetR.ok && pw.see === 1 && pw.seeFailed === 0 && pw.seeUnchecked === 0 && pw.jumped === 1 && s5.code === 0 && /✓/.test(line5) && /切换数据场景/.test(line5), '20 同上、这一步只写 set: preset=…、上一步 tip 没写“点”（只切数据场景）：按流程直接到达，构建通过，snap 写“切换数据场景”', JSON.stringify(pw) + JSON.stringify((presetR.report || {}).errors) + ' | ' + line5);
+  /* 解耦检查 r2 小问题：对 .prd-build/ 里的 failed 文件跑 --flows、不写 --out，截图落在项目的 .prd-build/snap，不多套一层；
+     项目根目录的交付文件也落在同一个目录；写了 --out 的照旧（s2 的目录） */
+  const projSnap = path.join(seeBadDir, '.prd-build', 'snap');
+  const flowPngs = (d) => (fs.existsSync(d) ? fs.readdirSync(d).filter((n) => /^f\d+-\d+-.*\.png$/.test(n)) : []);
+  const s6 = runSnap([seeBad.failed, '--flows', '--only']);
+  const fromFailed = flowPngs(projSnap).length;
+  fs.rmSync(projSnap, { recursive: true, force: true });
+  const s7 = runSnap([base.file, '--flows', '--only']);
+  const rootSnap = path.join(path.dirname(base.file), '.prd-build', 'snap');
+  ok(path.dirname(seeBad.failed) === path.join(seeBadDir, '.prd-build') && s6.code === 1 && fromFailed === 9 && s6.out.includes(projSnap) && !fs.existsSync(path.join(seeBadDir, '.prd-build', '.prd-build'))
+    && s7.code === 0 && flowPngs(rootSnap).length === 9 && flowPngs(path.join(TMP, 'flow-shots-bad')).length === 9,
+    '20 snap.mjs 默认截图目录：failed 文件和项目根目录的交付文件都落在项目的 .prd-build/snap，不出现 .prd-build/.prd-build；写了 --out 的照旧', 'failed→' + fromFailed + ' root→' + flowPngs(rootSnap).length + ' out→' + flowPngs(path.join(TMP, 'flow-shots-bad')).length + ' | ' + s6.out.slice(-300));
+}
+
 console.log('\n结果：' + pass + ' 通过，' + failN + ' 失败');
 if (failN) console.log('失败项：\n  - ' + fails.join('\n  - '));
 if (!KEEP && !failN) fs.rmSync(TMP, { recursive: true, force: true });

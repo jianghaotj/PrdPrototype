@@ -11,6 +11,7 @@ export const HINTS = {
   STATE_WHEN: '每个状态都要写 when：在什么数据或操作下出现。',
   PRESET: 'set 中引用的演示预设要在 product.scenarios.presets 中登记。',
   FLOW: '流程步骤引用的页面和状态必须存在。',
+  FLOW_SEE: '流程步骤写了 see，按流程真点过来没看到这些文字，或者这一步没真点到（上一步 tip 点名的按钮找不到、点了没跳转，或 tip 没点名按钮、画面上也没有直接去这一步的按钮），see 没法核对：看看上一页的按钮有没有把做完的状态带过来、有没有跳转，这一页有没有读它，tip 里有没有用 点“按钮上的字” 写对按钮；see 写错了就改 see。用 snap.mjs --flows 看每一步的截图。',
   FN: '功能点缺少 id 或 name。',
   FN_DUP: '功能点 ID 在本页内或与本端公共组件重名。',
   FN_DESC: '功能点必须写 desc：用户怎么操作、系统怎么响应。',
