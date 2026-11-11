@@ -1445,7 +1445,7 @@ console.log('\n14. 导出给开发测试');
     ok(acLines.length === 1 && acLines[0] === 'pageId,fnId,fnName,pre,act,expect', '样例没写 ac 时，验收条件文件只有表头，其余留空不报错');
   }
 
-  /* C. 原型阶段：--csv 成功，--md 仍拒绝；原型里有“清单”按钮（不在文档栏），点击下载同一 CSV */
+  /* C. 原型阶段：--csv 成功，--md 仍拒绝；1.3.0 起交付 HTML 里没有「清单」按钮（CSV 只从命令行导出） */
   const pvDir = variant(EXAMPLE, [PROTO_EDIT14]);
   const pvCsv = runBuild([pvDir, '--csv']);
   ok(pvCsv.status === 0 && fs.existsSync(path.join(pvDir, '请假审批-功能点-V1.0.csv')) && fs.readFileSync(path.join(pvDir, '请假审批-功能点-V1.0.csv'), 'utf8').indexOf('M02,') >= 0, '原型阶段 build.mjs --csv 成功，功能点文件含 M02 行', pvCsv.out.slice(0, 300));
@@ -1458,16 +1458,14 @@ console.log('\n14. 导出给开发测试');
       const pg = await bC.newPage({ width: 1600, height: 1000 });
       await pg.goto(fileUrl(pvHtml));
       await pg.waitFor('window.__PRD_READY === true', 20000);
-      const btn = await pg.evaluate('(function(){ var b = document.querySelector("[data-tool=csv]"); return !!b && b.textContent.trim() === "清单" && !document.querySelector("[data-act-doc=csv]"); })()');
-      ok(btn === true, '原型阶段：顶栏有「清单」按钮，文档栏没有重复的导出按钮');
-      const d = await downloadFrom(pg, '[data-tool=csv]');
-      const rows = d.text ? toObjs(parseCsv(d.text.replace(/^\uFEFF/, ''))) : [];
-      ok(d.names[0] === '请假审批-研发测试清单-V1.0.csv' && rows.some((r) => r.sheet === 'fns' && r.fnId === 'submit'), '原型阶段点「清单」：下载同一份 CSV，含功能点行', JSON.stringify(d.names));
-      ok(d.bytes[0] === 0xef && d.bytes[1] === 0xbb && d.bytes[2] === 0xbf, '原型阶段「清单」导出的 CSV 以 UTF-8 BOM 开头（Excel 可直接打开）');
+      const btn = await pg.evaluate('(function(){ return { tool: !!document.querySelector("[data-tool=csv]"), doc: !!document.querySelector("[data-act-doc]"), text: /清单|CSV|打印|PDF/.test(document.getElementById("top").textContent) }; })()');
+      ok(!btn.tool && !btn.doc && !btn.text, '1.3.0 原型阶段：顶栏没有「清单」按钮，也没有打印、PDF、CSV 入口', JSON.stringify(btn));
+      const rows = toObjs(parseCsv(await pg.evaluate('W.doc.csvText()')));
+      ok(rows.some((r) => r.sheet === 'fns' && r.fnId === 'submit'), '原型阶段：CSV 内容仍可由 W.doc.csvText 生成（供 --csv 和检查用），含功能点行');
     } finally { await bC.close(); }
   }
 
-  /* D/E. 托管模式：默认和原型都能 build --csv；默认模式文档栏只剩「导出 Markdown」且能导出，原型阶段「清单」导出 CSV 有功能点行 */
+  /* D/E. 托管模式：默认和原型都能 build --csv；默认模式文档栏只剩「导出 Markdown」且能导出；原型阶段没有「清单」按钮 */
   const hostD = await build(variant(HOSTFX, []), { csv: true });
   ok(hostD.ok && hostD.csvFiles && hostD.csvFiles.length === 3, '托管模式（默认）build --csv 检查通过，写出三份 CSV', hostD.ok ? '' : JSON.stringify(hostD.report.errors.slice(0, 2)));
   const hostP = await build(variant(HOSTFX, [PROTO_EDIT14]), { csv: true });
@@ -1486,9 +1484,9 @@ console.log('\n14. 导出给开发测试');
         ok(acts === 'md' && /需求文档-V1\.0\.md$/.test(dm.names[0] || '') && /^# .+ · 需求文档/.test(dm.text || ''), label + '：需求文档栏只有「导出 Markdown」，点击得到 Markdown', acts + ' ' + JSON.stringify(dm.names));
         continue;
       }
-      const d = await downloadFrom(pg, sel);
-      const rows = d.text ? toObjs(parseCsv(d.text.replace(/^\uFEFF/, ''))) : [];
-      ok(rows.filter((x) => x.sheet === 'fns').length > 0, label + '：点击导出得到 CSV，含功能点行（' + rows.filter((x) => x.sheet === 'fns').length + ' 行）', JSON.stringify(d.names));
+      const noBtn = await pg.evaluate('!document.querySelector(' + JSON.stringify(sel) + ')');
+      const rows = toObjs(parseCsv(await pg.evaluate('W.doc.csvText()')));
+      ok(noBtn && rows.filter((x) => x.sheet === 'fns').length > 0, label + '：没有「清单」按钮；CSV 内容仍可生成，含功能点行（' + rows.filter((x) => x.sheet === 'fns').length + ' 行）');
     } finally { await b.close(); }
   }
 
@@ -2073,6 +2071,86 @@ console.log('\n18. 评审意见按版本分组、结构检查文案');
     const t = JSON.parse(await pg.evaluate('JSON.stringify({ badge: (document.querySelector(".audit-badge") || {}).textContent || "", sec: Array.from(document.querySelectorAll("#right .np-sec h3")).map(function (x) { return x.firstChild.textContent; }), md: W.doc.markdown({ html: false }).slice(0, 600) })'));
     ok(/^结构检查通过/.test(t.badge) && t.sec.includes('结构检查') && /· 结构检查通过（\d{4}-\d{2}-\d{2}）/.test(t.md), '18 顶部徽标、需求文档右栏和 Markdown 统计行都写“结构检查通过”', JSON.stringify(t).slice(0, 400));
   } finally { await bq.close(); }
+}
+
+/* ---------- 19. 1.3.0：总流程图（由核心流程自动汇总）、去掉交付 HTML 里的 CSV 按钮 ---------- */
+console.log('\n19. 1.3.0 总流程图');
+{
+  const exMd = fs.readFileSync(ex.mdFile, 'utf8');
+  const fmSec = (exMd.split('### 总流程图')[1] || '').split('### 1. ')[0];
+  ok(/## \d+ 核心流程\n\n### 总流程图\n/.test(exMd) && fmSec.indexOf('```mermaid\n%%{init:') >= 0 && /flowchart TD/.test(fmSec), '19 Markdown：核心流程一章最前面是“总流程图”，附 Mermaid 代码');
+  ok(/subgraph e0\["员工手机端"\]/.test(fmSec) && /subgraph e1\["审批台（PC）"\]/.test(fmSec) && /M01 请假首页<br>▶ ①/.test(fmSec) && /n0 -->\|"①"\| n1/.test(fmSec), '19 自动汇总：每端一个分区、一个页面一个方框，开始页标 ▶ 和流程编号，箭头标流程编号', fmSec.slice(0, 500));
+  ok(/- ① 员工发起请假 · 员工手机端\n- ② 主管审批 · 审批台（PC）/.test(fmSec), '19 图下列出 ①② 对应的流程名', fmSec.slice(-200));
+  ok(/classDef s0 fill:#2f5bea/.test(fmSec) && /classDef s1 fill:#0f7d64/.test(fmSec) && /style e0 fill:#f1f5ff/.test(fmSec) && /n0\(\["/.test(fmSec) && !/linkStyle default/.test(fmSec), '19 配色：每端一种颜色，开始页实心胶囊；不用 linkStyle default（会画出分区间的隐形连线）');
+  const pre = /<script type="application\/json" id="prd-mermaid">([\s\S]*?)<\/script>/.exec(exHtml);
+  const preSvg = pre ? Object.values(JSON.parse(pre[1]))[0] || '' : '';
+  ok(/^<svg/.test(preSvg) && !/\d\.\d{3,}/.test(preSvg) && !/Mermaid \d[\d.]*（MIT）/.test(exHtml), '19 交付文件内嵌预先渲染的 SVG（坐标保留 2 位小数），不内嵌 Mermaid 库', preSvg.slice(0, 120));
+  const b19 = await launch();
+  try {
+    const pg = await b19.newPage({ width: 1600, height: 1000 });
+    await pg.goto(fileUrl(ex.file) + '#/doc'); await pg.waitFor('window.__PRD_READY === true', 20000); await sleep(400);
+    const d = JSON.parse(await pg.evaluate('JSON.stringify((function(){ var m = document.querySelector("#docbody .mermaid svg"); var tx = m ? Array.from(m.querySelectorAll("text")).map(function (t) { return t.textContent; }).join("|") : ""; return { svg: !!m, fo: m ? m.querySelectorAll("foreignObject").length : -1, hasLabel: /M01 请假首页/.test(tx) && /员工手机端/.test(tx), lib: !!window.mermaid, missing: /流程图需要 Mermaid/.test(document.getElementById("docbody").textContent) }; })())'));
+    ok(d.svg && d.fo === 0 && d.hasLabel && !d.lib && !d.missing, '19 需求文档里流程图显示，方框和分区标题有文字（SVG 文本，不依赖 foreignObject）', JSON.stringify(d));
+    await pg.evaluate('document.querySelector("#docbody .mermaid").click(); 1'); await sleep(200);
+    const z1 = await pg.evaluate('!!document.getElementById("mmd-full") && !!document.querySelector("#mmd-full svg")');
+    await pg.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await sleep(150);
+    const z2 = await pg.evaluate('!document.getElementById("mmd-full")');
+    ok(z1 && z2, '19 点流程图放大到原始尺寸，按 Esc 关闭', JSON.stringify({ z1, z2 }));
+    await pg.evaluate('location.hash = "#/flow"; 1'); await sleep(500);
+    const f = JSON.parse(await pg.evaluate('JSON.stringify({ svg: !!document.querySelector("#flowmap svg"), left: Array.from(document.querySelectorAll("#left .fl-h b")).map(function (b) { return b.textContent; }), h3: Array.from(document.querySelectorAll("#stage-in h3")).map(function (b) { return b.textContent; }) })'));
+    ok(f.svg && f.left[0] === '① 员工发起请假' && f.h3[1] === '② 主管审批', '19 “核心流程”演示页上方也有总流程图，流程按 ①② 编号', JSON.stringify(f));
+  } finally { await b19.close(); }
+
+  /* branch：分支条件写在箭头上（橙色加粗）；同一页的分支合成一条回到本页的箭头 */
+  const brDir = variant(EXAMPLE, [[PROD, "{ p: 'M03', st: 'withdraw', tip:", "{ p: 'M03', st: 'withdraw', branch: '要撤回', tip:"],
+    [PROD, "{ p: 'P02', st: 'reject', tip:", "{ p: 'P02', st: 'reject', branch: '驳回', tip:"]]);
+  const br = await build(brDir, { md: true });
+  const brMd = br.ok ? fs.readFileSync(br.mdFile, 'utf8') : '';
+  ok(br.ok && /n2 -->\|"① 要撤回"\| n2/.test(brMd) && /n4 -->\|"② 驳回"\| n4/.test(brMd) && /linkStyle [\d,]+ stroke:#e8590c/.test(brMd) && /橙色粗箭头上写的是分支条件/.test(brMd), '19 branch：条件写在箭头上，同页分支画成回到本页的箭头，分支箭头橙色', br.ok ? brMd.split('### 总流程图')[1].slice(0, 900) : JSON.stringify(br.report.errors));
+  const two = variant(EXAMPLE, [[PROD, "{ p: 'M02', st: 'confirm', tip:", "{ p: 'M02', st: 'confirm', branch: '确认', tip:"],
+    [PROD, "{ p: 'M02', st: 'form', tip:", "{ p: 'M02', st: 'form', branch: '填写', tip:"]]);
+  const twoR = await build(two, { md: true });
+  const twoMd = twoR.ok ? fs.readFileSync(twoR.mdFile, 'utf8') : '';
+  ok(twoR.ok && (twoMd.match(/n1 -->\|[^\n]*\| n1/g) || []).length === 1 && /n1 -->\|"① 确认"\| n1/.test(twoMd), '19 同一页的多个分支只画一条回到本页的箭头（不叠在一起）', (twoMd.split('### 总流程图')[1] || '').slice(0, 700));
+
+  /* flowMap：false 不画；写 Mermaid 文本时直接用；类型不对、语法错报 FLOW */
+  const off = await build(variant(EXAMPLE, [[PROD, '  flows: [', '  flowMap: false,\n  flows: [']]), { md: true });
+  const offMd = off.ok ? fs.readFileSync(off.mdFile, 'utf8') : '';
+  const offHtml = off.ok ? fs.readFileSync(off.file, 'utf8') : '';
+  ok(off.ok && !/总流程图/.test(offMd) && !/id="prd-mermaid"/.test(offHtml) && /### 1\. 员工发起请假/.test(offMd), '19 flowMap: false 时不画总流程图，其余流程照常');
+  const own = await build(variant(EXAMPLE, [[PROD, '  flows: [', "  flowMap: 'flowchart LR\\n  a[\"首页\"] --> b[\"审批\"]',\n  flows: ["]]), { md: true });
+  const ownMd = own.ok ? fs.readFileSync(own.mdFile, 'utf8') : '';
+  ok(own.ok && /### 总流程图\n\n```mermaid\nflowchart LR\n  a\["首页"\] --> b\["审批"\]\n```/.test(ownMd), '19 flowMap 写 Mermaid 文本时原样使用', (ownMd.split('### 总流程图')[1] || '').slice(0, 200));
+  const badT = await build(variant(EXAMPLE, [[PROD, '  flows: [', '  flowMap: true,\n  flows: [']]), {});
+  ok(!badT.ok && badT.report.errors.some((e) => e.code === 'FLOW' && /flowMap 只能写/.test(e.msg)), '19 flowMap 不是文本也不是 false：报 FLOW');
+  const badS = await build(variant(EXAMPLE, [[PROD, '  flows: [', "  flowMap: 'flowchart TD\\n  a --> ((( b',\n  flows: ["]]), {});
+  ok(!badS.ok && badS.report.errors.some((e) => e.code === 'FLOW' && /总流程图渲染失败/.test(e.msg)), '19 手写的 flowMap 语法错：报 FLOW，不交付', badS.ok ? '' : JSON.stringify(badS.report.errors.slice(0, 2)));
+  const badB = await build(variant(EXAMPLE, [[PROD, "{ p: 'M03', st: 'withdraw', tip:", "{ p: 'M03', st: 'withdraw', branch: 1, tip:"]]), {});
+  ok(!badB.ok && badB.report.errors.some((e) => e.code === 'FLOW' && /branch 要写成一小段文字/.test(e.msg)), '19 branch 不是文字：报 FLOW');
+  const longB = await build(variant(EXAMPLE, [[PROD, "{ p: 'M03', st: 'withdraw', tip:", "{ p: 'M03', st: 'withdraw', branch: '员工发现时间填错了想撤回重新提交申请', tip:"],
+    [PROD, "{ p: 'P02', st: 'reject', tip:", "{ p: 'P02', st: 'reject', brnach: '驳回', tip:"]]), {});
+  ok(longB.ok && longB.report.warns.some((w) => w.code === 'FLOW' && /箭头上放不下/.test(w.msg)) && longB.report.warns.some((w) => w.code === 'UNKNOWN_KEY' && /brnach/.test(w.msg)), '19 branch 太长只提醒；步骤字段拼错给 UNKNOWN_KEY 提醒');
+  /* 复核 r1：同一份源两次构建，总流程图 SVG 相同（固定 Mermaid 随机种子）；跨端箭头画成虚线；作者手写的 ```mermaid 现场渲染时方框里有字 */
+  const again = await build(variant(EXAMPLE, []), {});
+  const pre2 = again.ok ? /<script type="application\/json" id="prd-mermaid">([\s\S]*?)<\/script>/.exec(fs.readFileSync(again.file, 'utf8')) : null;
+  ok(!!pre && !!pre2 && pre[1] === pre2[1], '19 同一份源两次构建，内嵌的总流程图 SVG 完全相同');
+  const crossR = await build(variant(EXAMPLE, [[PROD, "label: '撤回确认' }", "label: '撤回确认' },\n        { p: 'P01', st: 'list', tip: '主管的待审批列表里这张单据已经消失。' }"]]), { md: true });
+  const crossMd = crossR.ok ? fs.readFileSync(crossR.mdFile, 'utf8') : '';
+  ok(crossR.ok && /n2 -->\|"①"\| n3/.test(crossMd) && /linkStyle \d+ stroke:#4e5969,stroke-width:2px,stroke-dasharray:6 4/.test(crossMd) && /灰色虚线是跨端/.test(crossMd), '19 跨端步骤：箭头画成灰色虚线，说明文字写明', crossR.ok ? (crossMd.split('### 总流程图')[1] || '').slice(0, 900) : JSON.stringify(crossR.report.errors.slice(0, 2)));
+  const own2 = await build(variant(EXAMPLE, [[PROD, '  flows: [', "  sections: [{ title: '示意图', md: '```mermaid\\nflowchart LR\\n  a[\"手写首页\"] --> b[\"手写审批\"]\\n```' }],\n  flows: ["]]), {});
+  if (own2.ok) {
+    const b19b = await launch();
+    try {
+      const pg = await b19b.newPage({ width: 1600, height: 1000 });
+      await pg.goto(fileUrl(own2.file) + '#/doc'); await pg.waitFor('window.__PRD_READY === true', 20000); await sleep(1500);
+      const t = JSON.parse(await pg.evaluate('JSON.stringify((function(){ var all = Array.from(document.querySelectorAll("#docbody .mermaid svg")).map(function (m) { return Array.from(m.querySelectorAll("text")).map(function (x) { return x.textContent; }).join("|"); }); return { lib: !!window.mermaid, own: all.some(function (x) { return /手写首页/.test(x) && /手写审批/.test(x); }) }; })())'));
+      ok(t.lib && t.own, '19 作者手写的 Mermaid 图现场渲染，方框里有文字（内嵌 Mermaid 库）', JSON.stringify(t));
+    } finally { await b19b.close(); }
+  } else ok(false, '19 作者手写的 Mermaid 图现场渲染，方框里有文字（内嵌 Mermaid 库）', JSON.stringify(own2.report.errors.slice(0, 2)));
+  const noFlow = await build(variant(EXAMPLE, [[PROD, /  flows: \[[\s\S]*?\n  \],\n/, '']]), { md: true });
+  const nfMd = noFlow.ok ? fs.readFileSync(noFlow.mdFile, 'utf8') : '';
+  ok(noFlow.ok && !/总流程图|核心流程/.test(nfMd) && !/id="prd-mermaid"/.test(fs.readFileSync(noFlow.file, 'utf8')), '19 没有核心流程时不画总流程图，也不内嵌 Mermaid', noFlow.ok ? '' : JSON.stringify(noFlow.report.errors.slice(0, 2)));
 }
 
 console.log('\n结果：' + pass + ' 通过，' + failN + ' 失败');

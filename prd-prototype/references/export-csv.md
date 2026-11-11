@@ -4,8 +4,7 @@
 
 ## 在交付 HTML 里导出
 
-- **原型阶段**：没有需求文档栏。顶栏有「清单」按钮，下载一个合并文件：`<产品名>-研发测试清单-<版本>.csv`，带 UTF-8 BOM。文件里用 `sheet` 列区分三张表：`fns`（功能点）、`fields`（字段）、`ac`（验收条件）。
-- **默认模式**：页面里不提供 CSV 下载。需求文档栏只有「导出 Markdown」（1.2.1 起去掉了「导出 CSV」和「打印 / 存为 PDF」）。要 CSV 时用下面的命令行。
+交付 HTML 里不提供 CSV 下载：默认模式的需求文档栏只有「导出 Markdown」（1.2.1 起去掉了「导出 CSV」和「打印 / 存为 PDF」），原型阶段顶栏的「清单」按钮 1.3.0 起也去掉了。要 CSV 时用下面的命令行。
 
 公共组件的 `pageId` 写作 `S:<端ID>`（与评审意见的挂点写法一致）。已标记为移除（`removed`）的功能点和字段不导出。单元格按 RFC 4180 转义（逗号、双引号、换行）。
 
@@ -31,4 +30,4 @@ node scripts/build.mjs <项目目录> --export-pack
 | 字段 | pageId, fnId, fnName, key, name, type, required, def, options, rule |
 | 验收条件 | pageId, fnId, fnName, pre, act, expect |
 
-合并 CSV 的列是以上并集，外加最前面的 `sheet`。`status` 只写「待确认」或「AI 假设」，已确认留空。`required` 写作「是」或「否」。`options` 多个值用顿号「、」连接；`def` 是默认值。
+三份文件的列见上表（`W.doc.csvText()` 能生成一份合并文本，列是三表并集，外加最前面的 `sheet` 列区分 `fns`、`fields`、`ac`，供检查和测试用）。`status` 只写「待确认」或「AI 假设」，已确认留空。`required` 写作「是」或「否」。`options` 多个值用顿号「、」连接；`def` 是默认值。

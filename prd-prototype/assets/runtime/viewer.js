@@ -241,7 +241,6 @@
       '<button class="vbtn" data-tool="hot" title="显示画板中所有可点击区域">热区 <kbd>H</kbd></button>' +
       '<button class="vbtn" data-tool="dots" title="显示或隐藏功能点标注圆点">标注 <kbd>N</kbd></button>' +
       '<button class="vbtn" data-tool="comments" title="查看、添加和导出评审意见">意见<span class="cmt-badge">' + cmtBadgeText() + '</span></button>' +
-      (ui.proto ? '<button class="vbtn" data-tool="csv" title="导出功能点、字段、验收条件（CSV），给开发和测试用">清单</button>' : '') +
       (D.multiRelease() ? '<button class="vbtn chg" data-tool="chg" title="只看 ' + h.esc(D.cur()) + ' 新增、修改、移除的功能点">本版变化</button>' : '') +
       '<button class="vbtn" data-tool="zoom" id="zoomBtn"><span class="lb">适应窗口</span></button>' +
       '<button class="vbtn" data-tool="left"><span class="lb">目录</span></button>' +
@@ -800,13 +799,13 @@
     var L = $('#left');
     if (tab === 'flow' || flow) {
       var cur = flow ? flow.id : null, ci = r && r.q ? +r.q.i || 0 : 0;
-      L.innerHTML = '<div class="nv-head">点击流程开始演示；演示中直接点画板里的按钮也会前进，键盘 ← → 切换步骤。</div>' + (W.P.flows || []).map(function (f) {
+      L.innerHTML = '<div class="nv-head">点击流程开始演示；演示中直接点画板里的按钮也会前进，键盘 ← → 切换步骤。</div>' + (W.P.flows || []).map(function (f, fi) {
         var on = f.id === cur;
         var steps = on ? '<div class="fl-s">' + f.steps.map(function (s, i) {
           var pg = W.pages[s.p];
           return '<a class="' + (i === ci ? 'on' : i < ci ? 'past' : '') + '" data-step="' + h.esc(f.id + '|' + i) + '"><i>' + (i + 1) + '</i><span>' + h.esc(s.p + ' ' + (s.label || (pg && pg.title) || '')) + '</span></a>';
         }).join('') + '</div>' : '';
-        return '<div class="fl ' + (on ? 'on' : '') + '"><a class="fl-h" data-step="' + h.esc(f.id) + '|0"><b>' + h.esc(f.name) + '</b><span>' + f.steps.length + ' 步' + (f.ends ? ' · ' + h.esc(f.ends) : '') + '</span></a>' + steps + '</div>';
+        return '<div class="fl ' + (on ? 'on' : '') + '"><a class="fl-h" data-step="' + h.esc(f.id) + '|0"><b>' + D.num(fi) + ' ' + h.esc(f.name) + '</b><span>' + f.steps.length + ' 步' + (f.ends ? ' · ' + h.esc(f.ends) : '') + '</span></a>' + steps + '</div>';
       }).join('');
       return;
     }
@@ -935,9 +934,11 @@
     ui.docKey = '';
     renderLeft('flow', r, null);
     if (!ui.proto) $('#right').innerHTML = '<div class="np"><h2>核心流程</h2><p class="goal">从左侧选择一条流程。演示中可以直接点击画板里的按钮前进，也可以使用底部的“上一步／下一步”。</p></div>';
-    $('#stage-in').innerHTML = '<div class="doc"><h1>核心流程演示</h1><p>共 ' + (W.P.flows || []).length + ' 条流程。</p>' + (W.P.flows || []).map(function (f) {
-      return '<h3>' + h.esc(f.name) + '</h3>' + (f.desc ? '<p>' + W.md.inline(f.desc) + '</p>' : '') + '<p><a href="#" data-step="' + h.esc(f.id) + '|0">▶ 开始演示（' + f.steps.length + ' 步）</a></p>';
+    var fm = D.flowMap();
+    $('#stage-in').innerHTML = '<div class="doc"><h1>核心流程演示</h1><p>共 ' + (W.P.flows || []).length + ' 条流程。' + (fm ? '下面的总流程图汇总了全部流程，箭头上的编号对应流程编号。' : '') + '</p>' + (fm ? '<div id="flowmap"></div>' : '') + (W.P.flows || []).map(function (f, fi) {
+      return '<h3>' + D.num(fi) + ' ' + h.esc(f.name) + '</h3>' + (f.desc ? '<p>' + W.md.inline(f.desc) + '</p>' : '') + '<p><a href="#" data-step="' + h.esc(f.id) + '|0">▶ 开始演示（' + f.steps.length + ' 步）</a></p>';
     }).join('') + '</div>';
+    if (fm) W.md.into($('#flowmap'), '```mermaid\n' + fm.code + '\n```');
     $('#flowbar').innerHTML = '';
   }
 
@@ -1012,6 +1013,23 @@
     s += '</div>';
     $('#right').innerHTML = s;
   }
+  /* 文档里的流程图点击放大：按图的原始尺寸铺满窗口，可滚动；点任意处或按 Esc 关闭 */
+  function mmdOpen(box) {
+    var svg = box.querySelector('svg');
+    if (!svg) return;
+    mmdClose();
+    var c = svg.cloneNode(true), vb = (svg.getAttribute('viewBox') || '').split(/[\s,]+/);
+    if (vb.length === 4 && +vb[2] > 0) { c.setAttribute('width', Math.round(+vb[2])); c.removeAttribute('height'); }
+    c.style.maxWidth = 'none';
+    var ov = document.createElement('div');
+    ov.id = 'mmd-full';
+    ov.className = 'mmd-full';
+    ov.innerHTML = '<div class="mmd-full-bar">原始尺寸，可上下左右滚动；点任意处或按 Esc 关闭</div><div class="mmd-full-in"></div>';
+    ov.lastChild.appendChild(c);
+    document.body.appendChild(ov);
+  }
+  function mmdClose() { var o = $('#mmd-full'); if (o) o.remove(); }
+  W.mmdOpen = mmdOpen;
   function exportMd() {
     var md = D.markdown({ html: false, changesOnly: chgOn() && D.multiRelease() });
     var blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
@@ -1023,16 +1041,7 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
 
-  /* 导出 CSV（原型阶段顶栏「清单」）：文件带 UTF-8 BOM，Excel 双击即可正确显示中文 */
-  function exportCsv() {
-    var blob = new Blob(['\uFEFF' + D.csvText()], { type: 'text/csv;charset=utf-8' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = (W.P.name || '需求') + '-研发测试清单-' + D.cur() + '.csv';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
-  }
+
 
   /* ---------- 画板缩放 ---------- */
   function fit() {
@@ -1117,6 +1126,7 @@
   }
   W.setRole = setRole;
   function onKey(e) {
+    if (e.key === 'Escape' && $('#mmd-full')) { mmdClose(); return; }
     if (e.target.closest && e.target.closest('#vsw') && vswKey(e)) return;
     if (e.key === 'Escape' && document.body.classList.contains('vsw-open')) { vswClose(true); return; }
     if (e.key === 'Escape' && (ui.cmt.pop || document.body.classList.contains('cmt-on'))) {
@@ -1148,6 +1158,9 @@
   }
   document.addEventListener('click', function (e) {
     var t = e.target;
+    if (t.closest('#mmd-full')) { mmdClose(); return; }
+    var mm = t.closest('.doc .mermaid');
+    if (mm && mm.querySelector('svg')) { mmdOpen(mm); return; }
     var cb = t.closest('[data-cmt]');
     if (cb) { cmtCardBtn(cb); return; }
     var ca = t.closest('[data-cmt-act]');
@@ -1213,7 +1226,6 @@
       if (k2 === 'hot') toggleHot();
       if (k2 === 'dots') toggleDots();
       if (k2 === 'comments') cmtToggle();
-      if (k2 === 'csv') exportCsv();
       if (k2 === 'sdots') { pref('sharedDots', !pref('sharedDots')); tool.classList.toggle('on', !!pref('sharedDots')); placeDots(); }
       if (k2 === 'chg') { B.toggle('chg-on'); pref('chg', B.contains('chg-on')); ui.docKey = ''; render({ keepSel: true }); }
       if (k2 === 'zoom') { ui.zoom = ui.zoom === 'fit' ? '100' : 'fit'; fit(); }

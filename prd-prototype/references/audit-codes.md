@@ -33,7 +33,7 @@
 | `FN_REMOVED` | 标记为 `removed` 的功能点还在原型里 | 从 render 中删除 |
 | `GO_TARGET` | `data-go` 或 `h.submit` 的 `ok` 跳转到不存在的页面或状态 | 改正目标 |
 | `BEHAVE` | `h.submit` 的 `form` 找不到唯一的 `h.form`，或 `h.search` 的 `filter` 找不到唯一的 `h.rows` | 两边的 id 写成一致，且在页面内唯一 |
-| `FLOW` | 流程步骤引用的页面或状态不存在 | 改正 |
+| `FLOW` | 流程步骤引用的页面或状态不存在；步骤的 `branch` 不是文字；`product.flowMap` 不是文本或 `false`；总流程图渲染失败（多半是手写的 `flowMap` 语法错） | 改正 |
 | `PRESET` | `set` 引用了未登记的数据场景 | 在 `scenarios.presets` 中登记 |
 | `RELEASE` | `changes` 引用了未登记的版本，或修改/移除没写 `note` | 按提示修改 |
 | `RENDER` | 页面 `render` 或 `after` 抛出异常 | 修复代码；常见原因是读了不存在的演示数据 |
@@ -58,7 +58,7 @@
 | `UNREACHABLE` | 页面没有任何入口（不是首页、不在流程中、没有按钮跳过来） |
 | `LAYER` | 状态声明了弹层但没渲染弹层组件，或渲染了弹层但状态没声明 `layer` |
 | `FN_BROAD` | 一个功能点下可交互元素超过 15 个（列表行内的除外），可能需要拆分 |
-| `FLOW` | 流程步骤没写 `tip` |
+| `FLOW` | 流程步骤没写 `tip`；`branch` 超过 12 个字，总流程图箭头上放不下 |
 | `HOST_MATCH` | 托管页面没有 `match`，点击原型时右侧需求不会自动切换 |
 | `HOST_RES` | 托管原型引用了网络图片、字体或不存在的文件 |
 | `ONLINE` | 端写了 `online: true`，其中的网络脚本或样式已放行。交付后需联网才能正常显示，交付说明里要标“需联网” |

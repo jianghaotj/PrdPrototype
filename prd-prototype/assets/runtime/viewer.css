@@ -230,6 +230,11 @@ body.flow-on #flowbar{display:flex}
 .doc img{max-width:100%}
 .doc pre{background:#f6f7f9;border-radius:8px;padding:12px 14px;overflow:auto;font-size:12.5px}
 .doc .mermaid{margin:12px 0;text-align:center}
+.doc .mermaid svg{cursor:zoom-in}
+.mmd-full{position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;background:rgba(20,24,32,.6);cursor:zoom-out}
+.mmd-full-bar{flex:none;padding:10px 24px;color:#fff;font-size:13px}
+.mmd-full-in{flex:1;min-height:0;overflow:auto;margin:0 24px 24px;padding:24px;background:#fff;border-radius:10px;text-align:center}
+.mmd-full-in svg{max-width:none;height:auto}
 .doc h4 .fid,.doc h3 .fid{font:12.5px ui-monospace,Menlo,monospace;color:var(--v-ink3);font-weight:400;margin-right:6px}
 .doc .open-in{font-size:12.5px;font-weight:400;margin-left:10px}
 .doc .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin:18px 0 6px}

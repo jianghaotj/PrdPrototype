@@ -117,7 +117,9 @@
       state: 'id label when layer set enter match changes',
       fn: 'id name desc fields rules errors empty perm src status statusNote ui gap dot sel text changes ac roles',
       field: 'key name type required def options rule status statusNote changes',
-      product: 'id name date fidelity version current releases background goals scope roles ends groups rules nfr dict flows sections todo demo scenarios clarify out demoNote outOfScope stage'
+      product: 'id name date fidelity version current releases background goals scope roles ends groups rules nfr dict flows flowMap sections todo demo scenarios clarify out demoNote outOfScope stage',
+      flow: 'id name ends preset set desc steps changes',
+      step: 'p st tip label set branch'
     };
     function unknown(obj, kind, where) {
       if (!obj || typeof obj !== 'object') return;
@@ -224,11 +226,17 @@
       if (m && presetIds.indexOf(m[1].trim()) < 0) E('PRESET', where + ' 引用了未登记的演示预设「' + m[1].trim() + '」');
       if (typeof set === 'object' && set.preset && presetIds.indexOf(set.preset) < 0) E('PRESET', where + ' 引用了未登记的演示预设「' + set.preset + '」');
     }
+    if (P.flowMap != null && P.flowMap !== false && typeof P.flowMap !== 'string') E('FLOW', 'product.flowMap 只能写 Mermaid 文本（手写总流程图）或 false（不画总流程图）；不写时由核心流程自动汇总');
     (P.flows || []).forEach(function (f) {
       if (!f.id || !f.name) E('FLOW', '核心流程需要 id 和 name');
       if (!f.steps || !f.steps.length) E('FLOW', '流程「' + f.name + '」没有步骤');
+      unknown(f, 'flow', '流程「' + f.name + '」');
       (f.steps || []).forEach(function (s, i) {
         var p = W.pages[s.p];
+        unknown(s, 'step', '流程「' + f.name + '」第 ' + (i + 1) + ' 步');
+        /* branch：分支条件，标在总流程图里进入这一步的箭头上 */
+        if (s.branch != null && (typeof s.branch !== 'string' || !s.branch.trim())) E('FLOW', '流程「' + f.name + '」第 ' + (i + 1) + ' 步的 branch 要写成一小段文字（分支条件，如“未诊断”）');
+        else if (s.branch && s.branch.trim().length > 12) Wn('FLOW', '流程「' + f.name + '」第 ' + (i + 1) + ' 步的 branch 有 ' + s.branch.trim().length + ' 个字，总流程图的箭头上放不下，建议 12 字以内');
         if (!p) E('FLOW', '流程「' + f.name + '」第 ' + (i + 1) + ' 步的页面「' + s.p + '」不存在');
         else if (s.st && !p.states.some(function (x) { return x.id === s.st; })) E('FLOW', '流程「' + f.name + '」第 ' + (i + 1) + ' 步的状态「' + s.st + '」在 ' + s.p + ' 中不存在');
         if (!s.tip) Wn('FLOW', '流程「' + f.name + '」第 ' + (i + 1) + ' 步没有 tip，演示时不知道下一步点哪里');

@@ -36,25 +36,50 @@
     if (!window.marked) return W.h.esc(s);
     return inline ? window.marked.parseInline(s, { gfm: true, breaks: true }) : window.marked.parse(s, { gfm: true, breaks: true });
   }
-  var mid = 0, inited = false;
+  var mid = 0, inited = false, pre = null;
+  /* 标签用 SVG 文字（htmlLabels: false）：默认的 HTML 标签放在 foreignObject 里，会被下面的清洗去掉，方框里就没有字了。
+     handDrawnSeed 固定随机种子：胶囊等形状的路径点每次一样，同一份源两次构建得到相同的 SVG */
+  function init() {
+    if (inited) return;
+    window.mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'neutral', fontFamily: 'inherit', htmlLabels: false, flowchart: { htmlLabels: false }, handDrawnSeed: 1 });
+    inited = true;
+  }
+  function svgClean(svg) {
+    return window.DOMPurify ? window.DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true }, FORBID_TAGS: ['script', 'foreignObject'] }) : '';
+  }
+  /* 构建时预先渲染好的图（如总流程图）：{ Mermaid 代码: SVG }。有就直接用，交付文件不必内嵌 Mermaid 库 */
+  function preRendered() {
+    if (pre) return pre;
+    pre = {};
+    var el = document.getElementById('prd-mermaid');
+    try { var t = el && el.textContent.trim(); if (t) pre = JSON.parse(t) || {}; } catch (e) {}
+    return pre;
+  }
   function mermaidIn(root) {
     var blocks = root.querySelectorAll('pre > code.language-mermaid');
     if (!blocks.length) return;
-    if (!window.mermaid) {
-      blocks.forEach(function (c) { c.parentNode.insertAdjacentHTML('beforebegin', '<p class="doc-empty">（流程图需要 Mermaid，构建时未内嵌）</p>'); });
-      return;
-    }
-    if (!inited) {
-      window.mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'neutral', fontFamily: 'inherit' });
-      inited = true;
-    }
+    var cache = preRendered(), live = [];
     blocks.forEach(function (c) {
-      var pre = c.parentNode, code = c.textContent, id = 'mmd-' + (++mid);
+      var svg = cache[c.textContent.trim()];
+      if (!svg) { live.push(c); return; }
       var box = document.createElement('div');
       box.className = 'mermaid';
-      pre.replaceWith(box);
+      box.innerHTML = svgClean(svg);
+      c.parentNode.replaceWith(box);
+    });
+    if (!live.length) return;
+    if (!window.mermaid) {
+      live.forEach(function (c) { c.parentNode.insertAdjacentHTML('beforebegin', '<p class="doc-empty">（流程图需要 Mermaid，构建时未内嵌）</p>'); });
+      return;
+    }
+    init();
+    live.forEach(function (c) {
+      var host = c.parentNode, code = c.textContent, id = 'mmd-' + (++mid);
+      var box = document.createElement('div');
+      box.className = 'mermaid';
+      host.replaceWith(box);
       window.mermaid.render(id, code).then(function (r) {
-        box.innerHTML = window.DOMPurify ? window.DOMPurify.sanitize(r.svg, { USE_PROFILES: { svg: true, svgFilters: true }, FORBID_TAGS: ['script', 'foreignObject'] }) : '';
+        box.innerHTML = svgClean(r.svg);
       }).catch(function (e) {
         box.innerHTML = '<p class="doc-empty">流程图语法错误：' + W.h.esc(e && e.message || e) + '</p>';
       });
@@ -71,6 +96,12 @@
       mermaidIn(el);
     },
     clean: clean,
+    /* 构建脚本用：把 Mermaid 代码渲染成 SVG 文本（语法错误时 reject），结果内嵌进交付文件 */
+    svg: function (code, id) {
+      if (!window.mermaid) return Promise.reject(new Error('没有内嵌 Mermaid'));
+      init();
+      return window.mermaid.render(id || 'prd-mmd', code).then(function (r) { return r.svg; });
+    },
     /* 纯文本（用于 Markdown 导出时去掉徽标 HTML） */
     plainBadges: function (s) {
       return String(s == null ? '' : s).replace(/\[待确认\]/g, '【待确认】').replace(/\[(?:AI\s*假设|AI)\]/g, '【AI 假设】');

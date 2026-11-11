@@ -282,20 +282,24 @@ export async function build(input, opts = {}) {
   });
 
   const allText = userJs.map((x) => x.src).join('\n');
+  /* 需求文字里写了 ```mermaid 才在交付文件里内嵌 Mermaid 库（约 3.5 MB）。
+     总流程图在构建时预先渲染成 SVG 内嵌（prd-mermaid），交付文件不为它内嵌 Mermaid；检查页和草稿要现场渲染，所以有流程时也带上 */
   const needMermaid = /```\s*mermaid/.test(allText);
-  const vendor = [read(path.join(VENDOR, 'purify.min.js')), read(path.join(VENDOR, 'marked.umd.js'))];
-  if (needMermaid) vendor.push(read(path.join(VENDOR, 'mermaid.min.js')));
+  const hasFlowMap = Array.isArray(cfg.flows) && cfg.flows.length > 0 && cfg.flowMap !== false;
+  const vendorBase = [read(path.join(VENDOR, 'purify.min.js')), read(path.join(VENDOR, 'marked.umd.js'))];
+  const mermaidJs = needMermaid || hasFlowMap ? read(path.join(VENDOR, 'mermaid.min.js')) : '';
   const rt = (n) => read(path.join(RT, n));
-  const scripts = [
-    ...vendor,
+  const appScripts = [
     rt('core.js'), rt('behave.js'), rt('md.js'), rt('doc.js'), rt('host.js'), rt('audit.js'),
     ...userJs.map((x) => '/* ' + path.relative(prd, x.f).split(path.sep).join('/') + ' */\n' + x.src),
     rt('comments.js'), rt('viewer.js')
   ];
-  scripts.forEach((s, i) => { if (/<\/script/i.test(s) && i >= vendor.length) die('运行时脚本中出现 </script'); });
+  appScripts.forEach((s) => { if (/<\/script/i.test(s)) die('运行时脚本中出现 </script'); });
+  const scriptsFor = (withMermaid) => [...vendorBase, ...(withMermaid ? [mermaidJs] : []), ...appScripts];
   const title = (cfg.name || '原型') + ' · ' + release + (proto ? ' · 原型' : ' · 原型需求');
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const assemble = (audit) => [
+  /* o.mermaid：是否内嵌 Mermaid 库；o.pre：构建时预先渲染的图 { Mermaid 代码: SVG } */
+  const assemble = (audit, o = {}) => [
     '<!doctype html>',
     '<html lang="zh-CN">',
     '<head>',
@@ -313,11 +317,12 @@ export async function build(input, opts = {}) {
     '<div id="app"><header id="top"></header><aside id="left"></aside><main id="stagewrap"><div id="stage"><div id="stage-in"></div></div><div id="flowbar"></div></main><aside id="right"></aside></div>',
     '<script type="application/json" id="prd-audit">' + (audit ? escJson(audit) : '') + '</script>',
     '<script type="application/json" id="prd-scope">' + (scope ? escJson(scope) : '') + '</script>',
+    o.pre && Object.keys(o.pre).length ? '<script type="application/json" id="prd-mermaid">' + escJson(o.pre) + '</script>' : '',
     ...hostBlocks,
-    ...scripts.map((s) => '<script>\n' + s + '\n</script>'),
+    ...scriptsFor(!!o.mermaid).map((s) => '<script>\n' + s + '\n</script>'),
     licenseComment('DOMPurify 3.2.7（Apache-2.0 / MPL-2.0）', 'DOMPurify-LICENSE'),
     licenseComment('Marked 18.0.7（MIT）', 'marked-LICENSE'),
-    needMermaid ? licenseComment('Mermaid 11.16.0（MIT）', 'mermaid-LICENSE') : '',
+    o.mermaid ? licenseComment('Mermaid 11.16.0（MIT）', 'mermaid-LICENSE') : '',
     '</body>',
     '</html>',
     ''
@@ -326,17 +331,17 @@ export async function build(input, opts = {}) {
   const base = path.basename(outName, '.html');
   if (opts.draft) {
     const draft = path.join(tmpDir, base + '.draft.html');
-    fs.writeFileSync(draft, assemble(null));
+    fs.writeFileSync(draft, assemble(null, { mermaid: needMermaid || hasFlowMap }));
     return { ok: true, draft: true, file: draft, release, name: cfg.name };
   }
 
   /* 断网检查：复制到系统临时目录，禁止所有网络请求地址后逐状态运行检查，并记录页面发出的网络请求 */
   const offlineDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prd-offline-'));
   const tmp = path.join(offlineDir, base + '.check.html');
-  fs.writeFileSync(tmp, assemble(null));
+  fs.writeFileSync(tmp, assemble(null, { mermaid: needMermaid || hasFlowMap }));
   const browser = await launch();
   let report, markdown = null, jsErrors = [], netReqs = [];
-  let csvSheets = null, csvRows = null, pageList = null;
+  let csvSheets = null, csvRows = null, pageList = null, preSvg = null;
   /* 资源加载失败（原型引用的图片、字体不存在）不阻止交付，作为提醒；脚本错误仍阻止 */
   const addJsErr = (m) => {
     if (/Failed to load resource|ERR_FILE_NOT_FOUND|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|net::ERR_/.test(m)) report.warns.push({ code: 'RES', msg: '有资源加载失败：' + m.replace(/^浏览器错误：/, '').replace(/（?file:\/\/\S*）?/g, '').trim() + '。托管原型请检查原文件引用的图片/字体是否存在' });
@@ -393,6 +398,14 @@ export async function build(input, opts = {}) {
     jsErrors = page.errors.slice();
     netReqs = page.requests.slice();
     summarize();
+    /* 总流程图：在检查页里渲染成 SVG，内嵌进交付文件；渲染失败（多半是手写的 product.flowMap 语法错）阻止交付 */
+    if (hasFlowMap) {
+      const fm = await page.evaluate('(function () { var fm = W.doc.flowMap(); if (!fm) return null; return W.md.svg(fm.code, "prd-flowmap").then(function (svg) { return { code: fm.code, svg: svg, custom: !!fm.custom }; }, function (e) { return { code: fm.code, error: String(e && e.message || e), custom: !!fm.custom }; }); })()');
+      if (fm && fm.error) report.errors.push({ code: 'FLOW', msg: '总流程图渲染失败：' + fm.error.split('\n')[0].slice(0, 200) + (fm.custom ? '。请检查 product.flowMap 的 Mermaid 写法' : '') });
+      /* 圆角、胶囊形状的路径带十几位小数，保留 2 位小数，画面不变，体积小很多 */
+      else if (fm) preSvg = { [fm.code]: fm.svg.replace(/(\d+\.\d{2})\d+/g, '$1') };
+      report.ok = report.errors.length === 0;
+    }
     /* 最终报告（含“需联网”等）同步回页面，导出内容与交付 HTML 用同一份 */
     await page.evaluate('W.audit = ' + escJson(report) + '; 1');
     if (opts.md) markdown = await page.evaluate('W.doc.markdown({ html: false })');
@@ -411,14 +424,14 @@ export async function build(input, opts = {}) {
     await browser.close();
     try { fs.rmSync(offlineDir, { recursive: true, force: true }); } catch (e) {}
   }
-  const html = assemble(report);
+  const html = assemble(report, { mermaid: needMermaid, pre: preSvg });
   const single = auditSingleFile(html);
   single.forEach((m) => report.errors.push({ code: 'SINGLE_FILE', msg: '交付文件引用了外部或相对资源：' + m }));
   report.ok = report.errors.length === 0;
 
   if (!report.ok) {
     const failed = path.join(tmpDir, base + '.failed.html');
-    fs.writeFileSync(failed, assemble(report));
+    fs.writeFileSync(failed, assemble(report, { mermaid: needMermaid || hasFlowMap, pre: preSvg }));
     return { ok: false, report, failed, release, name: cfg.name, outFile, legacyTheme };
   }
   /* --scope-baseline：检查通过后用当前清单覆盖基线，再完整构建一次，让交付文件和需求文档都按新基线生成。

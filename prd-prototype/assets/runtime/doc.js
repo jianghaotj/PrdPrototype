@@ -99,6 +99,93 @@
     return out;
   };
 
+  /* ---------- 总流程图：把各条核心流程汇总成一张 Mermaid 图 ----------
+     一个页面一个方框（同一页里的弹窗、状态变化合在一起），按步骤顺序连箭头，箭头上标第几条流程（①②…）。
+     步骤写了 branch 时，条件写在进入这一步的箭头上；同一页内写了 branch 的步骤画成回到本页的箭头。
+     多个端各占一块，从上往下排。product.flowMap 写 Mermaid 文本时直接用它，写 false 时不画。 */
+  function mq(s) { return String(s == null ? '' : s).replace(/"/g, '#quot;').replace(/</g, '#lt;').replace(/>/g, '#gt;').replace(/\s*[\r\n]+\s*/g, ' ').trim(); }
+  /* 各端配色（按端的顺序循环）：ink 页面描边与开始页底色，area/line 分区底色与边框，text 文字色。白底对比度都在 4.5:1 以上 */
+  var FM_COLORS = [
+    { ink: '#2f5bea', area: '#f1f5ff', line: '#b9cbf7', text: '#1d2b57' },
+    { ink: '#0f7d64', area: '#eefaf6', line: '#a7dbc9', text: '#0f3d31' },
+    { ink: '#7048d6', area: '#f6f2ff', line: '#cdbff2', text: '#33206e' },
+    { ink: '#b25e00', area: '#fff7ec', line: '#efcd9a', text: '#5a3200' }
+  ];
+  D.flowMap = function () {
+    var P = W.P, flows = P.flows || [];
+    if (P.flowMap === false || !flows.length) return null;
+    if (typeof P.flowMap === 'string' && P.flowMap.trim()) {
+      return { code: P.flowMap.trim().replace(/^```\s*mermaid[^\n]*\n/, '').replace(/\n?```$/, '').trim(), custom: true };
+    }
+    var nodes = [], byPage = {}, edges = [], byEdge = {};
+    flows.forEach(function (f, fi) {
+      if (D.removed(f)) return;
+      var prev = null;
+      (f.steps || []).forEach(function (s) {
+        var p = W.pages[s.p];
+        if (!p) return;
+        var n = byPage[p.id];
+        if (!n) { n = byPage[p.id] = { id: 'n' + nodes.length, p: p, starts: [] }; nodes.push(n); }
+        var br = typeof s.branch === 'string' ? s.branch.trim() : '';
+        if (!prev) { if (n.starts.indexOf(fi) < 0) n.starts.push(fi); }
+        else if (prev !== n || br) {
+          /* 回到本页的箭头每页只画一条（Mermaid 画多条会叠在一起），条件合在一个标签里 */
+          var k = prev.id + '>' + n.id + (prev === n ? '' : '|' + br);
+          if (!byEdge[k]) { byEdge[k] = { a: prev, b: n, parts: [] }; edges.push(byEdge[k]); }
+          var part = byEdge[k].parts.find(function (x) { return x.br === br; });
+          if (!part) { part = { br: br, flows: [] }; byEdge[k].parts.push(part); }
+          if (part.flows.indexOf(fi) < 0) part.flows.push(fi);
+        }
+        prev = n;
+      });
+    });
+    if (!nodes.length) return null;
+    var num = function (i) { return D.num(i); };
+    var ends = (P.ends || []).filter(function (e) { return nodes.some(function (n) { return n.p.end === e.id; }); });
+    var multi = ends.length > 1;
+    /* 版式：间距放大、线条走圆弧，适合投屏 */
+    var L = ['%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 36, "rankSpacing": 46, "padding": 12}, "themeVariables": {"fontSize": "15px", "edgeLabelBackground": "#ffffff"}}}%%', 'flowchart TD'];
+    var endIdx = {};
+    ends.forEach(function (e, ei) {
+      endIdx[e.id] = ei % FM_COLORS.length;
+      /* 端分区：direction TB 让区内也从上往下排（不写时 Mermaid 会把没有外连的分区横过来） */
+      if (multi) L.push('  subgraph e' + ei + '["' + mq(e.name) + '"]', '    direction TB');
+      nodes.forEach(function (n) {
+        if (n.p.end !== e.id) return;
+        var t = mq(n.p.id + ' ' + (n.p.title || '')) + (n.starts.length ? '<br>▶ ' + n.starts.map(num).join('') : '');
+        /* 开始页用胶囊形，其他页用圆角矩形 */
+        L.push((multi ? '    ' : '  ') + n.id + (n.starts.length ? '(["' + t + '"])' : '("' + t + '")'));
+      });
+      if (multi) L.push('  end');
+    });
+    var brLinks = [], crossLinks = [];
+    edges.forEach(function (e, i) {
+      var lb = e.parts.map(function (x) { return x.flows.map(num).join('') + (x.br ? ' ' + mq(x.br) : ''); }).join(' / ');
+      L.push('  ' + e.a.id + ' -->|"' + lb + '"| ' + e.b.id);
+      if (e.parts.some(function (x) { return x.br; })) brLinks.push(i);
+      else if (e.a.p.end !== e.b.p.end) crossLinks.push(i);
+    });
+    /* 不可见连线让各端分区上下排列，不横向挤在一起 */
+    for (var i = 1; i < ends.length; i++) L.push('  e' + (i - 1) + ' ~~~ e' + i);
+    /* 配色：每个端一种颜色（分区底色、页面描边、开始页实心）；分支条件的箭头用橙色加粗，跨端箭头用虚线 */
+    ends.forEach(function (e, ei) {
+      var c = FM_COLORS[endIdx[e.id]];
+      L.push('  classDef p' + ei + ' fill:#ffffff,stroke:' + c.ink + ',stroke-width:1.5px,color:' + c.text);
+      L.push('  classDef s' + ei + ' fill:' + c.ink + ',stroke:' + c.ink + ',stroke-width:2px,color:#ffffff,font-weight:bold');
+      var ps = nodes.filter(function (n) { return n.p.end === e.id && !n.starts.length; }).map(function (n) { return n.id; });
+      var ss = nodes.filter(function (n) { return n.p.end === e.id && n.starts.length; }).map(function (n) { return n.id; });
+      if (ps.length) L.push('  class ' + ps.join(',') + ' p' + ei);
+      if (ss.length) L.push('  class ' + ss.join(',') + ' s' + ei);
+      if (multi) L.push('  style e' + ei + ' fill:' + c.area + ',stroke:' + c.line + ',stroke-width:1.5px,color:' + c.text);
+    });
+    /* 只给实际的箭头上色；linkStyle default 会把分区之间的不可见连线也画出来 */
+    var plain = edges.map(function (e, i) { return i; }).filter(function (i) { return brLinks.indexOf(i) < 0 && crossLinks.indexOf(i) < 0; });
+    if (plain.length) L.push('  linkStyle ' + plain.join(',') + ' stroke:#8792a6,stroke-width:1.6px,color:#4e5969');
+    if (brLinks.length) L.push('  linkStyle ' + brLinks.join(',') + ' stroke:#e8590c,stroke-width:2.4px,color:#c2410c');
+    if (crossLinks.length) L.push('  linkStyle ' + crossLinks.join(',') + ' stroke:#4e5969,stroke-width:2px,stroke-dasharray:6 4,color:#3b4252');
+    return { code: L.join('\n'), nodes: nodes.length, edges: edges.length, branches: brLinks.length, cross: crossLinks.length };
+  };
+
   /* ---------- 片段渲染（HTML 与 Markdown 共用的取数逻辑） ---------- */
   /* 文字里已经写了 [待确认] / [AI 假设] 时不再重复加徽标 */
   function ownStatus(x) {
@@ -247,6 +334,16 @@
 
       if (P.flows && P.flows.length) {
         chapter('核心流程');
+        var fm = D.flowMap();
+        if (fm) {
+          out.push('### 总流程图\n\n' + (fm.custom ? '' : '每个方框是一个页面，同一页里的弹窗和状态变化合在一个方框里；颜色区分端。实心胶囊是流程开始的页面，▶ 后是从这里开始的流程编号；箭头上的编号是下面第几条流程' + (fm.branches ? '，橙色粗箭头上写的是分支条件' : '') + (fm.cross ? '，灰色虚线是跨端' : '') + '。' + (HTML ? '点图可以放大。' : '') + '\n\n'));
+          out.push('```mermaid\n' + fm.code + '\n```\n\n');
+          out.push(P.flows.map(function (f, fi) {
+            if (D.removed(f)) return '';
+            var s0 = (f.steps || [])[0];
+            return '- ' + D.num(fi) + ' ' + T(f.name) + (f.ends ? ' · ' + T(f.ends) : '') + (HTML && s0 ? ' ' + link('▶ 演示', '#/p/' + s0.p + '/' + (s0.st || '') + '?f=' + f.id + '&i=0') : '');
+          }).filter(Boolean).join('\n') + '\n\n');
+        }
         P.flows.forEach(function (f, fi) {
           out.push('### ' + (fi + 1) + '. ' + f.name + '\n\n' + (f.desc ? T(f.desc) + '\n\n' : ''));
           out.push(table(['步骤', '页面 · 状态', '说明'], f.steps.map(function (s, i) {
